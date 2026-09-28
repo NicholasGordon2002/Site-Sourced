@@ -1,0 +1,122 @@
+# Formspark — what it actually does with a submission
+
+Read on 2026-09-28, from Formspark's own pages. Every claim below is quoted or
+paraphrased from one of the sources listed at the end. The provider-facing
+strings in `src/demo/forms.ts` and the visitor-facing sentence in
+`src/demo/copy.ts` are built from this file — change one, change the others.
+
+**Account / form in use:** form name `Site Sourced demo form (MVP test)`,
+form id `nsPQBCgbx`, endpoint `https://submit-form.com/nsPQBCgbx`.
+The id lives in the gitignored `pipeline/.env.local` as
+`SS_FORMSPARK_FORM_ID`; the records reference it as
+`"form_access_key": "env:SS_FORMSPARK_FORM_ID"`. No id, key or address is in git.
+
+## Does it deliver email on the free plan?
+
+Yes. The free workspace's Notifications panel reads `1 recipient — Active`, and
+the recipient list is `site-sourced-311e0184@ctomail.io (member)`. Recipients are
+per form: Formspark's docs say to manage them in *that form's* Settings section,
+ticking workspace team members or adding "guests" outside the workspace. Nothing
+in the limits page restricts notifications on the free plan — only the paid
+features (autoresponder, branding removal, REST API, custom templates) are
+gated.
+
+## The free tier
+
+> "Submissions 250 · Forms 10 · Team members 5 · Submission archive Forever"
+
+> "Every accepted submission spends one submission from its workspace. Submissions
+> rejected as spam do not count against your total."
+
+> "Formspark does not cut you off at exactly zero. There is a small buffer past the
+> end of your submissions, and recent submissions that arrive beyond it are held
+> back rather than discarded. Purchasing a new bundle releases the held
+> submissions straight into your inbox."
+
+Bundles are a one-off purchase and "do not expire"; there is no subscription.
+Everything is per workspace.
+
+## Does it store the message body, and for how long?
+
+Yes — and this is the part that changes what our demo page is allowed to say.
+
+Privacy policy, "Data we handle for our customers" table:
+
+| Field | Retention |
+| --- | --- |
+| Submission content — "every field a form's visitor fills in", purpose "Deliver submissions to the customer who owns the form" | "Until the customer deletes it. Deleted submissions stay recoverable for 30 days" |
+| Submitter IP address | 12 months |
+| Approximate location derived from an IP address | 12 months |
+| Request metadata (user agent, referring page, origin) | "With the submission it belongs to" |
+| Filtered (spam-held) submissions | 12 months; "visible to the customer for 30 days" |
+| Notification recipients | until the customer removes the address or the account is deleted |
+| Export files | 7 days |
+
+Also: "If you delete your account, we remove your workspaces and their
+submissions straight away." Formspark is the *processor*; the account holder is
+the controller. Data is stored in Ireland and Germany (Trampoline Software SRL,
+Belgium).
+
+## Can storage be switched off?
+
+No. There is no "do not store" setting anywhere in the form settings — the
+settings screen offers Notifications, Autoresponder, Integrations, Spam
+protection, and (at the bottom) `Delete all submissions` / `Delete form`. The
+archive is the product. Deletion is manual or programmatic
+(`DELETE /forms/{formId}` deletes the form and its submissions;
+`DELETE /submissions/{submissionId}` deletes one; spam-quarantined submissions
+"expire on their own and cannot be deleted early").
+
+The only submissions Formspark will *not* save at all are empty ones, ones whose
+spam verification failed, and ones that trip the honeypot: "Formspark will not
+save submissions, send notifications or decrement your submission counter if any
+of the following conditions are true: the submission is empty; the spam
+protection verification was unsuccessful; the submission contains a honeypot."
+
+## Is the recipient configurable per form?
+
+Yes — per form, in the dashboard (see above). It is not a field in the POST body,
+so the business's address never appears in the page source.
+
+## Consequences for our copy
+
+The old line under the form — "Site Sourced only passes it along and doesn't keep
+or use it for anything else" — was written for a forward-only relay and is **not
+true of Formspark**: the message sits in the client's Formspark account until the
+client deletes it. It is still true that *Site Sourced* never receives a copy, so
+the notice now reads (built in `src/demo/copy.ts` from the provider preset):
+
+> This form sends your message to {business} through Formspark, the form service
+> set up in {business}'s own account. Formspark emails it to {business} and also
+> keeps a copy in {business}'s own Formspark account until {business} deletes it.
+> Site Sourced never receives a copy of it and never uses your details for
+> anything else.
+
+If we move a client to a forward-only provider (Web3Forms, StaticForms), the
+sentence shortens automatically — it is generated, not hand-written.
+
+## Useful behaviour for the hand-over pack
+
+- **Replying works.** The submission body contains a field named `email`, and
+  Formspark treats `mail`, `email`, `_replyto` or `_email.replyto` as the reply
+  address: "From your email inbox, you can directly reply to the person who
+  submitted the form."
+- **Honeypot.** A hidden field named `_honeypot` or `_gotcha` (we use `_gotcha`)
+  silently discards bot submissions — and such a submission is not counted
+  against the allowance.
+- **Notification title.** Set with a hidden field `_email.template.title`; there
+  is no documented `_subject` field, which is why we do not use one.
+- **Formspark branding** on notification emails cannot be removed on the free
+  plan.
+
+## Sources (all fetched 2026-09-28)
+
+- https://formspark.io/legal/privacy-policy/ (effective 22 August 2026)
+- https://formspark.io/pricing/
+- https://documentation.formspark.io/troubleshooting/limits-and-plans.html
+- https://documentation.formspark.io/dashboard/email-notification-settings.html
+- https://documentation.formspark.io/setup/spam-protection.html
+- https://documentation.formspark.io/customization/direct-replies.html
+- https://documentation.formspark.io/customization/notification-email.html
+- https://documentation.formspark.io/api/reference.html
+- dashboard.formspark.io — form `nsPQBCgbx`, Settings → Notifications (recipient list)

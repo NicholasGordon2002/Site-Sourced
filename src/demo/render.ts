@@ -575,13 +575,17 @@ keep the same file name, or update the name in styles.css and index.html.
 The contact form
 ----------------
 The form posts to ${form.provider.label}. ${form.provider.needs_account}.
-${form.provider.who_owns_the_account}. What the visitor types goes straight to
-${form.recipient}; nobody at Site Sourced keeps a copy and no list of names is
-gathered.
+${form.provider.who_owns_the_account}. Notifications go to ${form.recipient};
+nobody at Site Sourced receives a copy and no list of names is gathered.
 
+  Where the message is kept: ${form.provider.stores_submissions}
   Free tier: ${form.provider.free_tier}
   If it stops working: ${form.provider.if_it_lapses}
   Documentation: ${form.provider.url || "(self-hosted endpoint)"}
+
+The page says the same thing to your visitors, in the line just above the form.
+If you change form provider, that line changes with it — do not edit it by hand
+without checking what the new provider does with a submission.
 
 The form also shows your email address and phone number, so an enquiry can always
 reach you even if the form service is ever down.

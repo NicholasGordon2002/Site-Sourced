@@ -46,8 +46,8 @@
     }
   ],
   "form_recipient": "site-sourced-311e0184@ctomail.io",
-  "form_provider": "web3forms",
-  "form_access_key": "env:SS_FORMS_ACCESS_KEY",
+  "form_provider": "formspark",
+  "form_access_key": "env:SS_FORMSPARK_FORM_ID",
   "source": "test fixture (fictional business — not a real shop)",
   "images": [
     {

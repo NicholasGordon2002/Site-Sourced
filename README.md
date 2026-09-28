@@ -349,3 +349,53 @@ The fixtures' hero images are **AI-generated** (`test/fixtures/images/`) and bot
 manifest and the report say so; the CC0/Openverse/Commons path is the default for real
 records. Those files are 2–3.6 MB each, which is heavier than we want for a real
 bundle — downscaling needs an image encoder, and none is installed on this machine.
+
+---
+
+## Contact form (demo generator)
+
+A generated demo is a static page, so its contact form posts to a relay the
+client owns. Which relay, and which account, is a property of the record, not of
+the code:
+
+```json
+"form_recipient": "the-business@example.com",
+"form_provider": "formspark",
+"form_access_key": "env:SS_FORMSPARK_FORM_ID"
+```
+
+- `form_provider` picks a preset from `src/demo/forms.ts` (`formspark`,
+  `web3forms`, `staticforms`, `formsubmit`, `relay`).
+- `form_access_key` is the provider's form id or access key. `env:NAME` reads the
+  value from the environment, and the CLI also loads a **gitignored**
+  `pipeline/.env.local` automatically, so the id is never committed:
+
+  ```
+  # pipeline/.env.local  (never committed — see .gitignore)
+  SS_FORMSPARK_FORM_ID=xxxxxxxx
+  ```
+
+  A real environment variable always wins over the file, and `--no-env-file`
+  turns the file off. Create one Formspark form per client (free plan: 10 forms),
+  set that form's Notifications recipient to the client's own address, then give
+  the client's record its own variable name — e.g.
+  `"form_access_key": "env:SS_FORMSPARK_FORM_ID_ACME"`. Nothing else changes.
+- `--form-endpoint <url>` overrides every record's endpoint, for pointing a
+  generated bundle at a local test relay. It is a testing flag: never use it for
+  a real prospect.
+
+Every fact the demo states about the form — the notice under the form, the
+manifest's `form` block and the bundle's `README.txt` — is generated from the
+provider preset, so the page cannot claim more privacy than the provider
+actually gives. **Formspark keeps submissions in the client's account**; the
+evidence, with quotes and dates, is in `docs/formspark.md`. Update that file
+before changing what a page says.
+
+### Regenerating the demo bundles
+
+```bash
+cd /home/team/shared/pipeline
+bun run demo -- --record test/fixtures --out out/demos
+```
+
+`out/demos/` is gitignored: the bundles are build output, not source.

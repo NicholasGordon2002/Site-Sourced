@@ -11,6 +11,7 @@
  *      in this package that fetches a business URL.
  */
 
+import type { ResolvedForm } from "./forms.ts";
 import type { BusinessRecord, HoursRow, ServiceItem } from "./types.ts";
 
 export interface CategoryProfile {
@@ -254,7 +255,7 @@ export interface DemoCopy {
   offeringPlural: string;
 }
 
-export function composeCopy(record: BusinessRecord, slug: string): DemoCopy {
+export function composeCopy(record: BusinessRecord, slug: string, form: ResolvedForm): DemoCopy {
   const profile = profileFor(record);
   const cat = categoryLower(record);
   const city = (record.address?.city || "").trim();
@@ -294,7 +295,15 @@ export function composeCopy(record: BusinessRecord, slug: string): DemoCopy {
 
   const contactIntro = `Send a message to ${record.name} using the form below, or use the phone number or email address printed with it.`;
 
-  const formNotice = `This form sends your message directly to ${record.name}. Site Sourced only passes it along and doesn't keep or use it for anything else.`;
+  // This sentence is a privacy claim about a third party, so it is built from the
+  // provider preset rather than written once here. Formspark's own privacy policy
+  // says submissions are stored in the customer's account until the customer
+  // deletes them, so "we pass it along and keep nothing" would have been false.
+  const formNotice = [
+    `This form sends your message to ${record.name} through ${form.provider.label}, the form service set up in ${record.name}'s own account.`,
+    form.provider.visitor_storage({ business: record.name }),
+    "Site Sourced never receives a copy of it and never uses your details for anything else.",
+  ].join(" ");
 
   const banner = `This is an unsolicited design proposal from Site Sourced. It is not affiliated with, endorsed by, or operated by ${record.name}.`;
 

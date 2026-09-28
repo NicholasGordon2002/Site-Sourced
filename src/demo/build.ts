@@ -73,8 +73,9 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   await mkdir(join(dir, "img"), { recursive: true });
 
   const profile = profileFor(record);
-  const copy = composeCopy(record, slug);
+  // The form is resolved first: the page's privacy notice is provider-specific.
   const form = resolveForm(record);
+  const copy = composeCopy(record, slug, form);
   const warnings: string[] = [];
   if (form.warning) warnings.push(form.warning);
   if (!record.phone) warnings.push("record has no phone number — the header call button and the contact fallback are weaker without one.");
