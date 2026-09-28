@@ -224,3 +224,128 @@ src/types.ts      shared types
 ```
 
 Run `bun run leads -- --help` for the flag list.
+
+---
+
+# Site Sourced — demo generator (step 2)
+
+One command turns a single business record into a **complete, self-contained static
+website**:
+
+```bash
+bun run demo -- --record test/fixtures/maple-avenue-barber-shop.json --out out/demos
+bun run demo -- --record test/fixtures --out out/demos      # every record in a folder
+```
+
+The output folder is simultaneously the demo we send a prospect and the product we
+hand a client: it opens from disk with no server, and it uploads to any host as it is.
+
+## The bundle
+
+```
+out/demos/<slug>/
+  index.html      the page — plain HTML, readable, with the client's words in it
+  styles.css      plain CSS, no framework, no webfont, no @import
+  site.js         the contact form's only script (no tracking, no storage)
+  favicon.svg     generated from the business name and category colour
+  img/            CC0/public-domain photographs, or a labelled AI fallback
+  manifest.json   every fact about the bundle: images, licences, form, hand-off
+  README.txt      plain-language notes for the client (how to change their own text)
+```
+
+## What the generator will not do
+
+These are enforced in code, not by good intentions:
+
+- **No invented facts.** Copy is composed from the record's category and services.
+  A phrase bank (`src/demo/copy.ts`) refuses to build a page containing an award, a
+  testimonial, a customer count, a founding year or a performance claim unless the
+  record itself contains those words.
+- **No scraped content.** There is no code path that fetches a business's own site,
+  logo or photographs. The only URLs the generator fetches are image APIs and the
+  images themselves.
+- **Copyright-free imagery only.** Openverse and Wikimedia Commons are searched for
+  **CC0 / public-domain** files; the licence is re-read from the file's own metadata
+  and anything else is skipped. Downloads are capped at 700 KB. If nothing clean is
+  found, the page uses a plain CSS/SVG treatment and the manifest says so. A
+  hand-supplied image must declare CC0/public-domain, or be labelled `AI-generated`
+  (labelled in the manifest, as in the test fixtures).
+- **No submissions kept by us.** The form posts straight to a relay the client owns
+  (see `src/demo/forms.ts`), the page states that in plain words, and the business's
+  email address and phone number are printed next to the form so an enquiry is never
+  lost if the relay is down.
+
+## Compliance, in every bundle
+
+`<meta name="robots" content="noindex, nofollow">`; a proposal banner above the fold
+(verified by measuring its position in the rendered page); the same disclaimer in the
+footer next to the business's name and contact details; no "© <Business Name>"; and
+ODbL attribution for the OpenStreetMap-derived details. The build fails if any of
+them is missing.
+
+## Flags
+
+| Flag | Default | What it does |
+| --- | --- | --- |
+| `--record <path>` | — | a record JSON file, or a directory of them (repeatable) |
+| `--out <dir>` | `./out/demos` | where bundles are written |
+| `--cache-dir <dir>` | `./out/cache/demo` | HTTP/image cache (gitignored) |
+| `--no-images` | off | skip image sourcing entirely (CSS/SVG only, no network) |
+| `--refresh` | off | ignore the image cache and re-fetch |
+| `--form-endpoint <url>` | — | override the form endpoint (local relay tests only) |
+| `--summary <path>` | — | also write the run summary as JSON |
+
+## The contact form: what we chose, and why
+
+Static files cannot send email, so the form posts to a free relay that sends the
+message **to the business's own inbox**. `src/demo/forms.ts` carries the presets and
+the trade-offs; the record chooses one (`form_provider`) and supplies the key
+(`form_access_key`, which may be `env:NAME` so no real key is ever committed).
+
+**Recommended: Web3Forms.** No account to babysit — one access key tied to the
+recipient's address, created by the client themselves, so the client owns it from day
+one. Their stated model is that submissions are forwarded and not stored, which
+matches what the page promises the visitor. The key keeps the business's email address
+out of the page source, where scrapers would otherwise harvest it.
+
+Depends on: free tier 250 submissions/month; no card; no monthly bill.
+If it lapses: the form stops delivering, and the printed email address and phone
+number next to it still work.
+
+The same file documents **Formspark** (verified from its pricing page on 28 Sept 2026:
+free tier 250 submissions and a permanent archive, extra volume as a one-time bundle
+rather than a subscription — but it is account-based and it does store submissions),
+StaticForms and FormSubmit as alternatives.
+
+> **Unverified from this machine:** `web3forms.com` and `formsubmit.co` are behind a
+> Cloudflare bot check that refuses this development machine's IP (HTTP 403 for a
+> browser user-agent on both the site and the API endpoint), and every account-based
+> relay needs an email confirmation this machine cannot receive. So a submission to a
+> real relay could not be executed here. It was executed instead against
+> `test/verify.ts`, a local relay that implements the same request/response contract —
+> see the run log in the report to the lead.
+
+## Verifying a bundle locally
+
+```bash
+bun run demo -- --record test/fixtures --out out/demos
+bun run test/verify.ts        # static server on :8099, form relay on :8098
+```
+
+`test/verify.ts` serves the bundles and logs every request, which is how the "no
+external requests on load" claim is checked; it also stands in for the form relay so a
+submission can be followed end to end. Test fixtures live in `test/fixtures/` and are
+**fictional businesses** — the form recipient for test runs is our own inbox.
+
+## Test fixtures
+
+| Fixture | Category | Exercises |
+| --- | --- | --- |
+| `maple-avenue-barber-shop.json` | Barber shop | structured hours, services with notes, AI-fallback hero |
+| `northshore-garden-works.json` | Landscaping | raw OSM `opening_hours` string, five services |
+| `king-west-dental.json` | Dental clinic | health category palette, emergency-appointment wording |
+
+The fixtures' hero images are **AI-generated** (`test/fixtures/images/`) and both the
+manifest and the report say so; the CC0/Openverse/Commons path is the default for real
+records. Those files are 2–3.6 MB each, which is heavier than we want for a real
+bundle — downscaling needs an image encoder, and none is installed on this machine.
