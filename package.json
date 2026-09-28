@@ -1,0 +1,15 @@
+{
+  "name": "sitesourced-lead-engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Site Sourced lead engine: OpenStreetMap/Overpass business POIs for an Ontario area, flagged by website status.",
+  "scripts": {
+    "leads": "bun run src/cli.ts",
+    "leads:help": "bun run src/cli.ts -- --help",
+    "check": "bun run src/cli.ts -- --area \"Hamilton, ON\" --radius 8km --max-checks 0"
+  },
+  "engines": {
+    "bun": ">=1.1.0"
+  }
+}

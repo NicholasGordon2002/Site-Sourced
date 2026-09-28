@@ -1,0 +1,9 @@
+# dependencies (the engine has none — it runs on Bun's built-ins)
+node_modules/
+
+# HTTP cache: re-created on demand, can be large
+out/cache/
+
+# scratch
+*.log
+.DS_Store
