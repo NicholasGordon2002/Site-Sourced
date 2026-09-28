@@ -4,14 +4,18 @@
  * A static page cannot send email by itself, so the form posts to a relay the
  * client owns. These presets are the ones we evaluated; the record picks one by
  * name and supplies the key. Every fact below was read off the provider's own
- * pages during the evaluation on 28 September 2026 (see README for the caveats) —
- * update this file when a provider changes its pricing.
+ * pages on 28 September 2026 — the Formspark rows come from
+ * `docs/formspark.md`, which cites the exact pages; update that file and this
+ * one when a provider changes its pricing or its retention.
  *
  * What we will not do, whichever provider is chosen:
  *   - keep a copy of a submission ourselves (no database, no log, no list),
  *   - put the client's email address in the page (the key does the routing),
  *   - leave a visitor with no route when the relay is down (email + phone are
- *     always printed next to the form).
+ *     always printed next to the form),
+ *   - describe the relay as "forwarding only" when it also stores the message.
+ *     `visitor_storage` is the sentence the visitor actually reads, so it has to
+ *     match what the provider's own privacy policy says.
  */
 
 export interface FormProvider {
@@ -29,6 +33,11 @@ export interface FormProvider {
   who_owns_the_account: string;
   free_tier: string;
   if_it_lapses: string;
+  /**
+   * One plain sentence for the demo page: where the visitor's message ends up.
+   * Shown under the form, so it must be true of this provider specifically.
+   */
+  visitor_storage: (vars: { business: string }) => string;
   /** Provider documentation, for the hand-over pack. */
   url: string;
 }
@@ -51,21 +60,31 @@ export const PROVIDERS: Record<string, FormProvider> = {
     who_owns_the_account: "the client: they create the access key with their own address, so it is theirs to rotate or revoke",
     free_tier: "free plan: 250 submissions per month, no card, no monthly bill",
     if_it_lapses: "the form stops delivering; the page still shows the client's email address and phone number, so an enquiry is never lost",
+    visitor_storage: ({ business }) => `The form passes your message to ${business} by email; the relay does not keep a copy.`,
     url: "https://web3forms.com/",
   },
   formspark: {
     key: "formspark",
     label: "Formspark",
     endpoint: "https://submit-form.com/{key}",
-    hiddenFields: ({ business }) => ({ _subject: `Website enquiry from ${business} (Site Sourced demo)` }),
+    hiddenFields: ({ business }) => ({
+      // The only documented way to set the notification email's title. Formspark
+      // reads any field name starting with `_` as an instruction, not content.
+      "_email.template.title": `Website enquiry from ${business} (Site Sourced demo)`,
+    }),
     encode: "form",
-    // Verified from formspark.io/pricing on 2026-09-28.
-    stores_submissions: "yes — a submission archive is held on the provider's side (shown in their dashboard)",
-    needs_account: "yes — a free account (email sign-in) creates the form id",
-    who_owns_the_account: "the client: the account is theirs and the form id belongs to it",
-    free_tier: "free plan: 250 submissions, 10 forms; extra volume is a one-time data bundle, never a subscription",
-    if_it_lapses: "submissions are refused once the free allowance is spent; the printed email address and phone number still work",
-    url: "https://formspark.io/pricing",
+    // Sources, all read on 2026-09-28 (see docs/formspark.md for the quotes):
+    //   formspark.io/legal/privacy-policy      — retention of submission content
+    //   documentation.formspark.io/troubleshooting/limits-and-plans
+    //   documentation.formspark.io/dashboard/email-notification-settings
+    stores_submissions: "yes — the message is kept in the client's own Formspark account (dashboard) for as long as the client leaves it there; a deleted submission stays recoverable for a further 30 days",
+    needs_account: "yes — a free account (email magic-link sign-in) creates the form id",
+    who_owns_the_account: "the client: the account is theirs and the form id belongs to it, so they can read, export or delete submissions themselves",
+    free_tier: "free plan: 250 submissions, 10 forms, 5 team members; more submissions are a one-off bundle, never a subscription",
+    if_it_lapses: "the form stops accepting new submissions once the allowance is spent (recent ones are held back rather than discarded, and released by buying a bundle); the printed email address and phone number still work",
+    visitor_storage: ({ business }) =>
+      `Formspark emails it to ${business} and also keeps a copy in ${business}'s own Formspark account until ${business} deletes it.`,
+    url: "https://documentation.formspark.io/",
   },
   staticforms: {
     key: "staticforms",
@@ -83,6 +102,7 @@ export const PROVIDERS: Record<string, FormProvider> = {
     who_owns_the_account: "the client: they generate the key with their own address",
     free_tier: "free plan (low monthly submission cap); paid plans exist but are not needed at a small business's volume",
     if_it_lapses: "the form stops delivering; the printed email address and phone number still work",
+    visitor_storage: ({ business }) => `The form passes your message to ${business} by email; the relay does not keep a copy.`,
     url: "https://www.staticforms.xyz/",
   },
   formsubmit: {
@@ -96,6 +116,7 @@ export const PROVIDERS: Record<string, FormProvider> = {
     who_owns_the_account: "nobody — the address itself is the credential, which is also its weakness",
     free_tier: "free, no published monthly cap",
     if_it_lapses: "the form stops delivering; the printed email address and phone number still work",
+    visitor_storage: ({ business }) => `The form emails your message to ${business}; there is no dashboard holding a copy.`,
     url: "https://formsubmit.co/",
   },
   relay: {
@@ -109,6 +130,7 @@ export const PROVIDERS: Record<string, FormProvider> = {
     who_owns_the_account: "whoever runs the endpoint",
     free_tier: "n/a",
     if_it_lapses: "the form stops delivering; the printed email address and phone number still work",
+    visitor_storage: () => `This is a test relay: the message goes to the endpoint the demo was built with, and nothing is sent to a real business.`,
     url: "",
   },
 };
@@ -127,8 +149,9 @@ export const KEY_PLACEHOLDER = "REPLACE_WITH_PROVIDER_ACCESS_KEY";
 
 /**
  * Turn the record's form fields into a concrete endpoint. `env:NAME` in
- * `form_access_key` reads the value from the environment, so a real key never has
- * to be committed to the repository.
+ * `form_access_key` reads the value from the environment (the CLI also loads a
+ * gitignored `.env.local` — see README), so a real key never has to be committed
+ * to the repository.
  */
 export function resolveForm(record: {
   name: string;
@@ -155,7 +178,7 @@ export function resolveForm(record: {
     warning = `form key: no form_access_key in the record — the bundle was written with the placeholder ${KEY_PLACEHOLDER}.`;
   }
 
-  let endpoint = key === KEY_PLACEHOLDER && provider.key === "formsubmit" ? provider.endpoint : provider.endpoint;
+  let endpoint = provider.endpoint;
   if (record.form_endpoint) endpoint = record.form_endpoint;
   endpoint = endpoint
     .replace("{key}", key)

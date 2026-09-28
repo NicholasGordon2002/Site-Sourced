@@ -12,3 +12,7 @@ out/cache/
 out/demos/
 out/formtest/
 out/cache/demo/
+# per-client values (form ids, relay endpoints) — never committed
+.env.local
+# fetched provider documentation kept as evidence
+out/fs-docs/

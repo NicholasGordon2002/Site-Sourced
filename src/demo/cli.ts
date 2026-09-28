@@ -18,6 +18,7 @@ import { fileURLToPath } from "node:url";
 
 import type { BusinessRecord, LoadedRecord } from "./types.ts";
 import { buildBundle, GENERATOR } from "./build.ts";
+import { loadEnvFile } from "./env.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = resolve(HERE, "..", "..");
@@ -31,6 +32,9 @@ interface Args {
   formEndpoint: string;
   quiet: boolean;
   summaryJson: string;
+  /** Where per-client values such as a form id are read from (gitignored). */
+  envFile: string;
+  noEnvFile: boolean;
   help: boolean;
 }
 
@@ -47,6 +51,8 @@ Flags
   --form-endpoint <url> override every record's form endpoint (used for testing a
                         local relay; never for a real prospect)
   --summary <path>      also write the run summary as JSON
+  --env-file <path>     where per-client values are read from (default .env.local)
+  --no-env-file         do not read any env file (use the real environment only)
   --quiet
   --help
 
@@ -63,8 +69,9 @@ Record format (one JSON object, or an array, or {"records": [...]}):
     "hours": [ { "days": "Mon–Fri", "hours": "9:00 am – 6:00 pm" } ],
     "services": [ { "name": "Haircut", "note": "optional client wording" } ],
     "form_recipient": "the-business@example.com",   // required for a working form
-    "form_provider": "web3forms",                   // see src/demo/forms.ts
-    "form_access_key": "env:SS_FORMS_ACCESS_KEY"    // never commit a real key
+    "form_provider": "formspark",                   // see src/demo/forms.ts
+    "form_access_key": "env:SS_FORMSPARK_FORM_ID"   // the id itself lives in
+                                                    // gitignored .env.local, never here
   }
 `;
 
@@ -78,6 +85,8 @@ function parseArgs(argv: string[]): Args {
     formEndpoint: "",
     quiet: false,
     summaryJson: "",
+    envFile: join(PROJECT_ROOT, ".env.local"),
+    noEnvFile: false,
     help: false,
   };
   for (let i = 0; i < argv.length; i++) {
@@ -93,6 +102,8 @@ function parseArgs(argv: string[]): Args {
       case "--cache-dir": args.cacheDir = resolve(next()); break;
       case "--form-endpoint": args.formEndpoint = next(); break;
       case "--summary": args.summaryJson = resolve(next()); break;
+      case "--env-file": args.envFile = resolve(next()); break;
+      case "--no-env-file": args.noEnvFile = true; break;
       case "--no-images": args.noImages = true; break;
       case "--refresh": args.refresh = true; break;
       case "--quiet": case "-q": args.quiet = true; break;
