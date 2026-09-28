@@ -7,3 +7,8 @@ out/cache/
 # scratch
 *.log
 .DS_Store
+
+# generated demos and their image cache
+out/demos/
+out/formtest/
+out/cache/demo/

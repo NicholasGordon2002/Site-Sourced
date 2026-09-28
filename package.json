@@ -7,7 +7,10 @@
   "scripts": {
     "leads": "bun run src/cli.ts",
     "leads:help": "bun run src/cli.ts -- --help",
-    "check": "bun run src/cli.ts -- --area \"Hamilton, ON\" --radius 8km --max-checks 0"
+    "check": "bun run src/cli.ts -- --area \"Hamilton, ON\" --radius 8km --max-checks 0",
+    "demo": "bun run src/demo/cli.ts",
+    "demo:help": "bun run src/demo/cli.ts -- --help",
+    "demo:fixtures": "bun run src/demo/cli.ts -- --record test/fixtures --out out/demos"
   },
   "engines": {
     "bun": ">=1.1.0"

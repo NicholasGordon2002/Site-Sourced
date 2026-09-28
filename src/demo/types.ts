@@ -1,0 +1,149 @@
+/**
+ * Site Sourced — demo generator types.
+ *
+ * A record is the only input: everything on the generated page comes from it.
+ * Nothing is invented, and nothing is ever fetched from the business's own site.
+ */
+
+/** One opening-hours row, already in plain English ("Mon–Fri", "9:00 am – 6:00 pm"). */
+export interface HoursRow {
+  days: string;
+  hours: string;
+}
+
+/** One service or treatment offered. `note` is optional and always the client's own words. */
+export interface ServiceItem {
+  name: string;
+  note: string;
+}
+
+/** Where the business is. `street` may be empty — OSM often has no address. */
+export interface RecordAddress {
+  street: string;
+  city: string;
+  province: string;
+  postcode: string;
+}
+
+/** An image supplied by hand (CC0/PD file we already hold, or a labelled AI fallback). */
+export interface ImageOverride {
+  role: "hero" | "about";
+  /** Absolute or repo-relative path to a local file. Copied into the bundle. */
+  file: string;
+  /** Exact licence wording. Must be CC0/public domain, or start with "AI-generated". */
+  license: string;
+  source_url: string;
+  author: string;
+}
+
+/**
+ * The business record. Field names are deliberately plain so the JSON is readable
+ * by a human editing it by hand.
+ */
+export interface BusinessRecord {
+  /** Directory name under `out/demos/`. Derived from `name` when absent. */
+  slug?: string;
+  name: string;
+  /** e.g. "Barber shop", "Landscaping", "Dental clinic". */
+  category: string;
+  /** Optional human grouping from the lead engine, e.g. "Salons & barbers". */
+  category_group?: string;
+  address?: Partial<RecordAddress>;
+  phone?: string;
+  email?: string;
+  /** Either pre-formatted rows, or the raw OSM `opening_hours` string. */
+  hours?: HoursRow[] | string;
+  services?: (string | ServiceItem)[];
+  /** Any extra facts we hold and may print (never used to invent anything). */
+  notes?: string;
+  /** Where the contact form delivers. Required for a usable form. */
+  form_recipient: string;
+  /** Provider preset name — see src/demo/forms.ts (`web3forms`, `formspark`, ...). */
+  form_provider?: string;
+  /** Provider access key / form id. `env:NAME` reads the value from the environment. */
+  form_access_key?: string;
+  /** Escape hatch for self-hosted or test relays: overrides the preset endpoint. */
+  form_endpoint?: string;
+  /** Hand-supplied imagery. When absent the generator sources CC0/PD images itself. */
+  images?: ImageOverride[];
+  /** Kept out of the page; carried into the manifest for our own records. */
+  source?: string;
+}
+
+/** A record loaded from disk, with the file it came from. */
+export interface LoadedRecord {
+  path: string;
+  record: BusinessRecord;
+}
+
+/** One image that ended up inside the bundle (or a recorded fallback with no file). */
+export interface ManifestImage {
+  role: "hero" | "about";
+  /** Path inside the bundle, `null` when we fell back to a CSS/SVG treatment. */
+  file: string | null;
+  /** Where it came from, e.g. "Wikimedia Commons", "css-gradient-fallback". */
+  source: string;
+  source_url: string;
+  license: string;
+  license_url?: string;
+  author: string;
+  retrieved_at: string;
+  width?: number;
+  height?: number;
+  notes?: string;
+}
+
+/** The bundle manifest: our own audit trail, and the hand-over answer sheet. */
+export interface DemoManifest {
+  generator: string;
+  generated_at: string;
+  slug: string;
+  business: {
+    name: string;
+    category: string;
+    city: string;
+    phone_printed: boolean;
+    email_printed: boolean;
+    source: string;
+  };
+  files: string[];
+  images: ManifestImage[];
+  compliance: {
+    robots_meta: string;
+    banner_text: string;
+    footer_disclaimer: string;
+    banner_above_the_fold: boolean;
+    business_own_assets_used: boolean;
+    external_requests_on_load: string[];
+    /** Plain-language note on what the page does and does not fetch. */
+    external_requests_note: string;
+  };
+  form: {
+    provider: string;
+    endpoint: string;
+    recipient: string;
+    needs_account: string;
+    who_owns_the_account: string;
+    stores_submissions: string;
+    free_tier: string;
+    if_it_lapses: string;
+    fields: string[];
+    fallback_shown: string;
+  };
+  handoff: {
+    external_dependencies: { name: string; purpose: string; owner: string; cost: string; url: string }[];
+    recurring_costs: string[];
+    day_one_ownership: string[];
+  };
+  warnings: string[];
+}
+
+/** Result of generating one bundle. */
+export interface BundleResult {
+  slug: string;
+  dir: string;
+  files: string[];
+  images: ManifestImage[];
+  warnings: string[];
+  bytes: number;
+}
