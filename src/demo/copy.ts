@@ -21,9 +21,15 @@ import type { BusinessRecord, HoursRow, ManifestImage, ServiceItem } from "./typ
 
 export interface CategoryProfile {
   key: string;
-  /** Accent colours for the whole page. Plain hex, no framework, no theme file. */
+  /**
+   * The page's one accent, as the three values the stylesheet needs. Plain hex, no
+   * framework, no theme file. See docs/design-system.md §3 for the table these come
+   * from, and why each one carries white text at 4.5:1 or better.
+   */
   accent: string;
-  accentDark: string;
+  /** Accent as text on a light surface — links and hover states. */
+  accentInk: string;
+  /** Accent as a wash behind a notice or a card. */
   accentSoft: string;
   /** Words used to describe the kind of work, e.g. "services", "treatments". */
   offeringPlural: string;
@@ -34,81 +40,81 @@ export interface CategoryProfile {
 const PROFILES: CategoryProfile[] = [
   {
     key: "salon",
-    accent: "#8c4a2f",
-    accentDark: "#5f3220",
-    accentSoft: "#f6ece6",
+    accent: "#9E2B23",
+    accentInk: "#7A1F19",
+    accentSoft: "#FBEDEA",
     offeringPlural: "services",
     imageQueries: ["barber shop interior", "hair salon interior", "barber tools scissors"],
   },
   {
     key: "landscaping",
-    accent: "#2f6b3a",
-    accentDark: "#1e4726",
-    accentSoft: "#eaf3ec",
+    accent: "#4C7A23",
+    accentInk: "#35561A",
+    accentSoft: "#EEF5E4",
     offeringPlural: "services",
     imageQueries: ["garden landscaping", "lawn mowing", "hedge trimming garden"],
   },
   {
     key: "dental",
-    accent: "#1f6f8b",
-    accentDark: "#14505f",
-    accentSoft: "#e8f3f7",
+    accent: "#1B7A94",
+    accentInk: "#125B70",
+    accentSoft: "#E7F3F6",
     offeringPlural: "treatments",
     imageQueries: ["dental clinic chair", "dentist office interior", "dental instruments"],
   },
   {
     key: "trades",
-    accent: "#8a5a00",
-    accentDark: "#5f3e00",
-    accentSoft: "#fbf1e0",
+    accent: "#A06410",
+    accentInk: "#6F4508",
+    accentSoft: "#FBF1DF",
     offeringPlural: "services",
     imageQueries: ["plumber tools workbench", "carpenter workshop", "electrician tools"],
   },
   {
     key: "food",
-    accent: "#9c2b2b",
-    accentDark: "#6d1c1c",
-    accentSoft: "#fbebeb",
+    accent: "#7B2D4E",
+    accentInk: "#591E38",
+    accentSoft: "#F9ECF1",
     offeringPlural: "menu",
     imageQueries: ["small bakery interior", "restaurant table interior", "coffee shop counter"],
   },
   {
     key: "retail",
-    accent: "#4a3f8f",
-    accentDark: "#332b66",
-    accentSoft: "#efedfa",
+    accent: "#5346A0",
+    accentInk: "#3A3072",
+    accentSoft: "#EFEDFA",
     offeringPlural: "products and services",
     imageQueries: ["small shop interior", "store shelves retail", "florist shop flowers"],
   },
   {
     key: "fitness",
-    accent: "#1f5f7a",
-    accentDark: "#143f52",
-    accentSoft: "#e9f2f7",
+    accent: "#1B5FA8",
+    accentInk: "#12417A",
+    accentSoft: "#E9F0FA",
     offeringPlural: "classes and services",
     imageQueries: ["gym equipment", "yoga studio interior", "fitness studio"],
   },
   {
     key: "health",
-    accent: "#2a6b6b",
-    accentDark: "#1c4a4a",
-    accentSoft: "#e8f2f2",
+    accent: "#2A6B6B",
+    accentInk: "#1C4A4A",
+    accentSoft: "#E8F2F2",
     offeringPlural: "services",
     imageQueries: ["physiotherapy clinic", "medical clinic interior", "clinic waiting room"],
   },
   {
     key: "professional",
-    accent: "#33415c",
-    accentDark: "#222c40",
-    accentSoft: "#eceff4",
+    accent: "#3A4763",
+    accentInk: "#28324A",
+    accentSoft: "#ECEFF4",
     offeringPlural: "services",
     imageQueries: ["office desk documents", "law office books", "modern office interior"],
   },
   {
     key: "general",
-    accent: "#3b4a6b",
-    accentDark: "#28324a",
-    accentSoft: "#eceff4",
+    accent: "#3D4A63",
+    accentInk: "#2A3346",
+    accentSoft: "#EDEFF3",
     offeringPlural: "services",
     imageQueries: ["storefront small business", "workshop tools bench", "local shop counter"],
   },

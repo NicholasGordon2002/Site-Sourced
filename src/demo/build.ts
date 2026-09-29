@@ -2,10 +2,10 @@
  * Site Sourced — bundle assembly and self-check.
  *
  * `buildBundle` writes one self-contained folder: index.html, styles.css, site.js,
- * favicon.svg, the images, manifest.json and a plain-language README.txt. Every
- * reference on the page is a relative path to a file in the same folder, so the
- * bundle opens straight from disk (`file://`) and would also drop onto any host
- * unchanged.
+ * favicon.svg, the images, the two self-hosted fonts with their OFL licence text
+ * (fonts/), manifest.json and a plain-language README.txt. Every reference on the
+ * page is a relative path to a file in the same folder, so the bundle opens straight
+ * from disk (`file://`) and would also drop onto any host unchanged.
  *
  * The self-check is not decoration: if a compliance string is missing, if a local
  * file a page refers to does not exist, or if the copy guard finds a claim we are
@@ -25,6 +25,15 @@ import { sourceImages } from "./images.ts";
 import { esc, renderCss, renderEditingReadme, renderFavicon, renderIndex, renderJs, type RenderContext } from "./render.ts";
 
 export const GENERATOR = "sitesourced-demo-generator/0.1";
+
+/**
+ * The two typefaces every bundle ships, and the licence text that has to travel with
+ * them under the SIL Open Font License. They are files inside the bundle — loaded by a
+ * relative `url()` from styles.css — because the page must load nothing from the
+ * network. See docs/design-system.md §2.
+ */
+const FONT_ASSETS = ["fraunces-latin-600.woff2", "source-sans-3-latin.woff2", "OFL.txt"] as const;
+const FONT_SOURCE_DIR = join(import.meta.dir, "assets", "fonts");
 
 export interface BuildOptions {
   outRoot: string;
@@ -186,6 +195,18 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   await write("site.js", js);
   await write("favicon.svg", favicon);
   await write("README.txt", readme);
+
+  // The page's fonts, and the licence that must travel with them. A missing asset is a
+  // build failure, not a warning: the stylesheet would be pointing at nothing.
+  for (const name of FONT_ASSETS) {
+    try {
+      await mkdir(join(dir, "fonts"), { recursive: true });
+      await copyFile(join(FONT_SOURCE_DIR, name), join(dir, "fonts", name));
+      files.push(`fonts/${name}`);
+    } catch (err) {
+      await fail(`bundle ${slug} cannot include its font assets — ${name}: ${(err as Error).message}`);
+    }
+  }
 
   // Images: either the bytes we just downloaded, or a file supplied in the record.
   const images: ManifestImage[] = [];
