@@ -1,20 +1,20 @@
 #!/usr/bin/env bun
 /**
- * The illustration label: an AI-generated placeholder must be labelled *on the page*.
+ * The claims a generated page makes about itself, and the build's refusal to make
+ * one it cannot support.
  *
- *   bun test test/illustration-label.test.ts
+ *   bun test test/page-claims.test.ts
  *
- * The plan's rule is that where no suitable public-domain photograph exists, an
- * AI-generated placeholder may be used — but it must be labelled on the page as an
- * illustration, not a photograph of the business, and recorded as such in the
- * bundle. The manifest half of that was already there ("AI-generated image used as
- * a fallback"); the page half was not: the caption element did not exist, so a
- * visitor saw an AI image presented as the shop.
+ * Two of them live here, both enforced by `complianceChecks` in build.ts (the single
+ * self-check the build throws on):
  *
- * These tests pin both halves to one sentence, `illustrationLabel` in copy.ts:
- * the page renders it in a `<figcaption>` in normal flow (no hover, no JS), and the
- * build's compliance self-check refuses a page whose manifest records an
- * AI-generated image but which carries no such label.
+ *   1. An AI-generated placeholder must be labelled on the page as an illustration,
+ *      not left looking like a photograph of the business. The manifest recording it
+ *      is not evidence of a label — the page has to carry one.
+ *   2. The phone number and email address printed on a demonstration page are as
+ *      published in public listings and were never confirmed with the business, so
+ *      they carry the caveat — especially because the demonstration notice sends a
+ *      visitor to those very details as the way to reach the business.
  *
  * No filesystem, no network. Fixtures are fictional.
  */
@@ -161,5 +161,56 @@ test("a photograph carries no illustration label", async () => {
   expect(html).not.toContain("<figcaption");
   expect(
     complianceChecks({ html, record: RECORD, copy: ctx.copy, form: ctx.form, delivery: ctx.delivery, images }),
+  ).toEqual([]);
+});
+
+const CC0 = {
+  role: "hero" as const,
+  file: "images/hero.jpg",
+  license: "CC0 1.0 (public domain dedication)",
+  source_url: "https://example.invalid/photo",
+  author: "a photographer",
+};
+
+test("the details a demonstration points a visitor at carry the published-listings caveat", async () => {
+  const images = await manifestImages({ ...RECORD, images: [CC0] });
+  const { html, ctx } = await page(RECORD, images);
+
+  expect(ctx.copy.contactCaveat).toContain("as published in public listings — please confirm");
+  // Printed twice: with the details in the contact section, and in the footer next to
+  // the phone number and email address.
+  expect(html.split("as published in public listings — please confirm").length - 1).toBe(2);
+  // The demonstration notice points at exactly those details.
+  expect(ctx.copy.contactIntro).toContain("use the phone number or email address printed with it");
+  expect(
+    complianceChecks({ html, record: RECORD, copy: ctx.copy, form: ctx.form, delivery: ctx.delivery, images }),
+  ).toEqual([]);
+
+  // A page that prints the details without the caveat fails the build.
+  const stripped = html.replace(/as published in public listings[\s\S]*?relying on them\./g, "");
+  expect(stripped).not.toContain("as published in public listings");
+  const problems = complianceChecks({
+    html: stripped,
+    record: RECORD,
+    copy: ctx.copy,
+    form: ctx.form,
+    delivery: ctx.delivery,
+    images,
+  });
+  expect(problems.join(" ")).toContain("caveat that belongs with them");
+});
+
+test("a delivered page leaves the caveat out", async () => {
+  // The client's own address as the recipient: the delivery phase. Their details are
+  // their own by then, so the page does not call them unconfirmed.
+  const delivered: BusinessRecord = { ...RECORD, form_recipient: RECORD.email!, form_delivery: "business" };
+  const images = await manifestImages({ ...delivered, images: [CC0] });
+  const { html, ctx } = await page(delivered, images);
+
+  expect(ctx.delivery.mode).toBe("business");
+  expect(ctx.copy.contactCaveat).toBe("");
+  expect(html).not.toContain("as published in public listings");
+  expect(
+    complianceChecks({ html, record: delivered, copy: ctx.copy, form: ctx.form, delivery: ctx.delivery, images }),
   ).toEqual([]);
 });

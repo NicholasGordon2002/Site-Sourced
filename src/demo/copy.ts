@@ -282,6 +282,13 @@ export interface DemoCopy {
   formNotice: string;
   /** Which case the notice above was written for (carried into the manifest). */
   formNoticeDelivery: FormDeliveryMode;
+  /**
+   * The caveat printed with the business's phone number and email address, or "" in
+   * the business phase. The plan requires it: those details come from public
+   * listings, and the demonstration notice points a visitor at them as the way to
+   * reach the business, so they must not read as confirmed.
+   */
+  contactCaveat: string;
   /** What the form's own success message may claim. */
   formSuccess: string;
   banner: string;
@@ -363,8 +370,16 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
       ].join(" ");
 
   const banner = `This is an unsolicited design proposal from Site Sourced. It is not affiliated with, endorsed by, or operated by ${record.name}.`;
-
   const footerDisclaimer = `This page is an unsolicited design proposal from Site Sourced. It is not affiliated with, endorsed by, or operated by ${record.name}.`;
+
+  // The printed phone number and email address came from public listings and were
+  // never confirmed with the business — while this page is a demonstration the
+  // notice above the form sends a visitor to exactly those details, so the caveat
+  // belongs with them rather than only in the banner. On a delivered site the client
+  // has confirmed their own details, so it is not printed.
+  const contactCaveat = businessPhase
+    ? ""
+    : `The contact details for ${record.name} on this page are as published in public listings — please confirm them with the business before relying on them.`;
 
   void slug;
   return {
@@ -378,6 +393,7 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
     contactHeading,
     formNotice,
     formNoticeDelivery: delivery.mode,
+    contactCaveat,
     formSuccess,
     banner,
     footerDisclaimer,

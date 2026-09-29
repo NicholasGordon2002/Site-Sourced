@@ -268,7 +268,8 @@ ${hidden}
           <h3>Prefer email?</h3>
 ${record.email ? `          <p>Write to us directly: <a href="mailto:${esc(record.email)}">${esc(record.email)}</a></p>` : `          <p>No email address is recorded publicly for this business — please use the phone number.</p>`}
 ${record.phone ? `          <p>Or call <a href="${tel}">${esc(record.phone)}</a>.</p>` : ""}
-        </div>
+${copy.contactCaveat ? `          <!-- Compliance: these details came from public listings and are unconfirmed. Do not remove. -->
+          <p class="muted">${esc(copy.contactCaveat)}</p>\n` : ""}        </div>
       </div>
     </section>
   </main>
@@ -282,6 +283,8 @@ ${addr ? `        ${esc(addr)}<br>\n` : ""}${record.phone ? `        <a href="${
       <!-- Compliance: the same disclaimer as the banner, next to the business's name
            and contact details. Do not remove. -->
       <p class="disclaimer">${esc(copy.footerDisclaimer)}</p>
+${copy.contactCaveat ? `      <!-- Compliance: the printed details came from public listings. Do not remove. -->
+      <p class="footer-small">${esc(copy.contactCaveat)}</p>\n` : ""}
       <p class="footer-small">
         Business details come from public mapping data (© OpenStreetMap contributors, ODbL 1.0).
         Copy, layout and imagery: Site Sourced. No logo, photograph or text was taken from any

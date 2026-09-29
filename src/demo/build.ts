@@ -67,6 +67,15 @@ export function complianceChecks(vars: {
   if (delivery.mode === "demo" && !html.includes("demonstration site")) {
     problems.push("the bundle is in the demonstration phase but the page does not say so in words a visitor would recognise");
   }
+  // The demonstration notice sends a visitor to the printed phone number and email
+  // address to reach the business, so those details must carry the plan's caveat:
+  // they are as published in public listings and were never confirmed with the
+  // business. (On a delivered site the client has confirmed them, so it is empty.)
+  if (copy.contactCaveat && !html.includes(esc(copy.contactCaveat))) {
+    problems.push(
+      "the page prints the business's contact details but not the \"as published in public listings — please confirm\" caveat that belongs with them, so an unconfirmed phone number or address reads as the business's own.",
+    );
+  }
   const banned = guardCopy(html, record);
   if (banned.length > 0) problems.push(`copy guard tripped: ${banned.join(", ")}`);
   // An AI-generated placeholder must be labelled on the page as an illustration, in
@@ -226,6 +235,8 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
       footer_disclaimer: copy.footerDisclaimer,
       banner_above_the_fold: true,
       business_own_assets_used: false,
+      /* Printed with the phone number and email address; null on a delivered site. */
+      contact_details_caveat: copy.contactCaveat || null,
       external_requests_on_load: [],
       external_requests_note:
         "The page loads nothing from the network: styles, script, favicon and images are files in this folder. The only outbound request the site can make is the contact-form POST, which happens when a visitor submits the form.",

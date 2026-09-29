@@ -128,6 +128,8 @@ export interface DemoManifest {
     footer_disclaimer: string;
     banner_above_the_fold: boolean;
     business_own_assets_used: boolean;
+    /** The caveat printed with the business's contact details, or null if none. */
+    contact_details_caveat: string | null;
     external_requests_on_load: string[];
     /** Plain-language note on what the page does and does not fetch. */
     external_requests_note: string;
