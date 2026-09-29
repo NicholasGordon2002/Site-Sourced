@@ -55,6 +55,11 @@ export function referencedPaths(html: string, css = ""): string[] {
     const path = ref.trim().split("?")[0]!.trim();
     if (!path) return;
     if (/^(https?:|mailto:|tel:|data:|#|\/\/)/.test(path)) return;
+    // A link to another page of the same site is navigation, not a file this page
+    // loads: counting four sibling pages into every page's weight would make the
+    // per-page budget meaningless. The build checks separately that every nav target
+    // is a file the bundle actually contains.
+    if (/\.html?$/i.test(path)) return;
     refs.add(path.replace(/^\.\//, ""));
   };
   for (const m of html.matchAll(/(?:src|href)="([^"#][^"]*)"/g)) add(m[1]!);

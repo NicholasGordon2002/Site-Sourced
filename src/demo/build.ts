@@ -1,9 +1,10 @@
 /**
  * Site Sourced — bundle assembly and self-check.
  *
- * `buildBundle` writes one self-contained folder: index.html, styles.css, site.js,
+ * `buildBundle` writes one self-contained folder: five pages (index.html,
+ * services.html, about.html, contact.html, privacy.html), styles.css, site.js,
  * favicon.svg, the images, the two self-hosted fonts with their OFL licence text
- * (fonts/), manifest.json and a plain-language README.txt. Every reference on the
+ * (fonts/), manifest.json and a plain-language README.txt. Every reference on every
  * page is a relative path to a file in the same folder, so the bundle opens straight
  * from disk (`file://`) and would also drop onto any host unchanged.
  *
@@ -16,15 +17,36 @@ import { copyFile, mkdir, readdir, rm, stat } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 
 import type { BundleResult, BusinessRecord, DemoManifest, ManifestImage } from "./types.ts";
-import type { DemoCopy } from "./copy.ts";
-import { composeCopy, guardCopy, illustrationLabel, isIllustrativeImage, normaliseServices, profileFor, slugify } from "./copy.ts";
+import type { DemoCopy, PrivacyNotice } from "./copy.ts";
+import {
+  composeCopy,
+  composePrivacy,
+  guardCopy,
+  illustrationLabel,
+  isIllustrativeImage,
+  normaliseServices,
+  privacyNoticeProblems,
+  profileFor,
+  slugify,
+} from "./copy.ts";
 import type { FormDelivery } from "./delivery.ts";
 import { formDeliveryProblems, resolveDelivery } from "./delivery.ts";
 import { KEY_PLACEHOLDER, resolveForm, type ResolvedForm } from "./forms.ts";
 import { sourceImages } from "./images.ts";
 import { filesForSupplied, inspectSuppliedImage, manifestForSupplied } from "./supplied.ts";
 import { BUDGET, imageBudgetProblems, kb, pageLoadout, weightProblems } from "./weight.ts";
-import { esc, renderCss, renderEditingReadme, renderFavicon, renderIndex, renderJs, type RenderContext } from "./render.ts";
+import {
+  esc,
+  PAGE_IDS,
+  PAGE_SPECS,
+  renderCss,
+  renderEditingReadme,
+  renderFavicon,
+  renderJs,
+  renderPages,
+  type RenderContext,
+  type RenderedPage,
+} from "./render.ts";
 
 export const GENERATOR = "sitesourced-demo-generator/0.1";
 
@@ -49,61 +71,168 @@ export interface BuildOptions {
 }
 
 /**
- * Everything that must be true for a bundle to be publishable at all — one list,
- * one throw. It covers the page's compliance strings *and* the contact form: an
- * unconfigured endpoint, a recipient that cannot receive mail, or a form notice
- * that promises delivery to the business while the form routes somewhere else all
- * fail the build here, before any of it can reach a public path.
+ * Visitor-facing text that is still a working note rather than a sentence.
+ *
+ * The plan's rule is that nothing published carries placeholder data, and the privacy
+ * notice is the first page with a value we do not have yet (the owner's legal name and
+ * mailing address). The rule the owner set for it is stricter than "looks finished": a
+ * bracket-shaped or invented value must never reach a public path, so the build refuses
+ * a page containing a bracketed token, an unfilled `{Template}` token, or a working
+ * note. Attributes, comments and scripts are stripped first: what is scanned is what a
+ * visitor would read.
+ */
+export function placeholderProblems(pages: RenderedPage[]): string[] {
+  const patterns: [RegExp, string][] = [
+    [/\[[^\]\n]{2,60}\]/, "a bracketed placeholder"],
+    [/\{[a-zA-Z][^}\n]{2,60}\}/, "an unfilled template token"],
+    [/\b(TBD|TODO|FIXME)\b/, "a working note"],
+    [/lorem ipsum/i, "filler text"],
+  ];
+  const problems: string[] = [];
+  for (const page of pages) {
+    const text = page.html
+      .replace(/<!--[\s\S]*?-->/g, " ")
+      .replace(/<[^>]*>/g, " ")
+      .replace(/\s+/g, " ");
+    for (const [pattern, what] of patterns) {
+      const hit = pattern.exec(text);
+      if (hit) {
+        problems.push(
+          `${page.file} carries ${what} in visitor-facing text ("${hit[0].trim()}"). Nothing published carries placeholder data: ` +
+            `fill the value in copy.ts (PRIVACY_IDENTITY for our own identity) or leave the sentence out, and rebuild.`,
+        );
+      }
+    }
+  }
+  return problems;
+}
+
+/**
+ * Everything that must be true for a bundle to be publishable at all — one list, one
+ * throw — checked **on every page**, because the plan's compliance rules are per page
+ * and never inherited. It covers the pages' compliance strings, the contact form, and
+ * the privacy notice: an unconfigured endpoint, a recipient that cannot receive mail,
+ * a notice that promises delivery to the business while the form routes somewhere else,
+ * or a page whose printed details carry no caveat all fail the build here, before any
+ * of it can reach a public path.
+ *
+ * `PAGE_SPECS` says which obligations belong to which page, so the check cannot drift
+ * from the template: a page that prints the business's details must carry the caveat
+ * exactly twice, a page that carries the form must carry the delivery notice and load
+ * `site.js`, and every other page must do neither.
  */
 export function complianceChecks(vars: {
-  html: string;
+  pages: RenderedPage[];
   record: BusinessRecord;
   copy: DemoCopy;
   form: ResolvedForm;
   delivery: FormDelivery;
   /** The images this bundle will contain, as recorded in its manifest. */
   images: ManifestImage[];
+  /** The privacy notice this bundle carries, composed for the same phase. */
+  privacy: PrivacyNotice;
 }): string[] {
-  const { html, record, copy, form, delivery, images } = vars;
+  const { pages, record, copy, form, delivery, images, privacy } = vars;
   const problems: string[] = [];
-  if (!/<meta\s+name="robots"\s+content="noindex,\s*nofollow">/.test(html)) {
-    problems.push("missing or malformed <meta name=\"robots\" content=\"noindex, nofollow\">");
-  }
-  if (!html.includes(copy.banner)) problems.push("proposal banner text is not present in the page");
-  if (!html.includes(copy.footerDisclaimer)) problems.push("footer disclaimer is not present next to the business details");
-  if (html.indexOf(copy.banner) > html.indexOf("<header")) problems.push("the banner is not above the header");
-  if (/©\s*<strong>?/.test(html) || html.includes(`© ${record.name}`)) problems.push("a copyright line naming the business is present");
-  // Compared in its escaped form: that is how render.ts writes text into html.
-  if (!html.includes(esc(copy.formNotice))) problems.push("the form notice is not present in the page, next to the form");
-  if (delivery.mode === "demo" && !html.includes("demonstration site")) {
-    problems.push("the bundle is in the demonstration phase but the page does not say so in words a visitor would recognise");
-  }
-  // The demonstration notice sends a visitor to the printed phone number and email
-  // address to reach the business, so those details must carry the plan's caveat:
-  // they are as published in public listings and were never confirmed with the
-  // business. (On a delivered site the client has confirmed them, so it is empty.)
-  if (copy.contactCaveat && !html.includes(esc(copy.contactCaveat))) {
-    problems.push(
-      "the page prints the business's contact details but not the \"as published in public listings — please confirm\" caveat that belongs with them, so an unconfirmed phone number or address reads as the business's own.",
-    );
-  }
-  const banned = guardCopy(html, record);
-  if (banned.length > 0) problems.push(`copy guard tripped: ${banned.join(", ")}`);
-  // An AI-generated placeholder must be labelled on the page as an illustration, in
-  // words a visitor reads — the manifest recording it is not enough. The label is
-  // built by `illustrationLabel`, so the page and the manifest cannot disagree.
   const illustrative = images.filter(isIllustrativeImage);
-  if (illustrative.length > 0) {
-    const label = illustrationLabel(record.name);
-    if (!html.includes(esc(label))) {
-      problems.push(
-        `the bundle's manifest records an AI-generated image (${illustrative.map((i) => i.file).join(", ")}) but the page carries no label saying so. ` +
-          `An AI-generated placeholder must be labelled on the page as an illustration, not left looking like a photograph of ${record.name}; ` +
-          `expected the page to contain: "${label}"`,
-      );
+  const label = illustrationLabel(record.name);
+  const caveat = copy.contactCaveat;
+
+  for (const page of pages) {
+    const spec = PAGE_SPECS[page.id];
+    const html = page.html;
+    const on = `on ${page.file}`;
+
+    if (!/<meta\s+name="robots"\s+content="noindex,\s*nofollow">/.test(html)) {
+      problems.push(`${on}: missing or malformed <meta name="robots" content="noindex, nofollow">`);
     }
+    if (!html.includes(copy.banner)) problems.push(`${on}: the proposal banner text is not present`);
+    if (html.indexOf(copy.banner) > html.indexOf("<header")) problems.push(`${on}: the banner is not above the header`);
+    // The banner has to be the first content element in the body. The skip link is
+    // allowed in front of it: it is a keyboard affordance, not content, and it is
+    // invisible until focused.
+    const inBody = html.slice(html.indexOf("<body>") + 6).replace(/<!--[\s\S]*?-->/g, " ").trim();
+    const afterSkip = inBody.startsWith('<a class="skip-link"')
+      ? inBody.slice(inBody.indexOf("</a>") + 4).trim()
+      : inBody;
+    if (!afterSkip.startsWith('<div class="proposal-banner"')) {
+      problems.push(`${on}: the proposal banner is not the first content element in <body>, so a visitor can meet the business's name before they learn the page is our proposal`);
+    }
+    if (!html.includes(copy.footerDisclaimer)) {
+      problems.push(`${on}: the footer disclaimer is not present next to the business's name`);
+    }
+    if (/©\s*<strong>?/.test(html) || html.includes(`© ${record.name}`)) {
+      problems.push(`${on}: a copyright line naming the business is present`);
+    }
+
+    if (spec.printsDetails) {
+      // The demonstration notice sends a visitor to the printed phone number and
+      // email address to reach the business, so those details must carry the plan's
+      // caveat — twice, once with the details in the page body and once in the
+      // footer. (On a delivered site the client has confirmed them, so it is empty.)
+      const count = caveat ? html.split(esc(caveat)).length - 1 : 0;
+      if (caveat && count !== 2) {
+        problems.push(
+          `${on}: the business's published contact details are printed with the caveat that belongs with them ${count} time(s), not twice (once beside the details in the page body, once in the footer). ` +
+            `Unconfirmed details must never read as the business's own.`,
+        );
+      }
+      if (delivery.mode === "demo" && !html.includes("demonstration site")) {
+        problems.push(`${on}: this bundle is in the demonstration phase but the page does not say so in words a visitor would recognise`);
+      }
+    } else {
+      // The privacy notice prints none of the business's details: a notice about our
+      // own handling is not the place to repeat an unconfirmed phone number.
+      if (caveat && html.includes(esc(caveat))) {
+        problems.push(`${on}: carries the published-listings caveat although it prints none of the business's contact details — the caveat belongs only with the details it qualifies`);
+      }
+      for (const [what, value] of [["phone number", record.phone], ["email address", record.email]] as [string, string | undefined][]) {
+        if (value && html.includes(value)) {
+          problems.push(`${on}: prints the business's ${what} (${value}). The privacy notice is about our own handling, so it reprints none of the business's details.`);
+        }
+      }
+    }
+
+    if (spec.carriesForm) {
+      if (!html.includes("site.js")) {
+        problems.push(`${on}: the page carries the form but does not load site.js, so a submission cannot report its outcome`);
+      }
+      // Compared in its escaped form: that is how render.ts writes text into html.
+      if (!html.includes(esc(copy.formNotice))) {
+        problems.push(`${on}: the form-delivery notice is not present in the page, next to the form`);
+      }
+    } else {
+      if (html.includes("site.js")) {
+        problems.push(`${on}: loads site.js, but the contact form is only on ${PAGE_SPECS.contact.file}. Every other page must work unchanged with JavaScript off, and asks for one file less.`);
+      }
+      if (html.includes(esc(copy.formNotice))) {
+        problems.push(`${on}: quotes the form-delivery notice without carrying the form, which tells a visitor where a message goes on a page that has no message field`);
+      }
+    }
+
+    // An AI-generated placeholder must be labelled on the page that shows it, in words
+    // a visitor reads — the manifest recording it is not enough. The label is built by
+    // `illustrationLabel`, so the page and the manifest cannot disagree.
+    for (const role of spec.slots) {
+      const image = illustrative.find((i) => i.role === role);
+      if (image && !html.includes(esc(label))) {
+        problems.push(
+          `${on}: shows the AI-generated ${role} image (${image.file}) with no label saying so. ` +
+            `An AI-generated placeholder must be labelled as an illustration, not left looking like a photograph of ${record.name}; expected the page to contain: "${label}"`,
+        );
+      }
+    }
+    if (spec.slots.length === 0 && html.includes(esc(label))) {
+      problems.push(`${on}: carries an AI-illustration label although it shows no image that needs one`);
+    }
+
+    const banned = guardCopy(html, record);
+    if (banned.length > 0) problems.push(`${on}: copy guard tripped: ${banned.join(", ")}`);
   }
+
   problems.push(...formDeliveryProblems({ record, form, noticeMode: copy.formNoticeDelivery, placeholder: KEY_PLACEHOLDER }));
+  problems.push(...privacyNoticeProblems({ privacy, record, delivery }));
+  problems.push(...placeholderProblems(pages));
   return problems;
 }
 
@@ -157,6 +286,11 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   const form = resolveForm(record);
   const delivery = resolveDelivery(record, form);
   const copy = composeCopy(record, slug, form, delivery);
+  // The privacy notice is composed for the same phase as the form notice, from the
+  // same derivation — never a flag someone set. Anything the owner has not supplied
+  // (today: our legal name and mailing address) is recorded as an open item rather
+  // than printed as a placeholder.
+  const privacy = composePrivacy(record, form, delivery);
   const warnings: string[] = [];
   if (form.warning) warnings.push(form.warning);
   if (!record.phone) warnings.push("record has no phone number — the header call button and the contact fallback are weaker without one.");
@@ -164,6 +298,9 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   if (normaliseServices(record).length === 0) warnings.push("record lists no services — the services section says so plainly rather than inventing any.");
   if (delivery.mode === "demo") {
     warnings.push(`demonstration phase: ${delivery.basis} — so the page carries the demonstration notice and no message reaches ${record.name}.`);
+  }
+  for (const item of privacy.openItems) {
+    warnings.push(`privacy notice incomplete: ${item}. The page states nothing it cannot support, but this must be filled before a real prospect sees a page.`);
   }
 
   const sourced = await sourceImages(record, {
@@ -217,18 +354,19 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
     profile,
     form,
     delivery,
+    privacy,
     images,
     slug,
     generatedAt: new Date().toISOString(),
   };
 
-  const html = renderIndex(ctx);
+  const pages = renderPages(ctx);
   const css = renderCss(profile, slug);
   const js = renderJs();
   const favicon = renderFavicon(record, profile);
   const readme = renderEditingReadme(ctx);
 
-  const problems = [...problemsBeforeWrite, ...complianceChecks({ html, record, copy, form, delivery, images })];
+  const problems = [...problemsBeforeWrite, ...complianceChecks({ pages, record, copy, form, delivery, images, privacy })];
   if (problems.length > 0) await fail(`compliance self-check failed for ${slug}:\n  - ${problems.join("\n  - ")}`);
 
   const files: string[] = [];
@@ -239,7 +377,7 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
     files.push(relPath);
   };
 
-  await write("index.html", html);
+  for (const page of pages) await write(page.file, page.html);
   await write("styles.css", css);
   await write("site.js", js);
   await write("favicon.svg", favicon);
@@ -288,29 +426,47 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
     warnings.push(`removed ${rel}, a file inside this bundle that this build did not write (a leftover from an earlier run).`);
   }
 
-  const missing = await referencedFilesExist(dir, html, css);
+  // Every page, not just the home page: a nav link to a file that was never written,
+  // or a font a second page refers to, is a 404 on the published host — which serves
+  // flat files and has no directory-index resolution, so `/demo/<slug>/` does not work
+  // and only real paths do.
+  const missing: string[] = [];
+  for (const page of pages) {
+    for (const ref of await referencedFilesExist(dir, page.html, css)) {
+      missing.push(`${page.file} → ${ref}`);
+    }
+  }
   if (missing.length > 0) await fail(`bundle ${slug} refers to files it does not contain: ${missing.join(", ")}`);
 
-  // What the page actually weighs, measured from the files on disk rather than
-  // estimated from the record: the page itself, its stylesheet, its script, its two
-  // fonts, and one file per image slot — the hero variant a 360px phone asks for.
-  // Over the ceiling this bundle does not ship; over the target it still does, and
-  // the manifest carries the number so a heavy-but-honest page is visible, not hidden.
+  // What each page actually weighs, measured from the files on disk rather than
+  // estimated from the record: the page itself, its stylesheet, its script if it has
+  // one, its two fonts, and one file per image slot it shows — the hero variant a
+  // 360px phone asks for. Over the ceiling the bundle does not ship; over the target it
+  // still does, and the manifest carries the per-page number so a heavy-but-honest page
+  // is visible, not hidden.
   const sizes = new Map<string, number>();
   for (const f of files) sizes.set(f, (await stat(join(dir, f))).size);
-  const weight = weightProblems({ page: "index.html", html, css, sizes, images });
+  const weight: string[] = [];
+  const pageBytes: { file: string; bytes: number }[] = [];
+  for (const page of pages) {
+    const loadout = { page: page.file, html: page.html, css, sizes, images };
+    weight.push(...weightProblems(loadout));
+    pageBytes.push({ file: page.file, bytes: pageLoadout(loadout).reduce((sum, f) => sum + f.bytes, 0) });
+  }
   const imageBudgets = imageBudgetProblems({ images, sizes });
   if (weight.length > 0 || imageBudgets.length > 0) {
     await fail(`bundle ${slug} breaks the weight budget in docs/design-system.md §8:\n  - ${[...weight, ...imageBudgets].join("\n  - ")}`);
   }
-  const pageBytes = pageLoadout({ page: "index.html", html, css, sizes, images }).reduce((sum, f) => sum + f.bytes, 0);
+  const heaviest = [...pageBytes].sort((a, b) => b.bytes - a.bytes)[0]!;
   opts.onNote(
-    `weight: index.html loads ${kb(pageBytes)} cold at 360px (target ${kb(BUDGET.pageTarget)}, ceiling ${kb(BUDGET.pageCeiling)})`,
+    `weight: heaviest page is ${heaviest.file} at ${kb(heaviest.bytes)} cold at 360px (target ${kb(BUDGET.pageTarget)}, ceiling ${kb(BUDGET.pageCeiling)})`,
   );
-  if (pageBytes > BUDGET.pageTarget) {
-    warnings.push(
-      `the page weighs ${kb(pageBytes)} cold, over the ${kb(BUDGET.pageTarget)} target in docs/design-system.md §8 (the ${kb(BUDGET.pageCeiling)} ceiling is what fails a build).`,
-    );
+  for (const page of pageBytes) {
+    if (page.bytes > BUDGET.pageTarget) {
+      warnings.push(
+        `${page.file} weighs ${kb(page.bytes)} cold, over the ${kb(BUDGET.pageTarget)} target in docs/design-system.md §8 (the ${kb(BUDGET.pageCeiling)} ceiling is what fails a build).`,
+      );
+    }
   }
 
   const manifest: DemoManifest = {
@@ -338,6 +494,23 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
       external_requests_on_load: [],
       external_requests_note:
         "The page loads nothing from the network: styles, script, favicon and images are files in this folder. The only outbound request the site can make is the contact-form POST, which happens when a visitor submits the form.",
+      per_page: pages.map((page) => ({
+        file: page.file,
+        banner_above_the_fold: true,
+        prints_business_details: PAGE_SPECS[page.id].printsDetails,
+        caveat_instances: copy.contactCaveat ? page.html.split(esc(copy.contactCaveat)).length - 1 : 0,
+        loads_site_js: page.html.includes("site.js"),
+        illustration_labels: PAGE_SPECS[page.id].slots
+          .flatMap((role) => images.filter((i) => i.role === role && isIllustrativeImage(i)))
+          .map((i) => illustrationLabel(record.name)),
+      })),
+    },
+    privacy: {
+      file: PAGE_SPECS.privacy.file,
+      mode: privacy.mode,
+      contact_email: privacy.contactEmail,
+      last_updated: privacy.lastUpdated,
+      open_items: privacy.openItems,
     },
     form: {
       provider: form.provider.label,
@@ -416,4 +589,11 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
 }
 
 /** Every bundle output file, in the order a human would read them. */
-export const BUNDLE_FILES = ["index.html", "styles.css", "site.js", "favicon.svg", "README.txt", "manifest.json"] as const;
+export const BUNDLE_FILES = [
+  ...PAGE_IDS.map((id) => PAGE_SPECS[id].file),
+  "styles.css",
+  "site.js",
+  "favicon.svg",
+  "README.txt",
+  "manifest.json",
+] as const;

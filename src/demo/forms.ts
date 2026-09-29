@@ -29,6 +29,12 @@ export interface FormProvider {
   encode: "json" | "form";
   /** Whether a submission is stored by the provider. */
   stores_submissions: string;
+  /**
+   * What is left of a submission after we delete it there — one plain sentence the
+   * privacy notice prints, so the page states the provider's own post-deletion
+   * behaviour rather than promising an erasure the provider does not make.
+   */
+  post_deletion: string;
   needs_account: string;
   who_owns_the_account: string;
   free_tier: string;
@@ -66,6 +72,7 @@ export const PROVIDERS: Record<string, FormProvider> = {
     who_owns_the_account: "the client: they create the access key with their own address, so it is theirs to rotate or revoke",
     free_tier: "free plan: 250 submissions per month, no card, no monthly bill",
     if_it_lapses: "the form stops delivering; the page still shows the client's email address and phone number, so an enquiry is never lost",
+    post_deletion: "the relay states it forwards the message and keeps no copy, so there is nothing of yours left there to delete",
     visitor_storage: ({ party }) => `The form passes your message to ${party} by email; the relay does not keep a copy.`,
     url: "https://web3forms.com/",
   },
@@ -88,6 +95,7 @@ export const PROVIDERS: Record<string, FormProvider> = {
     who_owns_the_account: "whoever's account holds the form — the form id belongs to it, so they can read, export or delete submissions themselves. In a delivered site that is the client's own account; on a demonstration page it is Site Sourced's",
     free_tier: "free plan: 250 submissions, 10 forms, 5 team members; more submissions are a one-off bundle, never a subscription",
     if_it_lapses: "the form stops accepting new submissions once the allowance is spent (recent ones are held back rather than discarded, and released by buying a bundle); the printed email address and phone number still work",
+    post_deletion: "formspark keeps a deleted submission recoverable for a further 30 days under its own policy",
     visitor_storage: ({ party }) =>
       `Formspark emails it to ${party} and also keeps a copy in ${party}'s own Formspark account until ${party} deletes it.`,
     url: "https://documentation.formspark.io/",
@@ -108,6 +116,7 @@ export const PROVIDERS: Record<string, FormProvider> = {
     who_owns_the_account: "the client: they generate the key with their own address",
     free_tier: "free plan (low monthly submission cap); paid plans exist but are not needed at a small business's volume",
     if_it_lapses: "the form stops delivering; the printed email address and phone number still work",
+    post_deletion: "the relay states it emails the message on and keeps no copy, so there is nothing of yours left there to delete",
     visitor_storage: ({ party }) => `The form passes your message to ${party} by email; the relay does not keep a copy.`,
     url: "https://www.staticforms.xyz/",
   },
@@ -122,6 +131,7 @@ export const PROVIDERS: Record<string, FormProvider> = {
     who_owns_the_account: "nobody — the address itself is the credential, which is also its weakness",
     free_tier: "free, no published monthly cap",
     if_it_lapses: "the form stops delivering; the printed email address and phone number still work",
+    post_deletion: "the relay has no dashboard, so no copy of your message is left there after delivery",
     visitor_storage: ({ party }) => `The form emails your message to ${party}; there is no dashboard holding a copy.`,
     url: "https://formsubmit.co/",
   },
@@ -136,6 +146,7 @@ export const PROVIDERS: Record<string, FormProvider> = {
     who_owns_the_account: "whoever runs the endpoint",
     free_tier: "n/a",
     if_it_lapses: "the form stops delivering; the printed email address and phone number still work",
+    post_deletion: "the endpoint this site was built with keeps no copy of the message body",
     visitor_storage: ({ party }) =>
       `The form posts your message to the endpoint this site was built with, a self-hosted relay run by ${party} — no commercial form service is involved.`,
     url: "",
