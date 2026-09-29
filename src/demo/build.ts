@@ -17,7 +17,7 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 
 import type { BundleResult, BusinessRecord, DemoManifest, ManifestImage } from "./types.ts";
 import type { DemoCopy } from "./copy.ts";
-import { composeCopy, guardCopy, normaliseServices, profileFor, slugify } from "./copy.ts";
+import { composeCopy, guardCopy, illustrationLabel, isIllustrativeImage, normaliseServices, profileFor, slugify } from "./copy.ts";
 import type { FormDelivery } from "./delivery.ts";
 import { formDeliveryProblems, resolveDelivery } from "./delivery.ts";
 import { KEY_PLACEHOLDER, resolveForm, type ResolvedForm } from "./forms.ts";
@@ -50,8 +50,10 @@ export function complianceChecks(vars: {
   copy: DemoCopy;
   form: ResolvedForm;
   delivery: FormDelivery;
+  /** The images this bundle will contain, as recorded in its manifest. */
+  images: ManifestImage[];
 }): string[] {
-  const { html, record, copy, form, delivery } = vars;
+  const { html, record, copy, form, delivery, images } = vars;
   const problems: string[] = [];
   if (!/<meta\s+name="robots"\s+content="noindex,\s*nofollow">/.test(html)) {
     problems.push("missing or malformed <meta name=\"robots\" content=\"noindex, nofollow\">");
@@ -67,6 +69,20 @@ export function complianceChecks(vars: {
   }
   const banned = guardCopy(html, record);
   if (banned.length > 0) problems.push(`copy guard tripped: ${banned.join(", ")}`);
+  // An AI-generated placeholder must be labelled on the page as an illustration, in
+  // words a visitor reads — the manifest recording it is not enough. The label is
+  // built by `illustrationLabel`, so the page and the manifest cannot disagree.
+  const illustrative = images.filter(isIllustrativeImage);
+  if (illustrative.length > 0) {
+    const label = illustrationLabel(record.name);
+    if (!html.includes(esc(label))) {
+      problems.push(
+        `the bundle's manifest records an AI-generated image (${illustrative.map((i) => i.file).join(", ")}) but the page carries no label saying so. ` +
+          `An AI-generated placeholder must be labelled on the page as an illustration, not left looking like a photograph of ${record.name}; ` +
+          `expected the page to contain: "${label}"`,
+      );
+    }
+  }
   problems.push(...formDeliveryProblems({ record, form, noticeMode: copy.formNoticeDelivery, placeholder: KEY_PLACEHOLDER }));
   return problems;
 }
@@ -142,7 +158,7 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   const favicon = renderFavicon(record, profile);
   const readme = renderEditingReadme(ctx);
 
-  const problems = complianceChecks({ html, record, copy, form, delivery });
+  const problems = complianceChecks({ html, record, copy, form, delivery, images: sourced.images });
   if (problems.length > 0) await fail(`compliance self-check failed for ${slug}:\n  - ${problems.join("\n  - ")}`);
 
   const bytesByPath = new Map<string, Uint8Array>();

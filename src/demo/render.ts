@@ -14,6 +14,7 @@ import type { BusinessRecord, ManifestImage } from "./types.ts";
 import type { DemoCopy } from "./copy.ts";
 import type { CategoryProfile } from "./copy.ts";
 import { normaliseHours, normaliseServices } from "./copy.ts";
+import { illustrationLabel, isIllustrativeImage } from "./copy.ts";
 import type { FormDelivery } from "./delivery.ts";
 import type { ResolvedForm } from "./forms.ts";
 
@@ -115,12 +116,28 @@ function aboutImage(images: ManifestImage[]): ManifestImage | undefined {
   return images.find((i) => i.role === "about" && i.file);
 }
 
+/**
+ * The visible caption for an AI-generated placeholder image, or "" when the image
+ * on that slot is not illustrative.
+ *
+ * The caption is a plain `<figcaption>` in normal flow: no hover, no no-JS
+ * fallback needed, nothing hidden. Its wording comes from `illustrationLabel` in
+ * copy.ts, and `build.ts` refuses a bundle whose manifest records an AI-generated
+ * image while the page carries no such label.
+ */
+function illustrationCaption(images: ManifestImage[], role: "hero" | "about", businessName: string): string {
+  const image = images.find((i) => i.role === role && isIllustrativeImage(i));
+  return image ? illustrationLabel(businessName) : "";
+}
+
 export function renderIndex(ctx: RenderContext): string {
   const { record, copy, form, images } = ctx;
   const addr = addressLine(record);
   const tel = record.phone ? telHref(record.phone) : "";
   const hero = heroImageStyle(images);
   const about = aboutImage(images);
+  const heroCaption = illustrationCaption(images, "hero", record.name);
+  const aboutCaption = illustrationCaption(images, "about", record.name);
   const honeypot = form.provider.key === "web3forms" ? "botcheck" : "_gotcha";
   const hidden = Object.entries(form.hiddenFields)
     .map(([k, v]) => `        <input type="hidden" name="${esc(k)}" value="${esc(v)}">`)
@@ -159,6 +176,7 @@ ${record.phone ? `      <a class="call-button" href="${tel}">Call ${esc(record.p
   </header>
 
   <main id="main">
+    <figure class="hero-figure">
     <section class="${hero.cls}"${hero.style}>
       <div class="wrap hero-inner">
         <h1>${esc(record.name)}</h1>
@@ -169,12 +187,17 @@ ${record.phone ? `          <a class="button" href="${tel}">Call ${esc(record.ph
         </p>
       </div>
     </section>
+${heroCaption ? `    <!-- Compliance: an AI-generated placeholder is labelled as an illustration, not a
+         photograph of the business. Do not remove. -->
+    <figcaption class="wrap muted hero-caption">${esc(heroCaption)}</figcaption>\n` : ""}    </figure>
 
     <section class="section" id="about">
       <div class="wrap">
         <h2>About ${esc(record.name)}</h2>
 ${copy.about.map((p) => `        <p>${esc(p)}</p>`).join("\n")}
-${about ? `        <img class="about-photo" src="${esc(about.file!)}" alt="${esc(about.notes ?? "Photograph")}" loading="lazy" width="${about.width ?? 1600}" height="${about.height ?? 900}">` : ""}
+${about ? `        <figure class="about-figure">
+          <img class="about-photo" src="${esc(about.file!)}" alt="${esc(about.notes ?? "Photograph")}" loading="lazy" width="${about.width ?? 1600}" height="${about.height ?? 900}">
+${aboutCaption ? `          <figcaption class="muted">${esc(aboutCaption)}</figcaption>\n` : ""}        </figure>\n` : ""}
       </div>
     </section>
 
@@ -372,6 +395,10 @@ h3 { font-size: 1.05rem; margin: 0 0 .25rem; }
 
 .hero { padding: 2.5rem 0; background: linear-gradient(135deg, var(--accent), var(--accent-dark)); color: #fff; }
 .hero--photo { background-size: cover; background-position: center; }
+/* The two figures exist so an AI-generated placeholder has a caption element to live
+   in. Only the browser's default figure margin is neutralised here; the caption's
+   own look is left to the template's design pass. */
+.hero-figure, .about-figure { margin: 0; }
 .hero-inner { max-width: 42rem; }
 .hero h1 { font-size: 2rem; }
 .lead { font-size: 1.05rem; margin: 0 0 .5rem; }
