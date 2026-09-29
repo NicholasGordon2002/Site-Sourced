@@ -2,10 +2,10 @@
  * Site Sourced — bundle assembly and self-check.
  *
  * `buildBundle` writes one self-contained folder: index.html, styles.css, site.js,
- * favicon.svg, the images, manifest.json and a plain-language README.txt. Every
- * reference on the page is a relative path to a file in the same folder, so the
- * bundle opens straight from disk (`file://`) and would also drop onto any host
- * unchanged.
+ * favicon.svg, the images, the two self-hosted fonts with their OFL licence text
+ * (fonts/), manifest.json and a plain-language README.txt. Every reference on the
+ * page is a relative path to a file in the same folder, so the bundle opens straight
+ * from disk (`file://`) and would also drop onto any host unchanged.
  *
  * The self-check is not decoration: if a compliance string is missing, if a local
  * file a page refers to does not exist, or if the copy guard finds a claim we are
@@ -21,10 +21,19 @@ import { composeCopy, guardCopy, illustrationLabel, isIllustrativeImage, normali
 import type { FormDelivery } from "./delivery.ts";
 import { formDeliveryProblems, resolveDelivery } from "./delivery.ts";
 import { KEY_PLACEHOLDER, resolveForm, type ResolvedForm } from "./forms.ts";
-import { sourceImages } from "./images.ts";
+import { readImageSize, sourceImages } from "./images.ts";
 import { esc, renderCss, renderEditingReadme, renderFavicon, renderIndex, renderJs, type RenderContext } from "./render.ts";
 
 export const GENERATOR = "sitesourced-demo-generator/0.1";
+
+/**
+ * The two typefaces every bundle ships, and the licence text that has to travel with
+ * them under the SIL Open Font License. They are files inside the bundle — loaded by a
+ * relative `url()` from styles.css — because the page must load nothing from the
+ * network. See docs/design-system.md §2.
+ */
+const FONT_ASSETS = ["fraunces-latin-600.woff2", "source-sans-3-latin.woff2", "OFL.txt"] as const;
+const FONT_SOURCE_DIR = join(import.meta.dir, "assets", "fonts");
 
 export interface BuildOptions {
   outRoot: string;
@@ -150,13 +159,37 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
     onNote: opts.onNote,
   });
 
+  // A supplied file carries no dimensions of its own, and the page needs them: the
+  // hero's width/height attributes are what stop a phone reflowing as the picture
+  // arrives, and the srcset descriptor is the file's real pixel width. So measure the
+  // file before anything renders, from the file itself — a guessed number is worse
+  // than no number when the layout reserves space from it.
+  const bytesByPath = new Map<string, Uint8Array>();
+  for (const file of sourced.files) bytesByPath.set(file.path, file.bytes);
+
+  const images: ManifestImage[] = [];
+  for (const image of sourced.images) {
+    if (!image.file || image.width || bytesByPath.has(image.file)) {
+      images.push(image);
+      continue;
+    }
+    try {
+      const size = await readImageSize(await locateSupplied(image.file, opts.recordDir));
+      images.push(size ? { ...image, width: size.width, height: size.height } : image);
+    } catch {
+      // Missing where it was expected to be: the copy step below reports that as a
+      // warning, in the same words it always has.
+      images.push(image);
+    }
+  }
+
   const ctx: RenderContext = {
     record,
     copy,
     profile,
     form,
     delivery,
-    images: sourced.images,
+    images,
     slug,
     generatedAt: new Date().toISOString(),
   };
@@ -167,11 +200,8 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   const favicon = renderFavicon(record, profile);
   const readme = renderEditingReadme(ctx);
 
-  const problems = complianceChecks({ html, record, copy, form, delivery, images: sourced.images });
+  const problems = complianceChecks({ html, record, copy, form, delivery, images });
   if (problems.length > 0) await fail(`compliance self-check failed for ${slug}:\n  - ${problems.join("\n  - ")}`);
-
-  const bytesByPath = new Map<string, Uint8Array>();
-  for (const file of sourced.files) bytesByPath.set(file.path, file.bytes);
 
   const files: string[] = [];
   const write = async (relPath: string, contents: string | Uint8Array) => {
@@ -187,17 +217,27 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   await write("favicon.svg", favicon);
   await write("README.txt", readme);
 
-  // Images: either the bytes we just downloaded, or a file supplied in the record.
-  const images: ManifestImage[] = [];
-  for (const image of sourced.images) {
-    if (!image.file) {
-      images.push(image);
-      continue;
+  // The page's fonts, and the licence that must travel with them. A missing asset is a
+  // build failure, not a warning: the stylesheet would be pointing at nothing.
+  for (const name of FONT_ASSETS) {
+    try {
+      await mkdir(join(dir, "fonts"), { recursive: true });
+      await copyFile(join(FONT_SOURCE_DIR, name), join(dir, "fonts", name));
+      files.push(`fonts/${name}`);
+    } catch (err) {
+      await fail(`bundle ${slug} cannot include its font assets — ${name}: ${(err as Error).message}`);
     }
+  }
+
+  // Images: either the bytes we just downloaded, or a file supplied in the record.
+  // The entries were already measured above, so the page and the manifest describe the
+  // same picture, with the same real dimensions.
+  for (let i = 0; i < images.length; i++) {
+    const image = images[i]!;
+    if (!image.file) continue;
     const downloaded = bytesByPath.get(image.file);
     if (downloaded) {
       await write(image.file, downloaded);
-      images.push(image);
       continue;
     }
     try {
@@ -205,10 +245,9 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
       await mkdir(dirname(join(dir, image.file)), { recursive: true });
       await copyFile(source, join(dir, image.file));
       files.push(image.file);
-      images.push(image);
     } catch (err) {
       warnings.push(`image ${image.file} could not be copied in (${(err as Error).message}) — the page falls back to its CSS treatment.`);
-      images.push({ ...image, file: null, source: "css-gradient-fallback", notes: "Supplied file was not found." });
+      images[i] = { ...image, file: null, source: "css-gradient-fallback", notes: "Supplied file was not found." };
     }
   }
 

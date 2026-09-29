@@ -34,6 +34,9 @@ const TYPES: Record<string, string> = {
   ".js": "text/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
   ".svg": "image/svg+xml",
+  // Bundles ship their own fonts; without a font content-type the browser refuses
+  // them and the page silently falls back, which would hide a real failure here.
+  ".woff2": "font/woff2",
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
   ".png": "image/png",

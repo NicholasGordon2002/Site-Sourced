@@ -106,10 +106,35 @@ function copyOffering(record: BusinessRecord): string {
   return record.category ? record.category.toLowerCase() : "services";
 }
 
-function heroImageStyle(images: ManifestImage[]): { cls: string; style: string } {
-  const hero = images.find((i) => i.role === "hero" && i.file);
-  if (!hero) return { cls: "hero hero--plain", style: "" };
-  return { cls: "hero hero--photo", style: ` style="background-image:linear-gradient(rgba(15,18,22,.62),rgba(15,18,22,.62)),url('${esc(hero.file!)}')"` };
+/** The hero photograph, if this bundle carries one. */
+function heroImage(images: ManifestImage[]): ManifestImage | undefined {
+  return images.find((i) => i.role === "hero" && i.file);
+}
+
+/**
+ * The hero's `srcset`, built from the sizes the bundle actually holds.
+ *
+ * A bundle built today carries one file, so this is a single candidate: valid markup,
+ * and the browser downloads exactly the one file, which is why the weight problem is
+ * not solved by the markup alone. Once the generator cuts `images/hero-600.jpg …
+ * hero-1600.jpg` and lists them as `variants` on the manifest image, this same markup
+ * asks a phone for the 600px file instead of the 1600px one. `sizes="100vw"` because
+ * the hero is full-bleed at every breakpoint.
+ */
+function heroSrcset(hero: ManifestImage): string {
+  const variants = (hero.variants ?? []).filter((v) => v.file && v.width > 0);
+  if (variants.length > 0) return variants.map((v) => `${v.file} ${v.width}w`).join(", ");
+  return hero.width ? `${hero.file} ${hero.width}w` : "";
+}
+
+/**
+ * `width`/`height` from the image's recorded dimensions, or nothing at all.
+ *
+ * Omitted rather than guessed when the size was never measured: the layout reserves
+ * space from these numbers, so a wrong one is worse than no attribute.
+ */
+function sizeAttrs(image: ManifestImage): string {
+  return image.width && image.height ? ` width="${image.width}" height="${image.height}"` : "";
 }
 
 function aboutImage(images: ManifestImage[]): ManifestImage | undefined {
@@ -134,7 +159,8 @@ export function renderIndex(ctx: RenderContext): string {
   const { record, copy, form, images } = ctx;
   const addr = addressLine(record);
   const tel = record.phone ? telHref(record.phone) : "";
-  const hero = heroImageStyle(images);
+  const hero = heroImage(images);
+  const heroSrc = hero ? heroSrcset(hero) : "";
   const about = aboutImage(images);
   const heroCaption = illustrationCaption(images, "hero", record.name);
   const aboutCaption = illustrationCaption(images, "about", record.name);
@@ -167,36 +193,41 @@ export function renderIndex(ctx: RenderContext): string {
 
   <header class="site-header">
     <div class="wrap header-inner">
-      <div>
-        <p class="biz-name">${esc(record.name)}</p>
-        <p class="biz-meta">${esc(record.category)}${record.address?.city ? ` · ${esc(record.address.city)}, ${esc(record.address.province || "ON")}` : ""}</p>
-      </div>
+      <p class="wordmark">${esc(record.name)}</p>
 ${record.phone ? `      <a class="call-button" href="${tel}">Call ${esc(record.phone)}</a>` : `      <span class="call-button call-button--muted">Phone number not recorded</span>`}
     </div>
   </header>
 
   <main id="main">
     <figure class="hero-figure">
-    <section class="${hero.cls}"${hero.style}>
-      <div class="wrap hero-inner">
-        <h1>${esc(record.name)}</h1>
-        <p class="lead">${esc(copy.heroLead)}</p>
-        <p class="lead lead--second">${esc(copy.heroSecond)}</p>
-        <p class="hero-actions">
-${record.phone ? `          <a class="button" href="${tel}">Call ${esc(record.phone)}</a>\n` : ""}          <a class="button button--ghost" href="#contact">Send a message</a>
-        </p>
+      <div class="hero${hero ? " hero--photo" : " hero--plain"}">
+${hero ? `        <!-- The hero is a real <img>, not a CSS background: it carries its own
+             dimensions, a load priority and a srcset, which is what stops a phone
+             reflowing the page as the picture arrives and what lets it fetch the
+             smaller file rather than the biggest one. Decorative here — the headline
+             over it carries the meaning — so it is alt="" and the picture is
+             described, when it is an illustration, by the caption below. -->
+        <img class="hero-img" src="${esc(hero.file!)}"${heroSrc ? ` srcset="${esc(heroSrc)}" sizes="100vw"` : ""}${sizeAttrs(hero)} alt="" fetchpriority="high" decoding="async">
+        <div class="hero-scrim" aria-hidden="true"></div>
+` : ""}        <div class="wrap hero-inner">
+          <p class="hero-eyebrow">${esc(copy.heroEyebrow)}</p>
+          <h1>${esc(record.name)}</h1>
+          <p class="hero-lead">${esc(copy.heroLead)}</p>
+          <p class="hero-actions">
+${record.phone ? `            <a class="button button--paper" href="${tel}">Call ${esc(record.phone)}</a>\n` : ""}            <a class="button button--ghost" href="#contact">Send a message</a>
+          </p>
+        </div>
       </div>
-    </section>
-${heroCaption ? `    <!-- Compliance: an AI-generated placeholder is labelled as an illustration, not a
-         photograph of the business. Do not remove. -->
-    <figcaption class="wrap muted hero-caption">${esc(heroCaption)}</figcaption>\n` : ""}    </figure>
+${heroCaption ? `      <!-- Compliance: an AI-generated placeholder is labelled as an illustration, not a
+           photograph of the business. Do not remove. -->
+      <figcaption class="wrap muted hero-caption">${esc(heroCaption)}</figcaption>\n` : ""}    </figure>
 
     <section class="section" id="about">
       <div class="wrap">
         <h2>About ${esc(record.name)}</h2>
 ${copy.about.map((p) => `        <p>${esc(p)}</p>`).join("\n")}
 ${about ? `        <figure class="about-figure">
-          <img class="about-photo" src="${esc(about.file!)}" alt="${esc(about.notes ?? "Photograph")}" loading="lazy" width="${about.width ?? 1600}" height="${about.height ?? 900}">
+          <img class="about-photo" src="${esc(about.file!)}"${sizeAttrs(about)} alt="" loading="lazy" decoding="async">
 ${aboutCaption ? `          <figcaption class="muted">${esc(aboutCaption)}</figcaption>\n` : ""}        </figure>\n` : ""}
       </div>
     </section>
@@ -275,25 +306,29 @@ ${copy.contactCaveat ? `          <!-- Compliance: these details came from publi
   </main>
 
   <footer class="site-footer">
-    <div class="wrap">
-      <h2 class="footer-biz">${esc(record.name)}</h2>
-      <p class="footer-contact">
-${addr ? `        ${esc(addr)}<br>\n` : ""}${record.phone ? `        <a href="${tel}">${esc(record.phone)}</a>` : ""}${record.phone && record.email ? " · " : ""}${record.email ? `<a href="mailto:${esc(record.email)}">${esc(record.email)}</a>` : ""}
-      </p>
-      <!-- Compliance: the same disclaimer as the banner, next to the business's name
-           and contact details. Do not remove. -->
-      <p class="disclaimer">${esc(copy.footerDisclaimer)}</p>
-${copy.contactCaveat ? `      <!-- Compliance: the printed details came from public listings. Do not remove. -->
-      <p class="footer-small">${esc(copy.contactCaveat)}</p>\n` : ""}
-      <p class="footer-small">
-        Business details come from public mapping data (© OpenStreetMap contributors, ODbL 1.0).
-        Copy, layout and imagery: Site Sourced. No logo, photograph or text was taken from any
-        website belonging to ${esc(record.name)}. This page is marked <code>noindex</code> so it
-        never competes with the business's own site.
-      </p>
-      <p class="footer-small">
-        This demo comes down on request — reply to the email that sent it and it will be removed within a day.
-      </p>
+    <div class="wrap footer-grid">
+      <div>
+        <h2 class="footer-biz">${esc(record.name)}</h2>
+        <p class="footer-contact">
+${[addr ? esc(addr) : "", record.phone ? `<a href="${tel}">${esc(record.phone)}</a>` : "", record.email ? `<a href="mailto:${esc(record.email)}">${esc(record.email)}</a>` : ""].filter(Boolean).join("<br>\n        ")}
+        </p>
+        <!-- Compliance: the same disclaimer as the banner, next to the business's name
+             and contact details. Do not remove. -->
+        <p class="disclaimer">${esc(copy.footerDisclaimer)}</p>
+      </div>
+      <div>
+${copy.contactCaveat ? `        <!-- Compliance: the printed details came from public listings. Do not remove. -->
+        <p class="footer-small">${esc(copy.contactCaveat)}</p>
+` : ""}        <p class="footer-small">
+          Business details come from public mapping data (© OpenStreetMap contributors, ODbL 1.0).
+          Copy, layout and imagery: Site Sourced. No logo, photograph or text was taken from any
+          website belonging to ${esc(record.name)}. This page is marked <code>noindex</code> so it
+          never competes with the business's own site.
+        </p>
+        <p class="footer-small">
+          This demo comes down on request — reply to the email that sent it and it will be removed within a day.
+        </p>
+      </div>
     </div>
   </footer>
 
@@ -305,180 +340,407 @@ ${copy.contactCaveat ? `      <!-- Compliance: the printed details came from pub
 
 export function renderCss(profile: CategoryProfile, slug: string): string {
   return `/* Site Sourced demo stylesheet — ${slug}
-   Plain CSS, no framework, no webfont, no imports. Everything the page needs is in
-   this folder. Colours come from the business's category. */
+   Plain CSS: no framework, no preprocessor, no @import, and nothing fetched from
+   the network. The two fonts live in fonts/, beside this file, and are served from
+   the same folder. The business's category supplies the four accent values; every
+   other value is a token below, so a palette change is a change of four lines.
+
+   The design system behind these decisions is docs/design-system.md. */
+
+/* ------------------------------------------------------------------ fonts */
+
+@font-face {
+  font-family: "Fraunces";
+  src: url("fonts/fraunces-latin-600.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Source Sans 3";
+  src: url("fonts/source-sans-3-latin.woff2") format("woff2");
+  font-weight: 200 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ----------------------------------------------------------------- tokens */
 
 :root {
+  /* Type */
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+  --font-body: "Source Sans 3", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --fs-display: clamp(2.1rem, 8.5vw, 3.4rem);
+  --fs-h2: clamp(1.5rem, 5vw, 2.05rem);
+  --fs-h3: 1.2rem;
+  --fs-lead: clamp(1.0625rem, 2.4vw, 1.1875rem);
+  --fs-body: 1.0625rem;
+  --fs-small: 0.875rem;
+  --fs-label: 0.75rem;
+
+  /* Colour — one accent, ink, paper, warm grey. Contrast is measured in
+     docs/design-system.md §3; every pair a visitor reads meets 4.5:1. */
   --accent: ${profile.accent};
-  --accent-dark: ${profile.accentDark};
-  --soft: ${profile.accentSoft};
-  --ink: #1b1f24;
-  --muted: #5a6572;
-  --line: #dfe4e9;
-  --radius: 14px;
+  --accent-ink: ${profile.accentInk};
+  --accent-soft: ${profile.accentSoft};
+  --ink: #16181B;
+  --body-text: #3D444C;
+  --muted: #5E6672;
+  --paper: #FFFFFF;
+  --paper-2: #FAF7F2;
+  --line: #E6E2DA;
+  --footer-ink: #C3C9D1;
+
+  /* Space — a 4px base, named by what it is for. */
+  --s-1: 0.25rem;
+  --s-2: 0.5rem;
+  --s-3: 0.75rem;
+  --s-4: 1rem;
+  --s-5: 1.5rem;
+  --s-6: 2rem;
+  --s-7: 3rem;
+  --s-8: 4rem;
+  --s-9: 6rem;
+  --section-y: clamp(3rem, 8vw, 5rem);
+
+  /* Layout and shape */
   --wrap: 68rem;
+  --gutter: 1.25rem;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 18px;
+  --rule: 1px solid var(--line);
+  --shadow: 0 1px 2px rgba(16, 18, 20, .05), 0 8px 24px -16px rgba(16, 18, 20, .25);
 }
+
+/* ------------------------------------------------------------------- base */
 
 *, *::before, *::after { box-sizing: border-box; }
 
-html { -webkit-text-size-adjust: 100%; }
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  font-size: 1rem;
-  line-height: 1.55;
-  color: var(--ink);
-  background: #fff;
+  background: var(--paper);
+  color: var(--body-text);
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: 1.6;
 }
 
-img { max-width: 100%; height: auto; display: block; }
+img { display: block; max-width: 100%; height: auto; }
 
-.wrap { width: min(var(--wrap), 100% - 2rem); margin-inline: auto; }
+h1, h2, h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
 
-a { color: var(--accent-dark); }
+h1 { font-size: var(--fs-display); line-height: 1.05; margin: 0 0 var(--s-4); }
+h2 { font-size: var(--fs-h2); line-height: 1.15; margin: 0 0 var(--s-3); }
+h3 { font-size: var(--fs-h3); line-height: 1.25; margin: 0 0 var(--s-1); }
 
-h1 { font-size: 1.85rem; line-height: 1.2; margin: 0 0 .5rem; }
-h2 { font-size: 1.35rem; margin: 0 0 .5rem; }
-h3 { font-size: 1.05rem; margin: 0 0 .25rem; }
+p { margin: 0 0 var(--s-4); max-width: 34em; }
+
+a { color: var(--accent-ink); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+a:hover { text-decoration-thickness: 2px; }
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.wrap { width: min(var(--wrap), 100% - var(--gutter) * 2); margin-inline: auto; }
+.muted { color: var(--muted); }
 
 .skip-link {
   position: absolute;
   left: -9999px;
   top: 0;
-  background: #fff;
-  padding: .5rem .75rem;
-  z-index: 5;
+  z-index: 9;
+  background: var(--paper);
+  color: var(--ink);
+  padding: var(--s-3) var(--s-4);
+  border-radius: 0 0 var(--r-md) 0;
+  box-shadow: var(--shadow);
 }
-.skip-link:focus { left: .5rem; top: .5rem; }
+.skip-link:focus { left: 0; }
 
 /* The proposal banner: first thing on the page, in normal flow, never hidden. */
 .proposal-banner {
-  background: #1b1f24;
+  background: var(--ink);
   color: #fff;
   border-bottom: 3px solid var(--accent);
 }
 .proposal-banner p {
   margin: 0;
-  padding: .6rem 0;
-  font-size: .82rem;
-  line-height: 1.4;
+  padding: 0.7rem 0;
+  font-size: var(--fs-small);
+  line-height: 1.5;
+  max-width: 60em;
 }
 
-.site-header { border-bottom: 1px solid var(--line); background: #fff; }
+/* ----------------------------------------------------------------- header */
+
+.site-header {
+  background: var(--paper);
+  border-bottom: var(--rule);
+}
 .header-inner {
   display: flex;
   flex-wrap: wrap;
-  gap: .75rem;
   align-items: center;
-  justify-content: space-between;
-  padding: .9rem 0;
+  gap: var(--s-3) var(--s-4);
+  padding: var(--s-4) 0;
 }
-.biz-name { margin: 0; font-weight: 700; font-size: 1.1rem; }
-.biz-meta { margin: 0; color: var(--muted); font-size: .85rem; }
+.wordmark {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+.site-header .call-button { margin-left: auto; }
+
+/* ---------------------------------------------------------------- buttons */
 
 .button, .call-button {
-  display: inline-block;
-  background: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  min-height: 2.75rem;
+  padding: 0.7rem 1.15rem;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  background: var(--ink);
   color: #fff;
-  text-decoration: none;
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
   font-weight: 600;
-  padding: .7rem 1.1rem;
-  border: 0;
-  border-radius: 999px;
-  font-size: 1rem;
+  line-height: 1.2;
+  text-decoration: none;
   cursor: pointer;
 }
-.button:hover, .call-button:hover, .button:focus, .call-button:focus { background: var(--accent-dark); }
-.button--ghost { background: rgba(255, 255, 255, .16); border: 1px solid rgba(255, 255, 255, .75); }
-.button--ghost:hover { background: rgba(255, 255, 255, .3); }
-.button--small { padding: .5rem .9rem; font-size: .92rem; }
-.call-button--muted { background: var(--soft); color: var(--muted); cursor: default; }
-.link-quiet { margin-left: .75rem; font-size: .9rem; }
+.button:hover, .call-button:hover { background: #000; color: #fff; }
 
-.hero { padding: 2.5rem 0; background: linear-gradient(135deg, var(--accent), var(--accent-dark)); color: #fff; }
-.hero--photo { background-size: cover; background-position: center; }
-/* The two figures exist so an AI-generated placeholder has a caption element to live
-   in. Only the browser's default figure margin is neutralised here; the caption's
-   own look is left to the template's design pass. */
+.button--paper { background: #fff; color: var(--ink); }
+.button--paper:hover { background: #F1EEE8; color: var(--ink); }
+
+.button--ghost {
+  background: rgba(255, 255, 255, .1);
+  color: #fff;
+  border-color: rgba(255, 255, 255, .75);
+}
+.button--ghost:hover { background: rgba(255, 255, 255, .22); color: #fff; }
+
+.button--small { min-height: 2.25rem; padding: 0.45rem 0.9rem; font-size: var(--fs-small); }
+
+.call-button--muted {
+  background: var(--paper-2);
+  color: var(--muted);
+  border-color: var(--line);
+  cursor: default;
+  font-weight: 400;
+}
+.call-button--muted:hover { background: var(--paper-2); color: var(--muted); }
+
+.link-quiet { display: inline-block; margin: var(--s-3) 0 0 var(--s-4); font-size: var(--fs-small); color: var(--muted); }
+
+/* ------------------------------------------------------------------- hero */
+
+/* The hero is a real <img> filling a grid cell the copy sits in: the row is as tall
+   as the taller of the two, so the picture never decides where the words go. The
+   background below is the fallback — a bundle where no photograph passed the licence
+   check gets this ink gradient and nothing else. */
+.hero {
+  display: grid;
+  background: linear-gradient(140deg, var(--ink), #2C323A 70%);
+  color: #fff;
+}
+.hero > * { grid-area: 1 / 1; }
+.hero--photo { background: #1A1D21; }
+.hero-img {
+  width: 100%;
+  height: 100%;
+  min-height: 22rem;
+  object-fit: cover;
+  object-position: center;
+}
+/* The scrim is what makes white text on an unknown photograph legible: measured at
+   11:1 for white on the lightest part of it. Never removed, whatever the picture. */
+.hero-scrim {
+  background: linear-gradient(180deg, rgba(10, 12, 14, .58) 0%, rgba(10, 12, 14, .40) 34%, rgba(10, 12, 14, .88) 100%);
+}
+.hero-inner { align-self: end; padding: var(--s-7) 0 var(--s-6); }
+.hero-eyebrow {
+  margin: 0 0 var(--s-3);
+  font-size: var(--fs-label);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, .9);
+}
+.hero h1 { color: #fff; margin-bottom: var(--s-4); max-width: 20ch; letter-spacing: -0.02em; }
+.hero-lead { margin: 0; max-width: 30rem; font-size: var(--fs-lead); line-height: 1.5; color: rgba(255, 255, 255, .94); }
+.hero-actions { display: flex; flex-wrap: wrap; gap: var(--s-3); margin: var(--s-5) 0 0; max-width: none; }
+.hero :focus-visible { outline-color: #fff; }
+
+/* The two figures exist so a placeholder has a caption element to live in: the hero's
+   under the picture, in normal flow. Its wording is fixed by build-gated copy; only
+   its spacing is design. */
 .hero-figure, .about-figure { margin: 0; }
-.hero-inner { max-width: 42rem; }
-.hero h1 { font-size: 2rem; }
-.lead { font-size: 1.05rem; margin: 0 0 .5rem; }
-.lead--second { opacity: .92; }
-.hero-actions { margin: 1.25rem 0 0; display: flex; flex-wrap: wrap; gap: .6rem; }
+.hero-caption { margin: var(--s-3) 0 0; padding-bottom: var(--s-1); font-size: var(--fs-small); }
 
-.section { padding: 2rem 0; }
-.section--alt { background: #f7f9fa; border-block: 1px solid var(--line); }
-.section p { max-width: 46rem; }
-.muted { color: var(--muted); }
-.address { font-style: normal; font-weight: 600; }
+/* --------------------------------------------------------------- sections */
 
-.services { list-style: none; margin: 1rem 0 0; padding: 0; display: grid; gap: .75rem; }
-.services li { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: .9rem 1rem; }
-.services p { margin: 0; color: var(--muted); font-size: .95rem; max-width: none; }
+.section { padding: var(--section-y) 0; }
+.section--alt { background: var(--paper-2); border-block: var(--rule); }
+.section h2 { margin-bottom: var(--s-3); }
+.section h2::before {
+  content: "";
+  display: block;
+  width: 2.25rem;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+  margin-bottom: var(--s-3);
+}
+.section p { color: var(--body-text); }
+.section .muted, .muted { color: var(--muted); }
 
-.hours { margin: 1rem 0 0; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; max-width: 28rem; background: #fff; }
-.hours-row { display: flex; justify-content: space-between; gap: 1rem; padding: .55rem .9rem; border-bottom: 1px solid var(--line); }
+.address { font-style: normal; font-weight: 600; color: var(--ink); line-height: 1.5; }
+
+.services { list-style: none; margin: var(--s-5) 0 0; padding: 0; display: grid; gap: var(--s-3); }
+.services li {
+  background: var(--paper);
+  border: var(--rule);
+  border-radius: var(--r-lg);
+  padding: var(--s-4) var(--s-5);
+  box-shadow: 0 1px 2px rgba(16, 18, 20, .03);
+}
+.services p { margin: 0; max-width: none; color: var(--muted); font-size: 0.9375rem; }
+
+.hours {
+  margin: var(--s-5) 0 0;
+  max-width: 30rem;
+  background: var(--paper);
+  border: var(--rule);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+.hours-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-4);
+  padding: var(--s-3) var(--s-4);
+  border-bottom: var(--rule);
+}
 .hours-row:last-child { border-bottom: 0; }
-.hours dt { font-weight: 600; margin: 0; }
-.hours dd { margin: 0; color: var(--muted); }
+.hours dt { margin: 0; font-weight: 600; color: var(--ink); }
+.hours dd { margin: 0; color: var(--muted); font-variant-numeric: tabular-nums; }
 
-.about-photo { border-radius: var(--radius); margin-top: 1rem; }
+.about-photo { margin-top: var(--s-4); border-radius: var(--r-lg); }
+
+/* ------------------------------------------------------------ contact + form */
 
 .form-notice {
-  background: var(--soft);
+  margin: var(--s-5) 0;
+  padding: var(--s-4) var(--s-5);
+  background: var(--accent-soft);
   border-left: 4px solid var(--accent);
-  padding: .75rem .9rem;
-  border-radius: 0 var(--radius) var(--radius) 0;
-  font-size: .95rem;
+  border-radius: 0 var(--r-md) var(--r-md) 0;
+  color: var(--ink);
+  font-size: 0.9375rem;
 }
 
-.contact-form { max-width: 34rem; margin-top: 1rem; }
-.field { margin-bottom: .9rem; }
-.field label { display: block; font-weight: 600; margin-bottom: .25rem; }
+.contact-form { max-width: 34rem; margin-top: var(--s-5); }
+.field { margin-bottom: var(--s-4); }
+.field label { display: block; margin-bottom: var(--s-2); font-weight: 600; font-size: 0.9375rem; color: var(--ink); }
 .optional { font-weight: 400; color: var(--muted); }
 .field input, .field textarea {
   width: 100%;
-  padding: .65rem .7rem;
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  padding: 0.7rem 0.8rem;
+  border: var(--rule);
+  border-radius: var(--r-sm);
+  background: var(--paper);
+  color: var(--ink);
   font: inherit;
-  color: inherit;
-  background: #fff;
 }
-.field input:focus, .field textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.field textarea { min-height: 8rem; resize: vertical; }
+.field input:focus-visible, .field textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
 .hp { position: absolute; left: -9999px; height: 0; overflow: hidden; }
-.form-status { min-height: 1.4rem; margin: .8rem 0 0; font-weight: 600; }
-.form-status[data-state="error"] { color: #a3241f; }
-.form-status[data-state="ok"] { color: #1f6b3a; }
 
-.contact-fallback { max-width: 34rem; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--line); }
-.contact-fallback h3 { margin-bottom: .25rem; }
-.contact-fallback p { margin: .25rem 0; }
+.form-status { min-height: 1.5rem; margin: var(--s-4) 0 0; font-weight: 600; }
+.form-status[data-state="error"] { color: #A3241F; }
+.form-status[data-state="ok"] { color: #1F6B3A; }
 
-.site-footer { background: #1b1f24; color: #e8ebee; padding: 2rem 0; }
-.footer-biz { font-size: 1.1rem; margin: 0 0 .25rem; }
-.footer-contact { margin: 0 0 .9rem; }
-.site-footer a { color: #fff; }
-.disclaimer { border-left: 4px solid var(--accent); padding-left: .75rem; margin: 0 0 .9rem; font-size: .95rem; }
-.footer-small { color: #b6bec7; font-size: .82rem; margin: .4rem 0; max-width: 46rem; }
-.site-footer code { color: #d7dee5; }
+.contact-fallback {
+  max-width: 34rem;
+  margin-top: var(--s-6);
+  padding-top: var(--s-5);
+  border-top: var(--rule);
+}
+.contact-fallback h3 { margin-bottom: var(--s-2); }
+.contact-fallback p { margin: 0 0 var(--s-2); }
+.contact-fallback p:last-child { margin-bottom: 0; font-size: var(--fs-small); }
+
+/* ---------------------------------------------------------------- footer */
+
+.site-footer {
+  background: var(--ink);
+  color: var(--footer-ink);
+  padding: var(--s-8) 0 var(--s-7);
+  font-size: var(--fs-small);
+}
+.footer-grid { display: grid; gap: var(--s-7); }
+.footer-biz { margin: 0 0 var(--s-2); font-family: var(--font-display); font-size: 1.35rem; color: #fff; }
+.footer-contact { margin: 0 0 var(--s-4); color: #E8EBEE; line-height: 1.7; max-width: 34em; }
+.site-footer a { color: #fff; text-decoration-color: rgba(255, 255, 255, .45); }
+.site-footer a:hover { text-decoration-color: #fff; }
+.site-footer p { max-width: 46em; }
+.disclaimer {
+  margin: var(--s-4) 0 0;
+  padding-left: var(--s-4);
+  border-left: 4px solid var(--accent);
+  color: #fff;
+  font-size: 0.9375rem;
+}
+.footer-small { margin: 0 0 var(--s-4); }
+.footer-small:last-child { margin-bottom: 0; }
+.site-footer code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1em; color: #E8EBEE; }
+.site-footer :focus-visible { outline-color: #fff; }
+
+/* ------------------------------------------------------------ wider screens */
 
 @media (min-width: 48rem) {
-  h1 { font-size: 2.4rem; }
-  .hero h1 { font-size: 2.6rem; }
-  .hero { padding: 3.5rem 0; }
-  .section { padding: 3rem 0; }
+  :root { --gutter: 2rem; }
+  .hero-img { min-height: 28rem; max-height: 34rem; }
+  .hero-inner { padding: var(--s-9) 0 var(--s-8); }
   .services { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .two-col { display: grid; grid-template-columns: 1.1fr .9fr; gap: 2rem; align-items: start; }
+  .two-col { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: var(--s-7); align-items: start; }
+  .footer-grid { grid-template-columns: 1.1fr 0.9fr; gap: var(--s-8); }
 }
 
+@media (min-width: 64rem) {
+  .wordmark { font-size: 1.25rem; }
+}
+
+/* ------------------------------------------------------------ preferences */
+
 @media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
   * { transition: none !important; animation: none !important; }
 }
 `;
 }
+
 
 /**
  * The page's only script: post the form, show the outcome. It keeps no copy of

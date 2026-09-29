@@ -41,6 +41,65 @@ export interface ImageFile {
   bytes: Uint8Array;
 }
 
+/**
+ * The pixel dimensions of an image file, read from its own header.
+ *
+ * The hero and the about photograph are the two elements whose layout depends on
+ * knowing how tall they are: `width`/`height` attributes are what stop a phone
+ * reflowing the page as the picture arrives. A file the record supplies by hand
+ * carries no dimensions, and a guessed number is worse than no number — so we read
+ * the real ones. PNG, JPEG and WebP; anything else returns null and the caller
+ * falls back to a sane default.
+ */
+export async function readImageSize(path: string): Promise<{ width: number; height: number } | null> {
+  const head = new Uint8Array(await Bun.file(path).slice(0, 65536).arrayBuffer());
+  if (head.length < 24) return null;
+
+  // PNG: the IHDR chunk always follows the 8-byte signature.
+  if (head[0] === 0x89 && head[1] === 0x50 && head[2] === 0x4e && head[3] === 0x47) {
+    const view = new DataView(head.buffer, head.byteOffset);
+    return { width: view.getUint32(16), height: view.getUint32(20) };
+  }
+
+  // JPEG: walk the markers to the frame header (SOF0–SOF15, skipping DHT/JPG/DAC).
+  if (head[0] === 0xff && head[1] === 0xd8) {
+    let i = 2;
+    while (i + 9 < head.length) {
+      if (head[i] !== 0xff) {
+        i++;
+        continue;
+      }
+      const marker = head[i + 1]!;
+      if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+        return { width: (head[i + 7]! << 8) | head[i + 8]!, height: (head[i + 5]! << 8) | head[i + 6]! };
+      }
+      const length = (head[i + 2]! << 8) | head[i + 3]!;
+      if (length <= 0) return null;
+      i += 2 + length;
+    }
+    return null;
+  }
+
+  // WebP: RIFF container, then VP8 (lossy), VP8L (lossless) or VP8X (extended).
+  if (head[8] === 0x57 && head[9] === 0x45 && head[10] === 0x42 && head[11] === 0x50) {
+    const tag = String.fromCharCode(head[12]!, head[13]!, head[14]!, head[15]!);
+    if (tag === "VP8X") {
+      const w = 1 + (head[24]! | (head[25]! << 8) | (head[26]! << 16));
+      const h = 1 + (head[27]! | (head[28]! << 8) | (head[29]! << 16));
+      return { width: w, height: h };
+    }
+    if (tag === "VP8 ") {
+      return { width: ((head[27]! << 8) | head[26]!) & 0x3fff, height: ((head[29]! << 8) | head[28]!) & 0x3fff };
+    }
+    if (tag === "VP8L") {
+      const bits = head[21]! | (head[22]! << 8) | (head[23]! << 16) | (head[24]! << 24);
+      return { width: (bits & 0x3fff) + 1, height: ((bits >> 14) & 0x3fff) + 1 };
+    }
+  }
+
+  return null;
+}
+
 export interface SourcedImages {
   images: ManifestImage[];
   files: ImageFile[];
@@ -241,6 +300,9 @@ export async function sourceImages(record: BusinessRecord, opts: SourcingOptions
         license: img.license,
         author: img.author,
         retrieved_at: retrievedAt,
+        // Responsive sizes travel with the image so the page can offer a phone the
+        // small file. The generator does not cut them itself yet.
+        variants: img.variants && img.variants.length > 0 ? img.variants : undefined,
         notes: isAi
           ? "AI-generated image used as a fallback, labelled on the page as an illustration and not a photograph of this business."
           : "Supplied from our own CC0/public-domain library.",
