@@ -276,8 +276,10 @@ export function to12h(hhmm: string): string {
 
 /** Everything the page will say, composed only from the record. */
 export interface DemoCopy {
+  /** Category and place, e.g. "Barber shop · Hamilton, ON" — the hero's first line. */
+  heroEyebrow: string;
+  /** What the record says the business offers, as one line. */
   heroLead: string;
-  heroSecond: string;
   about: string[];
   servicesIntro: string;
   hoursIntro: string;
@@ -317,10 +319,15 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
         ? serviceNames[0]
         : `${serviceNames.slice(0, -1).join(", ")} and ${serviceNames[serviceNames.length - 1]}`;
 
-  const heroLead = city ? `${record.name} is a ${cat} in ${place}.` : `${record.name} is a ${cat} in Ontario.`;
-  const heroSecond = serviceSentence
-    ? `On this page: ${serviceSentence}.`
-    : "This page lists the details we were able to confirm about the business.";
+  // The hero says three things and no more: what this is and where (the eyebrow),
+  // whose name is on the door (the h1, in render.ts), and what is recorded for it
+  // (the offering line). The identity sentence — "X is a barber shop in Hamilton" —
+  // is written once, in About: the hero used to open by repeating the business's own
+  // name back at the visitor, which is the one thing they already know.
+  const heroEyebrow = [record.category, city ? `${city}, ${province}` : province].filter(Boolean).join(" · ");
+  const heroLead = serviceNames.length > 0
+    ? serviceNames.join(" · ")
+    : `Hours, address and phone number as published for this ${cat}.`;
 
   const about: string[] = [
     `${record.name} is a ${cat}${city ? ` in ${place}` : ""}.`,
@@ -389,8 +396,8 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
 
   void slug;
   return {
+    heroEyebrow,
     heroLead,
-    heroSecond,
     about,
     servicesIntro,
     hoursIntro,

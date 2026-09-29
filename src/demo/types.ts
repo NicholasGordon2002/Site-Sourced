@@ -31,6 +31,19 @@ export interface RecordAddress {
   postcode: string;
 }
 
+/**
+ * One responsive size of an image, as it sits inside the bundle: the file, and the
+ * width in pixels that the `srcset` descriptor needs. A bundle that carries
+ * `hero-600.jpg … hero-1600.jpg` lets a phone download the small one; a bundle with
+ * no variants lists none and the page falls back to a single candidate.
+ */
+export interface ImageVariant {
+  /** Path inside the bundle, e.g. `images/hero-600.jpg`. */
+  file: string;
+  /** The file's real pixel width. */
+  width: number;
+}
+
 /** An image supplied by hand (CC0/PD file we already hold, or a labelled AI fallback). */
 export interface ImageOverride {
   role: "hero" | "about";
@@ -40,6 +53,8 @@ export interface ImageOverride {
   license: string;
   source_url: string;
   author: string;
+  /** Responsive sizes of the same picture, when they have been prepared. */
+  variants?: ImageVariant[];
 }
 
 /**
@@ -104,6 +119,8 @@ export interface ManifestImage {
   retrieved_at: string;
   width?: number;
   height?: number;
+  /** Responsive sizes inside the bundle, when they exist. See ImageVariant. */
+  variants?: ImageVariant[];
   notes?: string;
 }
 

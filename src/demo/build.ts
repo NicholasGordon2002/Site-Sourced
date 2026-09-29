@@ -21,7 +21,7 @@ import { composeCopy, guardCopy, illustrationLabel, isIllustrativeImage, normali
 import type { FormDelivery } from "./delivery.ts";
 import { formDeliveryProblems, resolveDelivery } from "./delivery.ts";
 import { KEY_PLACEHOLDER, resolveForm, type ResolvedForm } from "./forms.ts";
-import { sourceImages } from "./images.ts";
+import { readImageSize, sourceImages } from "./images.ts";
 import { esc, renderCss, renderEditingReadme, renderFavicon, renderIndex, renderJs, type RenderContext } from "./render.ts";
 
 export const GENERATOR = "sitesourced-demo-generator/0.1";
@@ -159,13 +159,37 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
     onNote: opts.onNote,
   });
 
+  // A supplied file carries no dimensions of its own, and the page needs them: the
+  // hero's width/height attributes are what stop a phone reflowing as the picture
+  // arrives, and the srcset descriptor is the file's real pixel width. So measure the
+  // file before anything renders, from the file itself — a guessed number is worse
+  // than no number when the layout reserves space from it.
+  const bytesByPath = new Map<string, Uint8Array>();
+  for (const file of sourced.files) bytesByPath.set(file.path, file.bytes);
+
+  const images: ManifestImage[] = [];
+  for (const image of sourced.images) {
+    if (!image.file || image.width || bytesByPath.has(image.file)) {
+      images.push(image);
+      continue;
+    }
+    try {
+      const size = await readImageSize(await locateSupplied(image.file, opts.recordDir));
+      images.push(size ? { ...image, width: size.width, height: size.height } : image);
+    } catch {
+      // Missing where it was expected to be: the copy step below reports that as a
+      // warning, in the same words it always has.
+      images.push(image);
+    }
+  }
+
   const ctx: RenderContext = {
     record,
     copy,
     profile,
     form,
     delivery,
-    images: sourced.images,
+    images,
     slug,
     generatedAt: new Date().toISOString(),
   };
@@ -176,11 +200,8 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   const favicon = renderFavicon(record, profile);
   const readme = renderEditingReadme(ctx);
 
-  const problems = complianceChecks({ html, record, copy, form, delivery, images: sourced.images });
+  const problems = complianceChecks({ html, record, copy, form, delivery, images });
   if (problems.length > 0) await fail(`compliance self-check failed for ${slug}:\n  - ${problems.join("\n  - ")}`);
-
-  const bytesByPath = new Map<string, Uint8Array>();
-  for (const file of sourced.files) bytesByPath.set(file.path, file.bytes);
 
   const files: string[] = [];
   const write = async (relPath: string, contents: string | Uint8Array) => {
@@ -209,16 +230,14 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   }
 
   // Images: either the bytes we just downloaded, or a file supplied in the record.
-  const images: ManifestImage[] = [];
-  for (const image of sourced.images) {
-    if (!image.file) {
-      images.push(image);
-      continue;
-    }
+  // The entries were already measured above, so the page and the manifest describe the
+  // same picture, with the same real dimensions.
+  for (let i = 0; i < images.length; i++) {
+    const image = images[i]!;
+    if (!image.file) continue;
     const downloaded = bytesByPath.get(image.file);
     if (downloaded) {
       await write(image.file, downloaded);
-      images.push(image);
       continue;
     }
     try {
@@ -226,10 +245,9 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
       await mkdir(dirname(join(dir, image.file)), { recursive: true });
       await copyFile(source, join(dir, image.file));
       files.push(image.file);
-      images.push(image);
     } catch (err) {
       warnings.push(`image ${image.file} could not be copied in (${(err as Error).message}) — the page falls back to its CSS treatment.`);
-      images.push({ ...image, file: null, source: "css-gradient-fallback", notes: "Supplied file was not found." });
+      images[i] = { ...image, file: null, source: "css-gradient-fallback", notes: "Supplied file was not found." };
     }
   }
 

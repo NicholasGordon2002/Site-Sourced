@@ -147,9 +147,10 @@ neighbours by 20°+ on the wheel or by a clear lightness/saturation step, and ev
 white text at 4.5:1 or better, so the same tokens work for a filled button, a notice wash and
 a link without re-tuning per category.
 
-**Only the salon accent is wired into the code so far** (`PROFILES[0]` in
-`src/demo/copy.ts`); the rest of the table lands with the per-category variants in S3. The
-token names are already the final ones, so S3 is a data change, not a rewrite.
+**The whole table is wired into the code** — the ten `PROFILES` entries in
+`src/demo/copy.ts` carry these values, and the stylesheet reads them as tokens. What S3
+adds is the per-category *variant* work (patterns, imagery treatment, heading wording),
+not the palette.
 
 ### Contrast (measured, sRGB, WCAG 2.1)
 
@@ -243,7 +244,7 @@ tokens only.
 | Hours table | `.hours`, `.hours-row` | Definition list, one row per rule, hairline separators, `max-width: 30rem` |
 | Buttons | `.button` (ink), `.button--paper` (white on a photo), `.button--ghost` (outline on a photo), `.button--small` | Only three roles: do this, do this on a dark surface, a quieter second option |
 | Quiet link | `.link-quiet` | Muted, underlined on hover, for secondary actions ("See it on OpenStreetMap") |
-| Notice | `.notice` | `--accent-soft` wash, 4px accent bar on the left, `--r-md`. Used for the form-delivery notice and nothing else |
+| Notice | `.form-notice` | `--accent-soft` wash, 4px accent bar on the left, `--r-md`. Used for the form-delivery notice and nothing else |
 | Form | `.contact-form`, `.field`, `.hp` | Visible labels above inputs, 44px minimum height, `--r-sm`, focus ring in accent. Honeypot stays visually hidden and `aria-hidden` |
 | Status line | `.form-status` | `role="status"`, live region, only ever shows what `site.js` puts there |
 | Contact fallback | `.contact-fallback` | Printed phone and email next to the form, with the caveat |
@@ -350,13 +351,13 @@ A demo is judged on a phone, often on mobile data, in a browser with a cold cach
 
 | Item | Budget | Today |
 | --- | --- | --- |
-| HTML | ≤ 20 KB | ~11 KB |
-| CSS | ≤ 16 KB | ~9 KB |
-| JS | ≤ 4 KB | ~2.8 KB |
-| Fonts (2 files) | ≤ 60 KB | 46 KB |
+| HTML | ≤ 20 KB | 10.2 KB |
+| CSS | ≤ 16 KB | 12.3 KB |
+| JS | ≤ 4 KB | 2.7 KB |
+| Fonts (2 files) | ≤ 60 KB | 45.8 KB |
 | Hero image, served at 360px | ≤ 120 KB | **2.62 MB — over budget** |
 | About image | ≤ 200 KB | n/a on the current fixture |
-| Everything else | ≤ 30 KB | — |
+| Everything else | ≤ 30 KB | 0.3 KB (favicon + manifest) |
 | **Page at 360px, cold** | **≤ 400 KB** | **~2.7 MB, hero-dominated** |
 
 Rules: no third-party requests at all on load (the form POST is the only network call the site
@@ -445,9 +446,12 @@ is part of the interface: restyle those three classes in the stylesheet, do not 
 
 ## 12. What is built, and what is not
 
-**Built in S1 (this session):** the token block, the type scale, the colour scheme with the salon
-accent, the spacing scale, the header, the footer, the hero rebuilt on a real `<img>` with the
-frozen caption in normal flow, and the copy hierarchy fix in `composeCopy()`.
+**Built in S1 (this session):** the token block, the type scale, the colour table wired for all
+ten categories, the spacing scale, the header, the footer, the hero rebuilt on a real `<img>`
+(real dimensions measured from the file, the multi-size `srcset` shape, the frozen caption in
+normal flow), and the copy hierarchy fix in `composeCopy()` — the eyebrow carries the category
+and place, the name is printed once, and the hero line is the recorded offering. The two fonts
+and their OFL text now ship inside every bundle.
 
 **Not built yet, in the order it should happen:** responsive hero variants and the fixture
 re-encoding (§8); the three remaining pages and the navigation (§7); the icon set and the

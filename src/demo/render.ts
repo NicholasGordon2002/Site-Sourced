@@ -106,10 +106,35 @@ function copyOffering(record: BusinessRecord): string {
   return record.category ? record.category.toLowerCase() : "services";
 }
 
-function heroImageStyle(images: ManifestImage[]): { cls: string; style: string } {
-  const hero = images.find((i) => i.role === "hero" && i.file);
-  if (!hero) return { cls: "hero hero--plain", style: "" };
-  return { cls: "hero hero--photo", style: ` style="background-image:linear-gradient(rgba(15,18,22,.62),rgba(15,18,22,.62)),url('${esc(hero.file!)}')"` };
+/** The hero photograph, if this bundle carries one. */
+function heroImage(images: ManifestImage[]): ManifestImage | undefined {
+  return images.find((i) => i.role === "hero" && i.file);
+}
+
+/**
+ * The hero's `srcset`, built from the sizes the bundle actually holds.
+ *
+ * A bundle built today carries one file, so this is a single candidate: valid markup,
+ * and the browser downloads exactly the one file, which is why the weight problem is
+ * not solved by the markup alone. Once the generator cuts `images/hero-600.jpg …
+ * hero-1600.jpg` and lists them as `variants` on the manifest image, this same markup
+ * asks a phone for the 600px file instead of the 1600px one. `sizes="100vw"` because
+ * the hero is full-bleed at every breakpoint.
+ */
+function heroSrcset(hero: ManifestImage): string {
+  const variants = (hero.variants ?? []).filter((v) => v.file && v.width > 0);
+  if (variants.length > 0) return variants.map((v) => `${v.file} ${v.width}w`).join(", ");
+  return hero.width ? `${hero.file} ${hero.width}w` : "";
+}
+
+/**
+ * `width`/`height` from the image's recorded dimensions, or nothing at all.
+ *
+ * Omitted rather than guessed when the size was never measured: the layout reserves
+ * space from these numbers, so a wrong one is worse than no attribute.
+ */
+function sizeAttrs(image: ManifestImage): string {
+  return image.width && image.height ? ` width="${image.width}" height="${image.height}"` : "";
 }
 
 function aboutImage(images: ManifestImage[]): ManifestImage | undefined {
@@ -134,7 +159,8 @@ export function renderIndex(ctx: RenderContext): string {
   const { record, copy, form, images } = ctx;
   const addr = addressLine(record);
   const tel = record.phone ? telHref(record.phone) : "";
-  const hero = heroImageStyle(images);
+  const hero = heroImage(images);
+  const heroSrc = hero ? heroSrcset(hero) : "";
   const about = aboutImage(images);
   const heroCaption = illustrationCaption(images, "hero", record.name);
   const aboutCaption = illustrationCaption(images, "about", record.name);
@@ -174,26 +200,34 @@ ${record.phone ? `      <a class="call-button" href="${tel}">Call ${esc(record.p
 
   <main id="main">
     <figure class="hero-figure">
-    <section class="${hero.cls}"${hero.style}>
-      <div class="wrap hero-inner">
-        <h1>${esc(record.name)}</h1>
-        <p class="lead">${esc(copy.heroLead)}</p>
-        <p class="lead lead--second">${esc(copy.heroSecond)}</p>
-        <p class="hero-actions">
-${record.phone ? `          <a class="button" href="${tel}">Call ${esc(record.phone)}</a>\n` : ""}          <a class="button button--ghost" href="#contact">Send a message</a>
-        </p>
+      <div class="hero${hero ? " hero--photo" : " hero--plain"}">
+${hero ? `        <!-- The hero is a real <img>, not a CSS background: it carries its own
+             dimensions, a load priority and a srcset, which is what stops a phone
+             reflowing the page as the picture arrives and what lets it fetch the
+             smaller file rather than the biggest one. Decorative here — the headline
+             over it carries the meaning — so it is alt="" and the picture is
+             described, when it is an illustration, by the caption below. -->
+        <img class="hero-img" src="${esc(hero.file!)}"${heroSrc ? ` srcset="${esc(heroSrc)}" sizes="100vw"` : ""}${sizeAttrs(hero)} alt="" fetchpriority="high" decoding="async">
+        <div class="hero-scrim" aria-hidden="true"></div>
+` : ""}        <div class="wrap hero-inner">
+          <p class="hero-eyebrow">${esc(copy.heroEyebrow)}</p>
+          <h1>${esc(record.name)}</h1>
+          <p class="hero-lead">${esc(copy.heroLead)}</p>
+          <p class="hero-actions">
+${record.phone ? `            <a class="button button--paper" href="${tel}">Call ${esc(record.phone)}</a>\n` : ""}            <a class="button button--ghost" href="#contact">Send a message</a>
+          </p>
+        </div>
       </div>
-    </section>
-${heroCaption ? `    <!-- Compliance: an AI-generated placeholder is labelled as an illustration, not a
-         photograph of the business. Do not remove. -->
-    <figcaption class="wrap muted hero-caption">${esc(heroCaption)}</figcaption>\n` : ""}    </figure>
+${heroCaption ? `      <!-- Compliance: an AI-generated placeholder is labelled as an illustration, not a
+           photograph of the business. Do not remove. -->
+      <figcaption class="wrap muted hero-caption">${esc(heroCaption)}</figcaption>\n` : ""}    </figure>
 
     <section class="section" id="about">
       <div class="wrap">
         <h2>About ${esc(record.name)}</h2>
 ${copy.about.map((p) => `        <p>${esc(p)}</p>`).join("\n")}
 ${about ? `        <figure class="about-figure">
-          <img class="about-photo" src="${esc(about.file!)}" alt="${esc(about.notes ?? "Photograph")}" loading="lazy" width="${about.width ?? 1600}" height="${about.height ?? 900}">
+          <img class="about-photo" src="${esc(about.file!)}"${sizeAttrs(about)} alt="" loading="lazy" decoding="async">
 ${aboutCaption ? `          <figcaption class="muted">${esc(aboutCaption)}</figcaption>\n` : ""}        </figure>\n` : ""}
       </div>
     </section>
@@ -520,24 +554,48 @@ a:hover { text-decoration-thickness: 2px; }
 
 /* ------------------------------------------------------------------- hero */
 
-/* The background treatment here is the fallback: when no photograph passes the
-   licence check, the hero is this ink gradient and nothing else. */
+/* The hero is a real <img> filling a grid cell the copy sits in: the row is as tall
+   as the taller of the two, so the picture never decides where the words go. The
+   background below is the fallback — a bundle where no photograph passed the licence
+   check gets this ink gradient and nothing else. */
 .hero {
-  padding: var(--s-8) 0;
+  display: grid;
   background: linear-gradient(140deg, var(--ink), #2C323A 70%);
   color: #fff;
 }
-.hero--photo { background-size: cover; background-position: center; }
-.hero-inner { max-width: 38rem; }
-.hero h1 { color: #fff; margin-bottom: var(--s-4); }
-.hero .lead { font-size: var(--fs-lead); line-height: 1.5; margin: 0 0 var(--s-3); color: #F2F4F6; }
-.hero .lead--second { color: #E4E8EB; }
-.hero-actions { display: flex; flex-wrap: wrap; gap: var(--s-3); margin: var(--s-5) 0 0; }
+.hero > * { grid-area: 1 / 1; }
+.hero--photo { background: #1A1D21; }
+.hero-img {
+  width: 100%;
+  height: 100%;
+  min-height: 22rem;
+  object-fit: cover;
+  object-position: center;
+}
+/* The scrim is what makes white text on an unknown photograph legible: measured at
+   11:1 for white on the lightest part of it. Never removed, whatever the picture. */
+.hero-scrim {
+  background: linear-gradient(180deg, rgba(10, 12, 14, .58) 0%, rgba(10, 12, 14, .40) 34%, rgba(10, 12, 14, .88) 100%);
+}
+.hero-inner { align-self: end; padding: var(--s-7) 0 var(--s-6); }
+.hero-eyebrow {
+  margin: 0 0 var(--s-3);
+  font-size: var(--fs-label);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, .9);
+}
+.hero h1 { color: #fff; margin-bottom: var(--s-4); max-width: 20ch; letter-spacing: -0.02em; }
+.hero-lead { margin: 0; max-width: 30rem; font-size: var(--fs-lead); line-height: 1.5; color: rgba(255, 255, 255, .94); }
+.hero-actions { display: flex; flex-wrap: wrap; gap: var(--s-3); margin: var(--s-5) 0 0; max-width: none; }
 .hero :focus-visible { outline-color: #fff; }
 
-/* The two figures exist so an AI-generated placeholder has a caption element to
-   live in. Its wording is fixed by build-gated copy; only its spacing is design. */
+/* The two figures exist so a placeholder has a caption element to live in: the hero's
+   under the picture, in normal flow. Its wording is fixed by build-gated copy; only
+   its spacing is design. */
 .hero-figure, .about-figure { margin: 0; }
+.hero-caption { margin: var(--s-3) 0 0; padding-bottom: var(--s-1); font-size: var(--fs-small); }
 
 /* --------------------------------------------------------------- sections */
 
@@ -663,7 +721,8 @@ a:hover { text-decoration-thickness: 2px; }
 
 @media (min-width: 48rem) {
   :root { --gutter: 2rem; }
-  .hero { padding: var(--s-9) 0; }
+  .hero-img { min-height: 28rem; max-height: 34rem; }
+  .hero-inner { padding: var(--s-9) 0 var(--s-8); }
   .services { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .two-col { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: var(--s-7); align-items: start; }
   .footer-grid { grid-template-columns: 1.1fr 0.9fr; gap: var(--s-8); }
