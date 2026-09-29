@@ -1,16 +1,21 @@
 /**
- * Site Sourced — copy, categories and the two guards that keep a demo honest.
+ * Site Sourced — copy, categories and the guards that keep a demo honest.
  *
  * Everything a demo says is composed here, from the record's category and services.
- * Two hard rules are enforced in code, not by good intentions:
+ * Three hard rules are enforced in code, not by good intentions:
  *
  *   1. `guardCopy` refuses to build a page containing a claim we are not allowed to
  *      make (awards, testimonials, customer counts, founding years, performance
  *      promises) unless the same words are in the record itself.
- *   2. Nothing is ever read from the business's own website — there is no code path
+ *   2. Every word about the contact form is chosen from the delivery the record
+ *      actually describes (`delivery.ts`): while a bundle delivers anywhere but the
+ *      business's own published address, the page says it is a demonstration whose
+ *      message comes to Site Sourced, and that the named business is not involved.
+ *   3. Nothing is ever read from the business's own website — there is no code path
  *      in this package that fetches a business URL.
  */
 
+import { DEMO_OPERATOR, type FormDelivery, type FormDeliveryMode } from "./delivery.ts";
 import type { ResolvedForm } from "./forms.ts";
 import type { BusinessRecord, HoursRow, ServiceItem } from "./types.ts";
 
@@ -249,13 +254,19 @@ export interface DemoCopy {
   hoursIntro: string;
   locationIntro: string;
   contactIntro: string;
+  /** The heading over the contact section: the business's name, or the demo's. */
+  contactHeading: string;
   formNotice: string;
+  /** Which case the notice above was written for (carried into the manifest). */
+  formNoticeDelivery: FormDeliveryMode;
+  /** What the form's own success message may claim. */
+  formSuccess: string;
   banner: string;
   footerDisclaimer: string;
   offeringPlural: string;
 }
 
-export function composeCopy(record: BusinessRecord, slug: string, form: ResolvedForm): DemoCopy {
+export function composeCopy(record: BusinessRecord, slug: string, form: ResolvedForm, delivery: FormDelivery): DemoCopy {
   const profile = profileFor(record);
   const cat = categoryLower(record);
   const city = (record.address?.city || "").trim();
@@ -293,17 +304,40 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
     ? "Find the address below, or open directions in your maps app."
     : "No street address is recorded publicly for this business — the phone number above is the reliable way to find it.";
 
-  const contactIntro = `Send a message to ${record.name} using the form below, or use the phone number or email address printed with it.`;
+  // Everything about the form is chosen from the delivery the record actually
+  // describes (delivery.ts) — never from a flag someone set by hand. In the
+  // demonstration phase the page must not claim the message reaches the business:
+  // it comes to us, and the business named on the page has not seen it.
+  const businessPhase = delivery.mode === "business";
 
-  // This sentence is a privacy claim about a third party, so it is built from the
-  // provider preset rather than written once here. Formspark's own privacy policy
-  // says submissions are stored in the customer's account until the customer
-  // deletes them, so "we pass it along and keep nothing" would have been false.
-  const formNotice = [
-    `This form sends your message to ${record.name} through ${form.provider.label}, the form service set up in ${record.name}'s own account.`,
-    form.provider.visitor_storage({ business: record.name }),
-    "Site Sourced never receives a copy of it and never uses your details for anything else.",
-  ].join(" ");
+  const contactIntro = businessPhase
+    ? `Send a message to ${record.name} using the form below, or use the phone number or email address printed with it.`
+    : `This is a demonstration site, so the form below comes to ${DEMO_OPERATOR} rather than to ${record.name}. To reach ${record.name} itself, use the phone number or email address printed with it.`;
+
+  const contactHeading = businessPhase ? `Contact ${record.name}` : "About this demo";
+
+  const formSuccess = businessPhase
+    ? `Thanks — your message is on its way to ${record.name}.`
+    : `Thanks — your message has gone to ${DEMO_OPERATOR}, who built this demonstration. ${record.name} is not involved and will not see it.`;
+
+  // The storage half of the notice is a privacy claim about a third party, so it is
+  // built from the provider preset rather than written once here. Formspark's own
+  // privacy policy says submissions are stored in the account that owns the form
+  // until that account's holder deletes them, so "we pass it along and keep nothing"
+  // would have been false. `party` is whoever that account holder is: the business
+  // in the delivery phase, Site Sourced while the page is still a demonstration.
+  const formNotice = businessPhase
+    ? [
+        `This form sends your message to ${record.name} through ${form.provider.label}, the form service set up in ${record.name}'s own account.`,
+        form.provider.visitor_storage({ party: record.name }),
+        "Site Sourced never receives a copy of it and never uses your details for anything else.",
+      ].join(" ")
+    : [
+        `This is a demonstration site: the form below sends your message to ${DEMO_OPERATOR}, the company that built it — not to ${record.name}.`,
+        `${record.name} has not seen this page, is not involved in it and will not receive your message.`,
+        form.provider.visitor_storage({ party: DEMO_OPERATOR }),
+        `${DEMO_OPERATOR} uses it only to reply to you; there is no mailing list, and it is not passed on to ${record.name}.`,
+      ].join(" ");
 
   const banner = `This is an unsolicited design proposal from Site Sourced. It is not affiliated with, endorsed by, or operated by ${record.name}.`;
 
@@ -318,7 +352,10 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
     hoursIntro,
     locationIntro,
     contactIntro,
+    contactHeading,
     formNotice,
+    formNoticeDelivery: delivery.mode,
+    formSuccess,
     banner,
     footerDisclaimer,
     offeringPlural: profile.offeringPlural,

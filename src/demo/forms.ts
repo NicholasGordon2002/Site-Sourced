@@ -36,8 +36,14 @@ export interface FormProvider {
   /**
    * One plain sentence for the demo page: where the visitor's message ends up.
    * Shown under the form, so it must be true of this provider specifically.
+   *
+   * `party` is *whoever receives the message and holds the account it lands in* —
+   * the business's own name when the form delivers to the business, and
+   * "Site Sourced" while the page is still a demonstration (see delivery.ts).
+   * The sentence must stay true in both cases: it describes the provider, not
+   * the phase.
    */
-  visitor_storage: (vars: { business: string }) => string;
+  visitor_storage: (vars: { party: string }) => string;
   /** Provider documentation, for the hand-over pack. */
   url: string;
 }
@@ -60,7 +66,7 @@ export const PROVIDERS: Record<string, FormProvider> = {
     who_owns_the_account: "the client: they create the access key with their own address, so it is theirs to rotate or revoke",
     free_tier: "free plan: 250 submissions per month, no card, no monthly bill",
     if_it_lapses: "the form stops delivering; the page still shows the client's email address and phone number, so an enquiry is never lost",
-    visitor_storage: ({ business }) => `The form passes your message to ${business} by email; the relay does not keep a copy.`,
+    visitor_storage: ({ party }) => `The form passes your message to ${party} by email; the relay does not keep a copy.`,
     url: "https://web3forms.com/",
   },
   formspark: {
@@ -77,13 +83,13 @@ export const PROVIDERS: Record<string, FormProvider> = {
     //   formspark.io/legal/privacy-policy      — retention of submission content
     //   documentation.formspark.io/troubleshooting/limits-and-plans
     //   documentation.formspark.io/dashboard/email-notification-settings
-    stores_submissions: "yes — the message is kept in the client's own Formspark account (dashboard) for as long as the client leaves it there; a deleted submission stays recoverable for a further 30 days",
+    stores_submissions: "yes — the message is kept in the Formspark account that owns the form (dashboard) for as long as that account's holder leaves it there; a deleted submission stays recoverable for a further 30 days",
     needs_account: "yes — a free account (email magic-link sign-in) creates the form id",
-    who_owns_the_account: "the client: the account is theirs and the form id belongs to it, so they can read, export or delete submissions themselves",
+    who_owns_the_account: "whoever's account holds the form — the form id belongs to it, so they can read, export or delete submissions themselves. In a delivered site that is the client's own account; on a demonstration page it is Site Sourced's",
     free_tier: "free plan: 250 submissions, 10 forms, 5 team members; more submissions are a one-off bundle, never a subscription",
     if_it_lapses: "the form stops accepting new submissions once the allowance is spent (recent ones are held back rather than discarded, and released by buying a bundle); the printed email address and phone number still work",
-    visitor_storage: ({ business }) =>
-      `Formspark emails it to ${business} and also keeps a copy in ${business}'s own Formspark account until ${business} deletes it.`,
+    visitor_storage: ({ party }) =>
+      `Formspark emails it to ${party} and also keeps a copy in ${party}'s own Formspark account until ${party} deletes it.`,
     url: "https://documentation.formspark.io/",
   },
   staticforms: {
@@ -102,7 +108,7 @@ export const PROVIDERS: Record<string, FormProvider> = {
     who_owns_the_account: "the client: they generate the key with their own address",
     free_tier: "free plan (low monthly submission cap); paid plans exist but are not needed at a small business's volume",
     if_it_lapses: "the form stops delivering; the printed email address and phone number still work",
-    visitor_storage: ({ business }) => `The form passes your message to ${business} by email; the relay does not keep a copy.`,
+    visitor_storage: ({ party }) => `The form passes your message to ${party} by email; the relay does not keep a copy.`,
     url: "https://www.staticforms.xyz/",
   },
   formsubmit: {
@@ -116,7 +122,7 @@ export const PROVIDERS: Record<string, FormProvider> = {
     who_owns_the_account: "nobody — the address itself is the credential, which is also its weakness",
     free_tier: "free, no published monthly cap",
     if_it_lapses: "the form stops delivering; the printed email address and phone number still work",
-    visitor_storage: ({ business }) => `The form emails your message to ${business}; there is no dashboard holding a copy.`,
+    visitor_storage: ({ party }) => `The form emails your message to ${party}; there is no dashboard holding a copy.`,
     url: "https://formsubmit.co/",
   },
   relay: {
@@ -130,7 +136,8 @@ export const PROVIDERS: Record<string, FormProvider> = {
     who_owns_the_account: "whoever runs the endpoint",
     free_tier: "n/a",
     if_it_lapses: "the form stops delivering; the printed email address and phone number still work",
-    visitor_storage: () => `This is a test relay: the message goes to the endpoint the demo was built with, and nothing is sent to a real business.`,
+    visitor_storage: ({ party }) =>
+      `The form posts your message to the endpoint this site was built with, a self-hosted relay run by ${party} — no commercial form service is involved.`,
     url: "",
   },
 };
@@ -170,12 +177,12 @@ export function resolveForm(record: {
     if (value) key = value;
     else {
       key = KEY_PLACEHOLDER;
-      warning = `form key: environment variable ${name} is not set — the bundle was written with the placeholder ${KEY_PLACEHOLDER}, so the form will not deliver until it is set.`;
+      warning = `form key: environment variable ${name} is not set. The endpoint would carry the placeholder ${KEY_PLACEHOLDER}, which cannot deliver, so the compliance self-check fails the build until it is set.`;
     }
   }
   if (!key && provider.key !== "relay") {
     key = KEY_PLACEHOLDER;
-    warning = `form key: no form_access_key in the record — the bundle was written with the placeholder ${KEY_PLACEHOLDER}.`;
+    warning = `form key: no form_access_key in the record. The endpoint would carry the placeholder ${KEY_PLACEHOLDER}, which cannot deliver, so the compliance self-check fails the build.`;
   }
 
   let endpoint = provider.endpoint;

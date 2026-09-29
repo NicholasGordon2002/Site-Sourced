@@ -48,6 +48,7 @@
     }
   ],
   "form_recipient": "site-sourced-311e0184@ctomail.io",
+  "form_delivery": "demo",
   "form_provider": "formspark",
   "form_access_key": "env:SS_FORMSPARK_FORM_ID",
   "source": "test fixture (fictional business — not a real clinic)",
