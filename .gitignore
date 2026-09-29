@@ -16,3 +16,9 @@ out/cache/demo/
 .env.local
 # fetched provider documentation kept as evidence
 out/fs-docs/
+
+# lead data — never in git (rule 4: no lead lists)
+out/leads-*.csv
+out/leads-*.json
+# verification bundles
+out/verify/
