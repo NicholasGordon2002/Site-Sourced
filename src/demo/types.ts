@@ -5,6 +5,12 @@
  * Nothing is invented, and nothing is ever fetched from the business's own site.
  */
 
+/**
+ * `business` — the form delivers to the business's own published address.
+ * `demo` — it delivers anywhere else, so the page must say it is a demonstration.
+ */
+export type FormDeliveryClaim = "business" | "demo";
+
 /** One opening-hours row, already in plain English ("Mon–Fri", "9:00 am – 6:00 pm"). */
 export interface HoursRow {
   days: string;
@@ -58,6 +64,14 @@ export interface BusinessRecord {
   notes?: string;
   /** Where the contact form delivers. Required for a usable form. */
   form_recipient: string;
+  /**
+   * What this record asserts about the form's delivery. Optional, and **not a
+   * switch**: the page's notice is derived by comparing `form_recipient` with
+   * `email`, which is the business's own published address (see delivery.ts).
+   * When present this must agree with that derivation or the build fails, so a
+   * record cannot claim business delivery while routing somewhere else.
+   */
+  form_delivery?: FormDeliveryClaim;
   /** Provider preset name — see src/demo/forms.ts (`web3forms`, `formspark`, ...). */
   form_provider?: string;
   /** Provider access key / form id. `env:NAME` reads the value from the environment. */
@@ -114,6 +128,8 @@ export interface DemoManifest {
     footer_disclaimer: string;
     banner_above_the_fold: boolean;
     business_own_assets_used: boolean;
+    /** The caveat printed with the business's contact details, or null if none. */
+    contact_details_caveat: string | null;
     external_requests_on_load: string[];
     /** Plain-language note on what the page does and does not fetch. */
     external_requests_note: string;
@@ -122,6 +138,21 @@ export interface DemoManifest {
     provider: string;
     endpoint: string;
     recipient: string;
+    /**
+     * Who the form actually reaches, and how that was worked out. `mode` is
+     * derived by comparing `recipient` with `business_published_address` — never
+     * set by hand — and `notice` is the exact sentence the page shows a visitor.
+     */
+    delivery: {
+      mode: "business" | "demo";
+      party: string;
+      basis: string;
+      recipient: string;
+      business_published_address: string | null;
+      claimed_by_record: "business" | "demo" | null;
+      notice: string;
+      success_message: string;
+    };
     needs_account: string;
     who_owns_the_account: string;
     stores_submissions: string;

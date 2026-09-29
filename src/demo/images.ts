@@ -242,7 +242,7 @@ export async function sourceImages(record: BusinessRecord, opts: SourcingOptions
         author: img.author,
         retrieved_at: retrievedAt,
         notes: isAi
-          ? "AI-generated image used as a fallback, labelled as such. Not a photograph of this business."
+          ? "AI-generated image used as a fallback, labelled on the page as an illustration and not a photograph of this business."
           : "Supplied from our own CC0/public-domain library.",
       });
     }

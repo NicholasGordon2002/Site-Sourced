@@ -14,6 +14,8 @@ import type { BusinessRecord, ManifestImage } from "./types.ts";
 import type { DemoCopy } from "./copy.ts";
 import type { CategoryProfile } from "./copy.ts";
 import { normaliseHours, normaliseServices } from "./copy.ts";
+import { illustrationLabel, isIllustrativeImage } from "./copy.ts";
+import type { FormDelivery } from "./delivery.ts";
 import type { ResolvedForm } from "./forms.ts";
 
 export interface RenderContext {
@@ -21,6 +23,8 @@ export interface RenderContext {
   copy: DemoCopy;
   profile: CategoryProfile;
   form: ResolvedForm;
+  /** Who the form actually reaches — decides the notice and the wording around it. */
+  delivery: FormDelivery;
   images: ManifestImage[];
   slug: string;
   generatedAt: string;
@@ -112,12 +116,28 @@ function aboutImage(images: ManifestImage[]): ManifestImage | undefined {
   return images.find((i) => i.role === "about" && i.file);
 }
 
+/**
+ * The visible caption for an AI-generated placeholder image, or "" when the image
+ * on that slot is not illustrative.
+ *
+ * The caption is a plain `<figcaption>` in normal flow: no hover, no no-JS
+ * fallback needed, nothing hidden. Its wording comes from `illustrationLabel` in
+ * copy.ts, and `build.ts` refuses a bundle whose manifest records an AI-generated
+ * image while the page carries no such label.
+ */
+function illustrationCaption(images: ManifestImage[], role: "hero" | "about", businessName: string): string {
+  const image = images.find((i) => i.role === role && isIllustrativeImage(i));
+  return image ? illustrationLabel(businessName) : "";
+}
+
 export function renderIndex(ctx: RenderContext): string {
   const { record, copy, form, images } = ctx;
   const addr = addressLine(record);
   const tel = record.phone ? telHref(record.phone) : "";
   const hero = heroImageStyle(images);
   const about = aboutImage(images);
+  const heroCaption = illustrationCaption(images, "hero", record.name);
+  const aboutCaption = illustrationCaption(images, "about", record.name);
   const honeypot = form.provider.key === "web3forms" ? "botcheck" : "_gotcha";
   const hidden = Object.entries(form.hiddenFields)
     .map(([k, v]) => `        <input type="hidden" name="${esc(k)}" value="${esc(v)}">`)
@@ -156,6 +176,7 @@ ${record.phone ? `      <a class="call-button" href="${tel}">Call ${esc(record.p
   </header>
 
   <main id="main">
+    <figure class="hero-figure">
     <section class="${hero.cls}"${hero.style}>
       <div class="wrap hero-inner">
         <h1>${esc(record.name)}</h1>
@@ -166,12 +187,17 @@ ${record.phone ? `          <a class="button" href="${tel}">Call ${esc(record.ph
         </p>
       </div>
     </section>
+${heroCaption ? `    <!-- Compliance: an AI-generated placeholder is labelled as an illustration, not a
+         photograph of the business. Do not remove. -->
+    <figcaption class="wrap muted hero-caption">${esc(heroCaption)}</figcaption>\n` : ""}    </figure>
 
     <section class="section" id="about">
       <div class="wrap">
         <h2>About ${esc(record.name)}</h2>
 ${copy.about.map((p) => `        <p>${esc(p)}</p>`).join("\n")}
-${about ? `        <img class="about-photo" src="${esc(about.file!)}" alt="${esc(about.notes ?? "Photograph")}" loading="lazy" width="${about.width ?? 1600}" height="${about.height ?? 900}">` : ""}
+${about ? `        <figure class="about-figure">
+          <img class="about-photo" src="${esc(about.file!)}" alt="${esc(about.notes ?? "Photograph")}" loading="lazy" width="${about.width ?? 1600}" height="${about.height ?? 900}">
+${aboutCaption ? `          <figcaption class="muted">${esc(aboutCaption)}</figcaption>\n` : ""}        </figure>\n` : ""}
       </div>
     </section>
 
@@ -191,7 +217,7 @@ ${servicesBlock(record)}
 ${hoursBlock(record)}
         </div>
         <div>
-          <h2>Where to find us</h2>
+          <h2>Address</h2>
           <p class="muted">${esc(copy.locationIntro)}</p>
           ${addr ? `<address class="address">${esc(addr)}</address>` : `<p class="address muted">No street address recorded.</p>`}
           <p>
@@ -204,14 +230,14 @@ ${hoursBlock(record)}
 
     <section class="section section--alt" id="contact">
       <div class="wrap">
-        <h2>Contact ${esc(record.name)}</h2>
+        <h2>${esc(copy.contactHeading)}</h2>
         <p class="muted">${esc(copy.contactIntro)}</p>
 
         <!-- Compliance: this notice must stay next to the form. -->
         <p class="form-notice">${esc(copy.formNotice)}</p>
 
         <form class="contact-form" id="contact-form" method="POST" action="${esc(form.endpoint)}"
-              data-encode="${esc(form.provider.encode)}" data-success="Thanks — your message is on its way to ${esc(record.name)}."
+              data-encode="${esc(form.provider.encode)}" data-success="${esc(copy.formSuccess)}"
               data-failure="Sorry, that didn't send. Please use the email address or phone number below.">
           <div class="field">
             <label for="cf-name">Your name</label>
@@ -242,7 +268,8 @@ ${hidden}
           <h3>Prefer email?</h3>
 ${record.email ? `          <p>Write to us directly: <a href="mailto:${esc(record.email)}">${esc(record.email)}</a></p>` : `          <p>No email address is recorded publicly for this business — please use the phone number.</p>`}
 ${record.phone ? `          <p>Or call <a href="${tel}">${esc(record.phone)}</a>.</p>` : ""}
-        </div>
+${copy.contactCaveat ? `          <!-- Compliance: these details came from public listings and are unconfirmed. Do not remove. -->
+          <p class="muted">${esc(copy.contactCaveat)}</p>\n` : ""}        </div>
       </div>
     </section>
   </main>
@@ -256,6 +283,8 @@ ${addr ? `        ${esc(addr)}<br>\n` : ""}${record.phone ? `        <a href="${
       <!-- Compliance: the same disclaimer as the banner, next to the business's name
            and contact details. Do not remove. -->
       <p class="disclaimer">${esc(copy.footerDisclaimer)}</p>
+${copy.contactCaveat ? `      <!-- Compliance: the printed details came from public listings. Do not remove. -->
+      <p class="footer-small">${esc(copy.contactCaveat)}</p>\n` : ""}
       <p class="footer-small">
         Business details come from public mapping data (© OpenStreetMap contributors, ODbL 1.0).
         Copy, layout and imagery: Site Sourced. No logo, photograph or text was taken from any
@@ -369,6 +398,10 @@ h3 { font-size: 1.05rem; margin: 0 0 .25rem; }
 
 .hero { padding: 2.5rem 0; background: linear-gradient(135deg, var(--accent), var(--accent-dark)); color: #fff; }
 .hero--photo { background-size: cover; background-position: center; }
+/* The two figures exist so an AI-generated placeholder has a caption element to live
+   in. Only the browser's default figure margin is neutralised here; the caption's
+   own look is left to the template's design pass. */
+.hero-figure, .about-figure { margin: 0; }
 .hero-inner { max-width: 42rem; }
 .hero h1 { font-size: 2rem; }
 .lead { font-size: 1.05rem; margin: 0 0 .5rem; }
@@ -541,11 +574,77 @@ export function renderJs(): string {
 
 /** Plain-language hand-over notes that ship inside the bundle. */
 export function renderEditingReadme(ctx: RenderContext): string {
-  const { record, form } = ctx;
-  return `${record.name} — your website files
-${"=".repeat(`${record.name} — your website files`.length)}
+  const { record, form, delivery, images } = ctx;
+  const businessPhase = delivery.mode === "business";
 
-This folder is a complete website. It is three files you will look at most:
+  const title = businessPhase
+    ? `${record.name} — your website files`
+    : `${record.name} — demonstration site files (built by Site Sourced)`;
+
+  // What the page says about its own imagery has to match the licences actually
+  // recorded for it: an AI-generated placeholder is never a stock photograph.
+  const aiHero = images.some((i) => /^AI-generated/i.test(i.license ?? ""));
+  const imageNote = aiHero
+    ? `The hero picture on this page is an AI-generated illustration (a labelled fallback used
+because no suitable free-to-use photograph existed). It is not a photograph of the
+business and must be replaced with a real photograph before this page goes live as
+anyone's own site. The file is inside the bundle; swap it for one of your own and the
+layout follows automatically — keep the same file name, or update the name in
+styles.css and index.html.`
+    : `The photograph is a free-to-use (CC0 / public-domain) stock photograph, not a photo
+of your business. Swap it for one of your own and the layout follows automatically:
+keep the same file name, or update the name in styles.css and index.html.`;
+
+  const formSection = businessPhase
+    ? `The contact form
+----------------
+The form posts to ${form.provider.label}. ${form.provider.needs_account}.
+${form.provider.who_owns_the_account}. Notifications go to ${form.recipient};
+nobody at Site Sourced receives a copy and no list of names is gathered.
+
+  Where the message is kept: ${form.provider.stores_submissions}
+  Free tier: ${form.provider.free_tier}
+  If it stops working: ${form.provider.if_it_lapses}
+  Documentation: ${form.provider.url || "(self-hosted endpoint)"}
+
+The page says the same thing to your visitors, in the line just above the form.
+If you change form provider, that line changes with it — do not edit it by hand
+without checking what the new provider does with a submission.
+
+The form also shows your email address and phone number, so an enquiry can always
+reach you even if the form service is ever down.
+`
+    : `The contact form
+----------------
+This is a demonstration bundle, not a delivered site. The form posts to
+${form.provider.label} (${form.provider.needs_account}), and submissions go to
+${form.recipient} — Site Sourced's own test inbox, not the business's. ${record.name}
+is not notified, and nothing is forwarded on to them. The line above the form on the
+page tells the visitor exactly that, in their own words, because a form that goes to
+the demo operator must never read as the business's own.
+
+  Where the message is kept: ${form.provider.stores_submissions}
+  Free tier: ${form.provider.free_tier}
+  If it stops working: ${form.provider.if_it_lapses}
+  Documentation: ${form.provider.url || "(self-hosted endpoint)"}
+
+Before this bundle could be handed to a client, the record's form_recipient must be
+the client's own published address in an account the client owns. The page's notice
+then switches to the delivered-site wording on its own — that choice is derived by
+comparing form_recipient with the record's published email, never set by hand — and
+the build refuses to publish a bundle whose notice claims business delivery while the
+form routes anywhere else. The form also prints the business's published email
+address and phone number, so a visitor who wants the business itself rather than this
+demonstration can reach it directly.
+`;
+
+  return `${title}
+${"=".repeat(title.length)}
+
+${businessPhase ? "" : `DEMONSTRATION — not the business's website, and never sent to the business.
+The contact form's submissions come to Site Sourced. See "The contact form" below.
+
+`}This folder is a complete website. It is three files you will look at most:
 index.html (the words), styles.css (the colours and spacing) and site.js (the
 contact form). There is no database, no content management system and no server
 software to keep patched, so nothing here goes stale or needs a monthly update.
@@ -568,36 +667,23 @@ title). Use Find and Replace to change them all at once.
 
 The photograph
 --------------
-img/hero.jpg is a free-to-use (CC0 / public-domain) stock photograph, not a photo
-of your business. Swap it for one of your own and the layout follows automatically:
-keep the same file name, or update the name in styles.css and index.html.
+${imageNote}
 
-The contact form
-----------------
-The form posts to ${form.provider.label}. ${form.provider.needs_account}.
-${form.provider.who_owns_the_account}. Notifications go to ${form.recipient};
-nobody at Site Sourced receives a copy and no list of names is gathered.
-
-  Where the message is kept: ${form.provider.stores_submissions}
-  Free tier: ${form.provider.free_tier}
-  If it stops working: ${form.provider.if_it_lapses}
-  Documentation: ${form.provider.url || "(self-hosted endpoint)"}
-
-The page says the same thing to your visitors, in the line just above the form.
-If you change form provider, that line changes with it — do not edit it by hand
-without checking what the new provider does with a submission.
-
-The form also shows your email address and phone number, so an enquiry can always
-reach you even if the form service is ever down.
-
+${formSection}
 One recurring job
 -----------------
-Your domain name needs renewing once a year. Set it to auto-renew and the website
+${businessPhase ? `Your domain name needs renewing once a year. Set it to auto-renew and the website
 can sit untouched indefinitely.
-
+` : `The domain name is the one recurring item on a live site: it needs renewing once a
+year, set to auto-renew.`}
 Built by Site Sourced
 ---------------------
 This page is an unsolicited design proposal, not the business's official site, and
 it is marked noindex so it never competes with one. Ask and it comes down.
-`;
+${businessPhase ? "" : `
+On a demonstration bundle the name, address, phone number and hours come from public
+mapping data to show the layout; the text is written by Site Sourced and is not the
+business's own words. Nothing on the page was copied from a website belonging to
+${record.name}.
+`}`;
 }
