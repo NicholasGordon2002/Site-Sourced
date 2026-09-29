@@ -31,14 +31,39 @@ const USER_AGENT =
   process.env.SS_USER_AGENT ??
   "SiteSourced-DemoGenerator/0.1 (Ontario local-business demo sites; CC0/public-domain imagery only; contact: site-sourced-311e0184@ctomail.io)";
 
-/** Keep bundles small enough to email a link to and load on a phone. */
-const MAX_IMAGE_BYTES = 700 * 1024;
+/**
+ * The hard cap on a single image file in a bundle, whatever its source: a file over
+ * this is not a demo hero, it is a mistake. Downloaded candidates are checked as they
+ * are fetched; supplied files (see supplied.ts) are checked when the bundle is built,
+ * because a hand-supplied 2.6 MB hero is exactly how a 2.7 MB page shipped once.
+ */
+export const MAX_IMAGE_BYTES = 700 * 1024;
 
 const HISTORICAL = /histor|vintage|archiv|\b(18|19)\d\d\b|museum|military|servicemen|army|navy|prison|captive|guantanamo|nara\b|lccn|dvid|dod\b|second world war|wwii|war\b/i;
+
 
 export interface ImageFile {
   path: string;
   bytes: Uint8Array;
+}
+
+/**
+ * What a file's bytes actually are, whatever its name says.
+ *
+ * A `.jpg` whose bytes are a PNG is a bug on its own — a browser, a linter and a CDN
+ * all disagree about what the file is — and it was how the first fixtures shipped.
+ * The build compares this against the file extension and refuses a mismatch.
+ */
+export function sniffImageFormat(bytes: Uint8Array): "png" | "jpeg" | "webp" | null {
+  if (bytes.length > 3 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return "png";
+  if (bytes.length > 2 && bytes[0] === 0xff && bytes[1] === 0xd8) return "jpeg";
+  if (bytes.length > 12 && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) return "webp";
+  return null;
+}
+
+/** The extension a file of this format should carry, or null when we do not know it. */
+export function extensionForFormat(format: "png" | "jpeg" | "webp" | null): string | null {
+  return format === "png" ? ".png" : format === "jpeg" ? ".jpg" : format === "webp" ? ".webp" : null;
 }
 
 /**
@@ -51,13 +76,13 @@ export interface ImageFile {
  * the real ones. PNG, JPEG and WebP; anything else returns null and the caller
  * falls back to a sane default.
  */
-export async function readImageSize(path: string): Promise<{ width: number; height: number } | null> {
-  const head = new Uint8Array(await Bun.file(path).slice(0, 65536).arrayBuffer());
+export function imageSizeFromBytes(bytes: Uint8Array): { width: number; height: number } | null {
+  const head = bytes.subarray(0, 65536);
   if (head.length < 24) return null;
 
   // PNG: the IHDR chunk always follows the 8-byte signature.
   if (head[0] === 0x89 && head[1] === 0x50 && head[2] === 0x4e && head[3] === 0x47) {
-    const view = new DataView(head.buffer, head.byteOffset);
+    const view = new DataView(head.buffer, head.byteOffset, head.byteLength);
     return { width: view.getUint32(16), height: view.getUint32(20) };
   }
 
@@ -98,6 +123,11 @@ export async function readImageSize(path: string): Promise<{ width: number; heig
   }
 
   return null;
+}
+
+/** The same, for a file on disk. */
+export async function readImageSize(path: string): Promise<{ width: number; height: number } | null> {
+  return imageSizeFromBytes(new Uint8Array(await Bun.file(path).slice(0, 65536).arrayBuffer()));
 }
 
 export interface SourcedImages {
@@ -285,30 +315,47 @@ function fallbackHero(retrievedAt: string, reason: string): ManifestImage {
   };
 }
 
+/**
+ * One hand-supplied image, as the manifest describes it.
+ *
+ * The record may list a single `file`, or a `variants` set (the same picture at
+ * several widths, prepared by `tools/prepare-images.py`). When it lists variants the
+ * page's `src` is the widest of them — the browser that understands `srcset` picks
+ * from the set, and the one that does not gets the best file we hold rather than the
+ * smallest. The widths the record states are re-measured from the files themselves
+ * when the bundle is built (supplied.ts), so the page cannot describe a picture by a
+ * number nobody checked.
+ */
+function suppliedImage(img: ImageOverride, retrievedAt: string): ManifestImage {
+  const isAi = checkOverrideLicence(img);
+  const variants = (img.variants ?? []).filter((v) => v.file);
+  const file = (variants.length > 0 ? [...variants].sort((a, b) => b.width - a.width)[0]!.file : img.file) ?? null;
+  if (!file) {
+    throw new Error(
+      `image for the ${img.role} slot lists neither "file" nor "variants" — a record may not point at an image it does not name.`,
+    );
+  }
+  const sizes = variants.length > 0 ? ` Responsive sizes supplied: ${[...variants].sort((a, b) => a.width - b.width).map((v) => `${v.width}px`).join(", ")}.` : "";
+  return {
+    role: img.role,
+    file,
+    source: isAi ? "supplied: AI-generated fallback" : "supplied: CC0/public domain",
+    source_url: img.source_url,
+    license: img.license,
+    author: img.author,
+    retrieved_at: retrievedAt,
+    variants: variants.length > 0 ? variants : undefined,
+    notes: (isAi
+      ? "AI-generated image used as a fallback, labelled on the page as an illustration and not a photograph of this business."
+      : "Supplied from our own CC0/public-domain library.") + sizes,
+  };
+}
+
 export async function sourceImages(record: BusinessRecord, opts: SourcingOptions): Promise<SourcedImages> {
   const retrievedAt = new Date().toISOString();
 
   if (record.images && record.images.length > 0) {
-    const images: ManifestImage[] = [];
-    for (const img of record.images) {
-      const isAi = checkOverrideLicence(img);
-      images.push({
-        role: img.role,
-        file: img.file,
-        source: isAi ? "supplied: AI-generated fallback" : "supplied: CC0/public domain",
-        source_url: img.source_url,
-        license: img.license,
-        author: img.author,
-        retrieved_at: retrievedAt,
-        // Responsive sizes travel with the image so the page can offer a phone the
-        // small file. The generator does not cut them itself yet.
-        variants: img.variants && img.variants.length > 0 ? img.variants : undefined,
-        notes: isAi
-          ? "AI-generated image used as a fallback, labelled on the page as an illustration and not a photograph of this business."
-          : "Supplied from our own CC0/public-domain library.",
-      });
-    }
-    return { images, files: [] };
+    return { images: record.images.map((img) => suppliedImage(img, retrievedAt)), files: [] };
   }
 
   if (opts.noImages) {

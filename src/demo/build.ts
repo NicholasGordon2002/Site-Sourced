@@ -12,8 +12,8 @@
  * not allowed to make, the build fails loudly instead of shipping.
  */
 
-import { copyFile, mkdir, rm, stat } from "node:fs/promises";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { copyFile, mkdir, readdir, rm, stat } from "node:fs/promises";
+import { dirname, join, relative } from "node:path";
 
 import type { BundleResult, BusinessRecord, DemoManifest, ManifestImage } from "./types.ts";
 import type { DemoCopy } from "./copy.ts";
@@ -21,7 +21,9 @@ import { composeCopy, guardCopy, illustrationLabel, isIllustrativeImage, normali
 import type { FormDelivery } from "./delivery.ts";
 import { formDeliveryProblems, resolveDelivery } from "./delivery.ts";
 import { KEY_PLACEHOLDER, resolveForm, type ResolvedForm } from "./forms.ts";
-import { readImageSize, sourceImages } from "./images.ts";
+import { sourceImages } from "./images.ts";
+import { filesForSupplied, inspectSuppliedImage, manifestForSupplied } from "./supplied.ts";
+import { BUDGET, imageBudgetProblems, kb, pageLoadout, weightProblems } from "./weight.ts";
 import { esc, renderCss, renderEditingReadme, renderFavicon, renderIndex, renderJs, type RenderContext } from "./render.ts";
 
 export const GENERATOR = "sitesourced-demo-generator/0.1";
@@ -105,11 +107,23 @@ export function complianceChecks(vars: {
   return problems;
 }
 
-/** Every relative file the HTML/CSS/JS refers to must exist inside the bundle. */
+/**
+ * Every relative file the HTML/CSS/JS refers to must exist inside the bundle.
+ *
+ * `srcset` is read as well as `src`: a hero whose `src` exists but whose `srcset`
+ * points at variants that were never copied in would 404 on a phone while looking
+ * perfectly fine on the machine that built it.
+ */
 async function referencedFilesExist(dir: string, html: string, css: string): Promise<string[]> {
   const missing: string[] = [];
   const refs = new Set<string>();
   for (const m of html.matchAll(/(?:src|href)="([^"#][^"]*)"/g)) refs.add(m[1]!);
+  for (const m of html.matchAll(/srcset="([^"]*)"/g)) {
+    for (const candidate of m[1]!.split(",")) {
+      const path = candidate.trim().split(/\s+/)[0];
+      if (path) refs.add(path);
+    }
+  }
   for (const m of css.matchAll(/url\(['"]?([^'")]+)['"]?\)/g)) refs.add(m[1]!);
   for (const ref of refs) {
     if (/^(https?:|mailto:|tel:|data:)/.test(ref)) continue;
@@ -159,29 +173,43 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
     onNote: opts.onNote,
   });
 
-  // A supplied file carries no dimensions of its own, and the page needs them: the
-  // hero's width/height attributes are what stop a phone reflowing as the picture
-  // arrives, and the srcset descriptor is the file's real pixel width. So measure the
-  // file before anything renders, from the file itself — a guessed number is worse
-  // than no number when the layout reserves space from it.
-  const bytesByPath = new Map<string, Uint8Array>();
-  for (const file of sourced.files) bytesByPath.set(file.path, file.bytes);
-
+  // Everything that goes into the bundle, in memory, before anything is written:
+  // the bytes we downloaded, and the supplied files we read and measured. A supplied
+  // file is measured exactly like a fetched one — that check is how a 2.7 MB hero
+  // shipped, because it only ever ran on files we had fetched ourselves.
+  // Reasons to refuse the bundle that are known before a single file is written.
+  // Merged with the page's compliance self-check below, and thrown as one list.
+  const problemsBeforeWrite: string[] = [];
+  const suppliedFiles: { path: string; bytes: Uint8Array }[] = [];
   const images: ManifestImage[] = [];
   for (const image of sourced.images) {
-    if (!image.file || image.width || bytesByPath.has(image.file)) {
+    const downloaded = sourced.files.find((f) => f.path === image.file);
+    if (downloaded) {
       images.push(image);
       continue;
     }
-    try {
-      const size = await readImageSize(await locateSupplied(image.file, opts.recordDir));
-      images.push(size ? { ...image, width: size.width, height: size.height } : image);
-    } catch {
-      // Missing where it was expected to be: the copy step below reports that as a
-      // warning, in the same words it always has.
-      images.push(image);
+    const inspected = await inspectSuppliedImage(image, opts.recordDir);
+    problemsBeforeWrite.push(...inspected.problems);
+    if (inspected.variants.length === 0) {
+      // Missing where it was expected to be: the page falls back to its CSS treatment,
+      // in the same words it always has.
+      warnings.push(
+        `image ${inspected.missing.join(", ") || image.file} could not be read (${inspected.missing.length > 0 ? "not found" : "unreadable"}) — the page falls back to its CSS treatment.`,
+      );
+      images.push({ ...image, file: null, source: "css-gradient-fallback", notes: "Supplied file was not found." });
+      continue;
     }
+    const measured = manifestForSupplied(image, inspected.variants);
+    images.push(measured);
+    suppliedFiles.push(...filesForSupplied(inspected.variants));
+    opts.onNote(
+      `images: ${image.role} ← ${measured.file} (${inspected.variants.length} size${inspected.variants.length === 1 ? "" : "s"}: ${inspected.variants
+        .map((v) => `${v.width}px ${kb(v.bytes.byteLength)}`)
+        .join(", ")})`,
+    );
   }
+  const bytesByPath = new Map<string, Uint8Array>();
+  for (const file of [...sourced.files, ...suppliedFiles]) bytesByPath.set(file.path, file.bytes);
 
   const ctx: RenderContext = {
     record,
@@ -200,7 +228,7 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   const favicon = renderFavicon(record, profile);
   const readme = renderEditingReadme(ctx);
 
-  const problems = complianceChecks({ html, record, copy, form, delivery, images });
+  const problems = [...problemsBeforeWrite, ...complianceChecks({ html, record, copy, form, delivery, images })];
   if (problems.length > 0) await fail(`compliance self-check failed for ${slug}:\n  - ${problems.join("\n  - ")}`);
 
   const files: string[] = [];
@@ -229,30 +257,61 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
     }
   }
 
-  // Images: either the bytes we just downloaded, or a file supplied in the record.
-  // The entries were already measured above, so the page and the manifest describe the
-  // same picture, with the same real dimensions.
-  for (let i = 0; i < images.length; i++) {
-    const image = images[i]!;
-    if (!image.file) continue;
-    const downloaded = bytesByPath.get(image.file);
-    if (downloaded) {
-      await write(image.file, downloaded);
-      continue;
+  // Images: either the bytes we downloaded, or a supplied file in the record — both
+  // are in `bytesByPath` by now, already measured, so the page and the manifest
+  // describe the same picture with the same real dimensions. A variant set is written
+  // in full: that is the point of it — the phone downloads one file, the folder holds
+  // the set.
+  for (const image of images) {
+    const paths = (image.variants?.length ?? 0) > 0 ? image.variants!.map((v) => v.file) : image.file ? [image.file] : [];
+    for (const path of paths) {
+      const bytes = bytesByPath.get(path);
+      if (!bytes) {
+        warnings.push(`image ${path} has no bytes to write — the page would refer to a file it does not contain.`);
+        continue;
+      }
+      await write(path, bytes);
     }
-    try {
-      const source = await locateSupplied(image.file, opts.recordDir);
-      await mkdir(dirname(join(dir, image.file)), { recursive: true });
-      await copyFile(source, join(dir, image.file));
-      files.push(image.file);
-    } catch (err) {
-      warnings.push(`image ${image.file} could not be copied in (${(err as Error).message}) — the page falls back to its CSS treatment.`);
-      images[i] = { ...image, file: null, source: "css-gradient-fallback", notes: "Supplied file was not found." };
-    }
+  }
+
+  // A bundle contains what this build put in it and nothing else. Without this, a
+  // file from an earlier build survives in the folder — which is how a re-encoded hero
+  // could leave its 2.6 MB predecessor sitting in the published demo path, still
+  // reachable at a guessable URL, long after the page stopped referring to it.
+  const keep = new Set<string>([...files, "manifest.json"]);
+  const present = await readdir(dir, { recursive: true, withFileTypes: true });
+  for (const entry of present) {
+    if (!entry.isFile()) continue;
+    const rel = entry.parentPath ? relative(dir, join(entry.parentPath, entry.name)) : entry.name;
+    if (keep.has(rel)) continue;
+    await rm(join(dir, rel), { force: true });
+    warnings.push(`removed ${rel}, a file inside this bundle that this build did not write (a leftover from an earlier run).`);
   }
 
   const missing = await referencedFilesExist(dir, html, css);
   if (missing.length > 0) await fail(`bundle ${slug} refers to files it does not contain: ${missing.join(", ")}`);
+
+  // What the page actually weighs, measured from the files on disk rather than
+  // estimated from the record: the page itself, its stylesheet, its script, its two
+  // fonts, and one file per image slot — the hero variant a 360px phone asks for.
+  // Over the ceiling this bundle does not ship; over the target it still does, and
+  // the manifest carries the number so a heavy-but-honest page is visible, not hidden.
+  const sizes = new Map<string, number>();
+  for (const f of files) sizes.set(f, (await stat(join(dir, f))).size);
+  const weight = weightProblems({ page: "index.html", html, css, sizes, images });
+  const imageBudgets = imageBudgetProblems({ images, sizes });
+  if (weight.length > 0 || imageBudgets.length > 0) {
+    await fail(`bundle ${slug} breaks the weight budget in docs/design-system.md §8:\n  - ${[...weight, ...imageBudgets].join("\n  - ")}`);
+  }
+  const pageBytes = pageLoadout({ page: "index.html", html, css, sizes, images }).reduce((sum, f) => sum + f.bytes, 0);
+  opts.onNote(
+    `weight: index.html loads ${kb(pageBytes)} cold at 360px (target ${kb(BUDGET.pageTarget)}, ceiling ${kb(BUDGET.pageCeiling)})`,
+  );
+  if (pageBytes > BUDGET.pageTarget) {
+    warnings.push(
+      `the page weighs ${kb(pageBytes)} cold, over the ${kb(BUDGET.pageTarget)} target in docs/design-system.md §8 (the ${kb(BUDGET.pageCeiling)} ceiling is what fails a build).`,
+    );
+  }
 
   const manifest: DemoManifest = {
     generator: GENERATOR,
@@ -354,19 +413,6 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   for (const f of files) total += (await stat(join(dir, f))).size;
 
   return { slug, dir, files: manifest.files, images, warnings, bytes: total };
-}
-
-async function locateSupplied(file: string, recordDir: string): Promise<string> {
-  const candidates = isAbsolute(file) ? [file] : [resolve(recordDir, file), resolve(process.cwd(), file)];
-  for (const candidate of candidates) {
-    try {
-      await stat(candidate);
-      return candidate;
-    } catch {
-      continue;
-    }
-  }
-  throw new Error(`not found: ${candidates.join(", ")}`);
 }
 
 /** Every bundle output file, in the order a human would read them. */

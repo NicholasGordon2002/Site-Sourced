@@ -34,8 +34,12 @@ export interface RecordAddress {
 /**
  * One responsive size of an image, as it sits inside the bundle: the file, and the
  * width in pixels that the `srcset` descriptor needs. A bundle that carries
- * `hero-600.jpg … hero-1600.jpg` lets a phone download the small one; a bundle with
+ * `hero-600.jpg … hero-1536.jpg` lets a phone download the small one; a bundle with
  * no variants lists none and the page falls back to a single candidate.
+ *
+ * The width is the file's real pixel width, and `build.ts` re-measures every file
+ * before it renders: a record whose stated width disagrees with the file fails the
+ * build rather than putting a wrong descriptor in the `srcset`.
  */
 export interface ImageVariant {
   /** Path inside the bundle, e.g. `images/hero-600.jpg`. */
@@ -47,13 +51,22 @@ export interface ImageVariant {
 /** An image supplied by hand (CC0/PD file we already hold, or a labelled AI fallback). */
 export interface ImageOverride {
   role: "hero" | "about";
-  /** Absolute or repo-relative path to a local file. Copied into the bundle. */
-  file: string;
+  /**
+   * Absolute or repo-relative path to a local file. Copied into the bundle.
+   *
+   * Optional when `variants` is given: the widest variant becomes the page's `src`.
+   * One of the two must be present.
+   */
+  file?: string;
   /** Exact licence wording. Must be CC0/public domain, or start with "AI-generated". */
   license: string;
   source_url: string;
   author: string;
-  /** Responsive sizes of the same picture, when they have been prepared. */
+  /**
+   * The same picture at several widths, prepared with `tools/prepare-images.py`.
+   * Listed narrowest first is conventional; the build sorts them by measured width
+   * and the widest becomes the page's `src` and its `width`/`height` attributes.
+   */
   variants?: ImageVariant[];
 }
 

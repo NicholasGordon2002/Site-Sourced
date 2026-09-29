@@ -347,8 +347,59 @@ submission can be followed end to end. Test fixtures live in `test/fixtures/` an
 
 The fixtures' hero images are **AI-generated** (`test/fixtures/images/`) and both the
 manifest and the report say so; the CC0/Openverse/Commons path is the default for real
-records. Those files are 2–3.6 MB each, which is heavier than we want for a real
-bundle — downscaling needs an image encoder, and none is installed on this machine.
+records. Each fixture hero is a **variant set** of real JPEGs — `…-600.jpg`,
+`…-900.jpg`, `…-1200.jpg`, and `…-1536.jpg` where the picture fits the budget — listed
+in the record under `images[].variants`. See *Preparing images* below.
+
+---
+
+## Preparing images
+
+Image encoding is **build-time tooling only**. It lives outside this repository, no
+delivered bundle needs it, and the pipeline itself has no dependencies: it measures and
+copies the files, and refuses a file that is too heavy or mislabelled rather than
+quietly re-encoding it behind your back.
+
+One-time setup, in a directory that is neither in this repo nor on the published site:
+
+```bash
+python3 -m venv /home/team/shared/.tools/imaging-venv
+/home/team/shared/.tools/imaging-venv/bin/pip install Pillow
+```
+
+Then, for each picture:
+
+```bash
+cd /home/team/shared/pipeline
+/home/team/shared/.tools/imaging-venv/bin/python tools/prepare-images.py \
+    --in test/fixtures/images/barber-hero-1536.jpg --out-dir test/fixtures/images
+```
+
+- It cuts the tier widths the page's `srcset` asks for (600 / 900 / 1200 / 1600), never
+  upscaling: the largest tier is `min(native width, 1600)` and its file is named with
+  its real width, so the name never lies.
+- It fits each tier to the design system's budget (`docs/design-system.md` §8: the hero
+  is ≤ 180 KB at its widest and ≤ 120 KB for the file a 360px phone downloads) by
+  stepping the JPEG quality down a ladder. A tier that cannot fit even at the bottom of
+  the ladder is **dropped, and said out loud** in the output — the budget beats pixels,
+  and the aspect ratio is unchanged, so the space the page reserves is unchanged too.
+- It prints a ready-to-paste `variants` block for the record.
+- It re-encodes a PNG that is wearing a `.jpg` name, and says that it did.
+- Output is progressive JPEG, 4:2:0, carrying no metadata from the source.
+
+The **committed `.jpg` files are the artefact of record**: re-running the tool from the
+largest committed variant reproduces the smaller tiers.
+
+What the build does with the result, whether the files came from this tool or from a
+download:
+
+| Check | Where | On failure |
+| --- | --- | --- |
+| The bytes match the file name (a `.jpg` must be a JPEG) | `src/demo/supplied.ts` | build fails, naming the file and the command to run |
+| The record's stated width is the file's real width | `src/demo/supplied.ts` | build fails: that number goes into the page's `srcset` |
+| Each image is inside the budget for its role, and the 700 KB hard cap | `src/demo/supplied.ts`, `src/demo/weight.ts` | build fails |
+| The whole page a 360px phone loads is under the 750 KB ceiling | `src/demo/weight.ts` | build fails, naming the page and the heaviest file it loads |
+| No file from an earlier build is left behind in the bundle folder | `src/demo/build.ts` | removed, and listed as a warning |
 
 ---
 
