@@ -1,17 +1,40 @@
 /**
  * Site Sourced — page rendering.
  *
- * One template, plain HTML/CSS/JS, no framework and no third-party asset of any
- * kind: the page makes zero network requests while it loads. The only outbound
- * request the site can ever make is the contact-form POST, and that goes to a
- * relay the client owns (see forms.ts).
+ * **One record in, five pages out**, plain HTML/CSS/JS: no framework and no
+ * third-party asset of any kind, so a page makes zero network requests while it
+ * loads. The only outbound request the site can ever make is the contact-form POST,
+ * and that goes to a relay the client owns (see forms.ts).
  *
- * The HTML is deliberately readable. A client who opens index.html in a text
- * editor can find their own sentences and change them.
+ *   index.html    the hero, a short About, the recorded services, hours, a contact CTA
+ *   services.html the full recorded list as cards, hours, a contact CTA
+ *   about.html    the About paragraphs, the about photograph, hours, a contact CTA
+ *   contact.html  the delivery notice, the form, the printed details, directions, hours
+ *   privacy.html  our privacy notice (see `composePrivacy`)
+ *
+ * Three rules hold on **every** page, and `build.ts` checks each page rather than
+ * trusting the template:
+ *
+ *   1. the proposal banner is the first content element, in normal flow;
+ *   2. the same disclaimer sits next to the business's name in the footer, and the
+ *      printed-details caveat sits with the details it belongs to;
+ *   3. `noindex, nofollow`, so a proposal never competes with the business's own site.
+ *
+ * `site.js` is loaded by the contact page and by nothing else: the form is the only
+ * thing on the site that needs script, so every other page works with JavaScript off
+ * and asks the browser for one file less.
+ *
+ * Navigation is plain links to real files, in the header and repeated in the footer.
+ * There is no hamburger menu and no JavaScript: on the published host a bundle is
+ * served as flat files, so `services.html` is a path that serves and `/services/` is
+ * not — the links point at files for exactly that reason.
+ *
+ * The HTML is deliberately readable. A client who opens index.html in a text editor
+ * can find their own sentences and change them.
  */
 
 import type { BusinessRecord, ManifestImage } from "./types.ts";
-import type { DemoCopy } from "./copy.ts";
+import type { DemoCopy, PrivacyNotice } from "./copy.ts";
 import type { CategoryProfile } from "./copy.ts";
 import { normaliseHours, normaliseServices } from "./copy.ts";
 import { illustrationLabel, isIllustrativeImage } from "./copy.ts";
@@ -25,9 +48,47 @@ export interface RenderContext {
   form: ResolvedForm;
   /** Who the form actually reaches — decides the notice and the wording around it. */
   delivery: FormDelivery;
+  /** The privacy notice, composed for the same phase as the form notice. */
+  privacy: PrivacyNotice;
   images: ManifestImage[];
   slug: string;
   generatedAt: string;
+}
+
+export type PageId = "index" | "services" | "about" | "contact" | "privacy";
+
+/**
+ * What each page is, as data: the filename the links point at, whether the page
+ * prints the business's phone number and email (the caveat's home), whether it
+ * carries the form (the only thing site.js is for), and which image slots it shows
+ * (which is where an AI-illustration label has to appear).
+ *
+ * `build.ts` reads this table to check the right obligations on the right page, and
+ * the two scripts that audit a bundle read the same table from the manifest.
+ */
+export interface PageSpec {
+  id: PageId;
+  file: string;
+  printsDetails: boolean;
+  carriesForm: boolean;
+  slots: ("hero" | "about")[];
+}
+
+export const PAGE_SPECS: Record<PageId, PageSpec> = {
+  index: { id: "index", file: "index.html", printsDetails: true, carriesForm: false, slots: ["hero", "about"] },
+  services: { id: "services", file: "services.html", printsDetails: true, carriesForm: false, slots: [] },
+  about: { id: "about", file: "about.html", printsDetails: true, carriesForm: false, slots: ["about"] },
+  contact: { id: "contact", file: "contact.html", printsDetails: true, carriesForm: true, slots: [] },
+  privacy: { id: "privacy", file: "privacy.html", printsDetails: false, carriesForm: false, slots: [] },
+};
+
+/** Every page, in the order a visitor meets them and the nav lists them. */
+export const PAGE_IDS: PageId[] = ["index", "services", "about", "contact", "privacy"];
+
+export interface RenderedPage {
+  id: PageId;
+  file: string;
+  html: string;
 }
 
 export function esc(s: string): string {
@@ -77,29 +138,37 @@ export function renderFavicon(record: BusinessRecord, profile: CategoryProfile):
   ].join("\n");
 }
 
+/* ------------------------------------------------------------ record sections */
+
 function hoursBlock(record: BusinessRecord): string {
   const { rows, note } = normaliseHours(record);
   if (rows.length === 0) {
-    return `      <p class="muted">No opening hours are recorded publicly for this business. Call to ask.</p>`;
+    return `        <p class="muted">No opening hours are recorded publicly for this business. Call to ask.</p>`;
   }
   const items = rows
-    .map((r) => `        <div class="hours-row"><dt>${esc(r.days)}</dt><dd>${esc(r.hours)}</dd></div>`)
+    .map((r) => `          <div class="hours-row"><dt>${esc(r.days)}</dt><dd>${esc(r.hours)}</dd></div>`)
     .join("\n");
-  const noteLine = note ? `\n      <p class="muted">${esc(note)}</p>` : "";
-  return `      <dl class="hours">\n${items}\n      </dl>${noteLine}`;
+  const noteLine = note ? `\n        <p class="muted">${esc(note)}</p>` : "";
+  return `        <dl class="hours card">\n${items}\n        </dl>${noteLine}`;
 }
 
-function servicesBlock(record: BusinessRecord): string {
+/**
+ * The service cards. `level` is the heading level the names take: `h3` under a
+ * section heading on the home page, `h2` on a page whose `h1` is the offering
+ * itself, so no page skips a heading level.
+ */
+function servicesBlock(record: BusinessRecord, level: 2 | 3): string {
   const services = normaliseServices(record);
+  const heading = `h${level}`;
   if (services.length === 0) {
-    return `      <p class="muted">Nothing is recorded yet — this is where the business's ${esc(copyOffering(record))} would be listed.</p>`;
+    return `        <p class="muted">Nothing is recorded yet — this is where the business's ${esc(copyOffering(record))} would be listed.</p>`;
   }
-  return `      <ul class="services">\n${services
+  return `        <ul class="services">\n${services
     .map(
       (s) =>
-        `        <li><h3>${esc(s.name)}</h3>${s.note ? `<p>${esc(s.note)}</p>` : ""}</li>`,
+        `          <li class="card"><${heading}>${esc(s.name)}</${heading}>${s.note ? `<p>${esc(s.note)}</p>` : ""}</li>`,
     )
-    .join("\n")}\n      </ul>`;
+    .join("\n")}\n        </ul>`;
 }
 
 function copyOffering(record: BusinessRecord): string {
@@ -114,12 +183,11 @@ function heroImage(images: ManifestImage[]): ManifestImage | undefined {
 /**
  * The hero's `srcset`, built from the sizes the bundle actually holds.
  *
- * A bundle built today carries one file, so this is a single candidate: valid markup,
- * and the browser downloads exactly the one file, which is why the weight problem is
- * not solved by the markup alone. Once the generator cuts `images/hero-600.jpg …
- * hero-1600.jpg` and lists them as `variants` on the manifest image, this same markup
- * asks a phone for the 600px file instead of the 1600px one. `sizes="100vw"` because
- * the hero is full-bleed at every breakpoint.
+ * A bundle with one file gets a single candidate: valid markup, and the browser
+ * downloads exactly that file. With `images/hero-600.jpg … hero-1536.jpg` listed as
+ * `variants` on the manifest image, this same markup asks a phone for the 600px file
+ * instead of the 1536px one. `sizes="100vw"` because the hero is full-bleed at every
+ * breakpoint.
  */
 function heroSrcset(hero: ManifestImage): string {
   const variants = (hero.variants ?? []).filter((v) => v.file && v.width > 0);
@@ -142,64 +210,156 @@ function aboutImage(images: ManifestImage[]): ManifestImage | undefined {
 }
 
 /**
- * The visible caption for an AI-generated placeholder image, or "" when the image
- * on that slot is not illustrative.
+ * The visible caption for an AI-generated placeholder image, or "" when the image in
+ * that slot is not illustrative.
  *
- * The caption is a plain `<figcaption>` in normal flow: no hover, no no-JS
- * fallback needed, nothing hidden. Its wording comes from `illustrationLabel` in
- * copy.ts, and `build.ts` refuses a bundle whose manifest records an AI-generated
- * image while the page carries no such label.
+ * The caption is a plain `<figcaption>` in normal flow: no hover, no no-JS fallback
+ * needed, nothing hidden. Its wording comes from `illustrationLabel` in copy.ts, and
+ * `build.ts` refuses a page that shows an image the manifest records as AI-generated
+ * while that page carries no such label.
  */
 function illustrationCaption(images: ManifestImage[], role: "hero" | "about", businessName: string): string {
   const image = images.find((i) => i.role === role && isIllustrativeImage(i));
   return image ? illustrationLabel(businessName) : "";
 }
 
-export function renderIndex(ctx: RenderContext): string {
-  const { record, copy, form, images } = ctx;
-  const addr = addressLine(record);
+/* ----------------------------------------------------------------- page shell */
+
+function pageTitle(ctx: RenderContext, id: PageId): string {
+  const { record, copy } = ctx;
+  const city = record.address?.city;
+  switch (id) {
+    case "services":
+      return `${copy.pages.services.title} — ${record.name}${city ? `, ${city}` : ""} (design proposal)`;
+    case "about":
+      return `${copy.pages.about.title} — ${record.category}${city ? ` in ${city}` : ""} (design proposal)`;
+    case "contact":
+      return `${copy.pages.contact.title} — ${record.name} (design proposal)`;
+    case "privacy":
+      return copy.pages.privacy.title;
+    default:
+      return `${record.name} — ${record.category}${city ? `, ${city}` : ""} (design proposal)`;
+  }
+}
+
+function pageDescription(ctx: RenderContext, id: PageId): string {
+  const { record, copy } = ctx;
+  if (id === "index") {
+    return `An unsolicited design proposal from Site Sourced for ${record.name}, ${record.category.toLowerCase()}${record.address?.city ? ` in ${record.address.city}` : ""}.`;
+  }
+  return `${copy.pages[id].lead} An unsolicited design proposal from Site Sourced for ${record.name}.`;
+}
+
+/** The navigation: same links on every page, as real files. */
+function navBlock(copy: DemoCopy, current: PageId, className: string, label: string): string {
+  const items = PAGE_IDS.map((id) => {
+    const current_ = id === current ? ' aria-current="page"' : "";
+    return `          <li><a href="${PAGE_SPECS[id].file}"${current_}>${esc(copy.nav[id])}</a></li>`;
+  }).join("\n");
+  return `      <nav class="${className}" aria-label="${esc(label)}">
+        <ul>
+${items}
+        </ul>
+      </nav>`;
+}
+
+function headerBlock(ctx: RenderContext, id: PageId): string {
+  const { record, copy } = ctx;
   const tel = record.phone ? telHref(record.phone) : "";
-  const hero = heroImage(images);
-  const heroSrc = hero ? heroSrcset(hero) : "";
-  const about = aboutImage(images);
-  const heroCaption = illustrationCaption(images, "hero", record.name);
-  const aboutCaption = illustrationCaption(images, "about", record.name);
-  const honeypot = form.provider.key === "web3forms" ? "botcheck" : "_gotcha";
-  const hidden = Object.entries(form.hiddenFields)
-    .map(([k, v]) => `        <input type="hidden" name="${esc(k)}" value="${esc(v)}">`)
-    .join("\n");
-
-  return `<!doctype html>
-<html lang="en-CA">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <!-- Compliance: this page must never appear in search results, and must never
-       compete with the business's own site. Do not remove this line. -->
-  <meta name="robots" content="noindex, nofollow">
-  <title>${esc(record.name)} — ${esc(record.category)}${record.address?.city ? `, ${esc(record.address.city)}` : ""} (design proposal)</title>
-  <meta name="description" content="An unsolicited design proposal from Site Sourced for ${esc(record.name)}, ${esc(record.category.toLowerCase())}${record.address?.city ? ` in ${esc(record.address.city)}` : ""}.">
-  <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css">
-</head>
-<body>
-  <a class="skip-link" href="#main">Skip to content</a>
-
-  <!-- Compliance: the proposal banner sits above everything, in normal flow, so it
-       is visible without scrolling on every screen size. Do not remove. -->
-  <div class="proposal-banner" role="note">
-    <p class="wrap">${esc(copy.banner)}</p>
-  </div>
-
-  <header class="site-header">
+  // The call button prints the business's published phone number. The privacy page
+  // prints none of the business's details — an unconfirmed number has no business on
+  // a notice about how we handle a message — so its header carries the wordmark and
+  // the navigation only.
+  const call = !PAGE_SPECS[id].printsDetails
+    ? ""
+    : record.phone
+      ? `          <a class="call-button" href="${tel}">${esc(copy.ui.callLabel)} ${esc(record.phone)}</a>`
+      : `          <span class="call-button call-button--muted">${esc(copy.ui.noPhoneNote)}</span>`;
+  return `  <header class="site-header">
     <div class="wrap header-inner">
       <p class="wordmark">${esc(record.name)}</p>
-${record.phone ? `      <a class="call-button" href="${tel}">Call ${esc(record.phone)}</a>` : `      <span class="call-button call-button--muted">Phone number not recorded</span>`}
-    </div>
-  </header>
+${navBlock(copy, id, "site-nav", "Pages")}
+${call ? `${call}\n` : ""}    </div>
+  </header>`;
+}
 
-  <main id="main">
-    <figure class="hero-figure">
+/**
+ * The printed phone number and email address, next to the contact route.
+ *
+ * On a demonstration page these came from public listings and were never confirmed
+ * with the business, so the caveat from `copy.contactCaveat` sits directly under them
+ * — here and again in the footer. That is the plan's rule ("as published in public
+ * listings — please confirm"), and `build.ts` counts the two instances per page.
+ */
+function fallbackBlock(ctx: RenderContext): string {
+  const { record, copy } = ctx;
+  const tel = record.phone ? telHref(record.phone) : "";
+  return `        <div class="contact-fallback">
+          <h3>${esc(copy.fallback.heading)}</h3>
+${record.email ? `          <p>${esc(copy.fallback.emailIntro)} <a href="mailto:${esc(record.email)}">${esc(record.email)}</a></p>` : `          <p>${esc(copy.fallback.noEmail)}</p>`}
+${record.phone ? `          <p>${esc(copy.fallback.phoneIntro)} <a href="${tel}">${esc(record.phone)}</a>.</p>` : `          <p>${esc(copy.fallback.noPhone)}</p>`}
+${copy.contactCaveat ? `          <!-- Compliance: these details came from public listings and are unconfirmed. Do not remove. -->
+          <p class="muted">${esc(copy.contactCaveat)}</p>\n` : ""}        </div>`;
+}
+
+function footerBlock(ctx: RenderContext, id: PageId): string {
+  const { record, copy } = ctx;
+  const spec = PAGE_SPECS[id];
+  const addr = addressLine(record);
+  const tel = record.phone ? telHref(record.phone) : "";
+  // The privacy page deliberately prints none of the business's details: a privacy
+  // notice is not the place to repeat an unconfirmed phone number, and the plan's
+  // caveat belongs only with details we actually print.
+  const details = spec.printsDetails
+    ? [addr ? esc(addr) : "", record.phone ? `<a href="${tel}">${esc(record.phone)}</a>` : "", record.email ? `<a href="mailto:${esc(record.email)}">${esc(record.email)}</a>` : ""]
+        .filter(Boolean)
+        .join("<br>\n          ")
+    : "";
+  return `  <footer class="site-footer">
+    <div class="wrap footer-grid">
+      <div>
+        <h2 class="footer-biz">${esc(record.name)}</h2>
+${details ? `        <p class="footer-contact">\n          ${details}\n        </p>\n` : ""}        <!-- Compliance: the same disclaimer as the banner, next to the business's name
+             and contact details. Do not remove. -->
+        <p class="disclaimer">${esc(copy.footerDisclaimer)}</p>
+      </div>
+      <div>
+${copy.contactCaveat && spec.printsDetails ? `        <!-- Compliance: the printed details came from public listings. Do not remove. -->
+        <p class="footer-small">${esc(copy.contactCaveat)}</p>
+` : ""}${navBlock(copy, id, "footer-nav", "Pages")}
+        <p class="footer-small">
+          ${esc(copy.footer.provenance)}
+        </p>
+        <p class="footer-small">
+          ${esc(copy.footer.takedown)}
+        </p>
+      </div>
+    </div>
+  </footer>`;
+}
+
+function pageHead(ctx: RenderContext, id: PageId): string {
+  const { record, copy } = ctx;
+  const city = record.address?.city;
+  const eyebrow = [record.category, city ? `${city}, ${record.address?.province ?? "ON"}` : ""].filter(Boolean).join(" · ");
+  return `    <header class="page-head">
+      <div class="wrap">
+        <p class="eyebrow">${esc(eyebrow)}</p>
+        <h1>${esc(copy.pages[id].title)}</h1>
+        <p class="lead">${esc(copy.pages[id].lead)}</p>
+      </div>
+    </header>`;
+}
+
+/* --------------------------------------------------------------- page content */
+
+function heroSection(ctx: RenderContext): string {
+  const { record, copy, images } = ctx;
+  const hero = heroImage(images);
+  const heroSrc = hero ? heroSrcset(hero) : "";
+  const caption = illustrationCaption(images, "hero", record.name);
+  const tel = record.phone ? telHref(record.phone) : "";
+  return `    <figure class="hero-figure">
       <div class="hero${hero ? " hero--photo" : " hero--plain"}">
 ${hero ? `        <!-- The hero is a real <img>, not a CSS background: it carries its own
              dimensions, a load priority and a srcset, which is what stops a phone
@@ -210,37 +370,38 @@ ${hero ? `        <!-- The hero is a real <img>, not a CSS background: it carrie
         <img class="hero-img" src="${esc(hero.file!)}"${heroSrc ? ` srcset="${esc(heroSrc)}" sizes="100vw"` : ""}${sizeAttrs(hero)} alt="" fetchpriority="high" decoding="async">
         <div class="hero-scrim" aria-hidden="true"></div>
 ` : ""}        <div class="wrap hero-inner">
-          <p class="hero-eyebrow">${esc(copy.heroEyebrow)}</p>
+          <p class="eyebrow">${esc(copy.heroEyebrow)}</p>
           <h1>${esc(record.name)}</h1>
           <p class="hero-lead">${esc(copy.heroLead)}</p>
           <p class="hero-actions">
-${record.phone ? `            <a class="button button--paper" href="${tel}">Call ${esc(record.phone)}</a>\n` : ""}            <a class="button button--ghost" href="#contact">Send a message</a>
+${record.phone ? `            <a class="button button--paper" href="${tel}">${esc(copy.ui.callLabel)} ${esc(record.phone)}</a>\n` : ""}            <a class="button button--ghost" href="${PAGE_SPECS.contact.file}">${esc(copy.contactCtaButton)}</a>
           </p>
         </div>
       </div>
-${heroCaption ? `      <!-- Compliance: an AI-generated placeholder is labelled as an illustration, not a
+${caption ? `      <!-- Compliance: an AI-generated placeholder is labelled as an illustration, not a
            photograph of the business. Do not remove. -->
-      <figcaption class="wrap muted hero-caption">${esc(heroCaption)}</figcaption>\n` : ""}    </figure>
+      <figcaption class="wrap muted hero-caption">${esc(caption)}</figcaption>\n` : ""}    </figure>`;
+}
 
-    <section class="section" id="about">
+function aboutSection(ctx: RenderContext, paragraphs: string[]): string {
+  const { record, copy, images } = ctx;
+  const image = aboutImage(images);
+  const caption = illustrationCaption(images, "about", record.name);
+  return `    <section class="section" id="about">
       <div class="wrap">
         <h2>About ${esc(record.name)}</h2>
-${copy.about.map((p) => `        <p>${esc(p)}</p>`).join("\n")}
-${about ? `        <figure class="about-figure">
-          <img class="about-photo" src="${esc(about.file!)}"${sizeAttrs(about)} alt="" loading="lazy" decoding="async">
-${aboutCaption ? `          <figcaption class="muted">${esc(aboutCaption)}</figcaption>\n` : ""}        </figure>\n` : ""}
-      </div>
-    </section>
+${paragraphs.map((p) => `        <p>${esc(p)}</p>`).join("\n")}
+${paragraphs.length < copy.about.length ? `        <p><a class="link-quiet link-quiet--inline" href="${PAGE_SPECS.about.file}">More about ${esc(record.name)}</a></p>\n` : ""}${image ? `        <figure class="about-figure">
+          <img class="about-photo" src="${esc(image.file!)}"${sizeAttrs(image)} alt="" loading="lazy" decoding="async">
+${caption ? `          <!-- Compliance: an AI-generated placeholder is labelled as an illustration. Do not remove. -->
+          <figcaption class="muted">${esc(caption)}</figcaption>\n` : ""}        </figure>\n` : ""}      </div>
+    </section>`;
+}
 
-    <section class="section section--alt" id="services">
-      <div class="wrap">
-        <h2>${esc(copy.offeringPlural.charAt(0).toUpperCase() + copy.offeringPlural.slice(1))}</h2>
-        <p class="muted">${esc(copy.servicesIntro)}</p>
-${servicesBlock(record)}
-      </div>
-    </section>
-
-    <section class="section" id="hours">
+function hoursAddressSection(ctx: RenderContext): string {
+  const { record, copy } = ctx;
+  const addr = addressLine(record);
+  return `    <section class="section" id="hours">
       <div class="wrap two-col">
         <div>
           <h2>Opening hours</h2>
@@ -251,92 +412,198 @@ ${hoursBlock(record)}
           <h2>Address</h2>
           <p class="muted">${esc(copy.locationIntro)}</p>
           ${addr ? `<address class="address">${esc(addr)}</address>` : `<p class="address muted">No street address recorded.</p>`}
-          <p>
-            <a class="button button--small" href="${directionsLink(record)}" target="_blank" rel="noopener noreferrer">Get directions</a>
-            <a class="link-quiet" href="${osmLink(record)}" target="_blank" rel="noopener noreferrer">See it on OpenStreetMap</a>
+          <p class="address-links">
+            <a class="button button--small" href="${directionsLink(record)}" target="_blank" rel="noopener noreferrer">${esc(copy.ui.directions)}</a>
+            <a class="link-quiet" href="${osmLink(record)}" target="_blank" rel="noopener noreferrer">${esc(copy.ui.osm)}</a>
           </p>
         </div>
       </div>
-    </section>
+    </section>`;
+}
 
-    <section class="section section--alt" id="contact">
+/** The link to the contact page, with the printed details beside it. */
+function contactCtaSection(ctx: RenderContext, alt: boolean): string {
+  const { copy } = ctx;
+  return `    <section class="section${alt ? " section--alt" : ""}" id="contact">
       <div class="wrap">
-        <h2>${esc(copy.contactHeading)}</h2>
-        <p class="muted">${esc(copy.contactIntro)}</p>
+        <h2>${esc(copy.contactCtaHeading)}</h2>
+        <p class="muted">${esc(copy.contactCtaIntro)}</p>
+        <p class="cta-actions"><a class="button" href="${PAGE_SPECS.contact.file}">${esc(copy.contactCtaButton)}</a></p>
+${fallbackBlock(ctx)}
+      </div>
+    </section>`;
+}
 
-        <!-- Compliance: this notice must stay next to the form. -->
+function contactFormSection(ctx: RenderContext): string {
+  const { copy, form } = ctx;
+  const honeypot = form.provider.key === "web3forms" ? "botcheck" : "_gotcha";
+  const hidden = Object.entries(form.hiddenFields)
+    .map(([k, v]) => `            <input type="hidden" name="${esc(k)}" value="${esc(v)}">`)
+    .join("\n");
+  return `    <section class="section section--alt" id="form">
+      <div class="wrap">
+        <h2>${esc(copy.contactCtaHeading)}</h2>
+
+        <!-- Compliance: this notice must stay next to the form. It is derived from
+             the delivery the record describes, never written by hand. -->
         <p class="form-notice">${esc(copy.formNotice)}</p>
 
         <form class="contact-form" id="contact-form" method="POST" action="${esc(form.endpoint)}"
               data-encode="${esc(form.provider.encode)}" data-success="${esc(copy.formSuccess)}"
               data-failure="Sorry, that didn't send. Please use the email address or phone number below.">
           <div class="field">
-            <label for="cf-name">Your name</label>
+            <label for="cf-name">${esc(copy.ui.fieldName)}</label>
             <input id="cf-name" name="name" type="text" autocomplete="name" required>
           </div>
           <div class="field">
-            <label for="cf-email">Your email</label>
+            <label for="cf-email">${esc(copy.ui.fieldEmail)}</label>
             <input id="cf-email" name="email" type="email" autocomplete="email" required>
           </div>
           <div class="field">
-            <label for="cf-phone">Your phone <span class="optional">(optional)</span></label>
+            <label for="cf-phone">${esc(copy.ui.fieldPhone)} <span class="optional">${esc(copy.ui.fieldOptional)}</span></label>
             <input id="cf-phone" name="phone" type="tel" autocomplete="tel">
           </div>
           <div class="field">
-            <label for="cf-message">Message</label>
+            <label for="cf-message">${esc(copy.ui.fieldMessage)}</label>
             <textarea id="cf-message" name="message" rows="5" required></textarea>
           </div>
           <div class="hp" aria-hidden="true">
-            <label for="cf-${honeypot}">Leave this field empty</label>
+            <label for="cf-${honeypot}">${esc(copy.ui.honeypot)}</label>
             <input id="cf-${honeypot}" name="${honeypot}" type="text" tabindex="-1" autocomplete="off">
           </div>
 ${hidden}
-          <button class="button" type="submit">Send message</button>
+          <button class="button" type="submit">${esc(copy.ui.submit)}</button>
           <p class="form-status" id="form-status" role="status" aria-live="polite"></p>
         </form>
 
-        <div class="contact-fallback">
-          <h3>Prefer email?</h3>
-${record.email ? `          <p>Write to us directly: <a href="mailto:${esc(record.email)}">${esc(record.email)}</a></p>` : `          <p>No email address is recorded publicly for this business — please use the phone number.</p>`}
-${record.phone ? `          <p>Or call <a href="${tel}">${esc(record.phone)}</a>.</p>` : ""}
-${copy.contactCaveat ? `          <!-- Compliance: these details came from public listings and are unconfirmed. Do not remove. -->
-          <p class="muted">${esc(copy.contactCaveat)}</p>\n` : ""}        </div>
+        <p class="form-privacy"><a href="${PAGE_SPECS.privacy.file}">${esc(copy.ui.privacyLink)}</a></p>
+
+${fallbackBlock(ctx)}
+      </div>
+    </section>`;
+}
+
+function privacySection(ctx: RenderContext): string {
+  const { privacy } = ctx;
+  const blocks = privacy.sections
+    .map(
+      (s) => `        <h2>${esc(s.heading)}</h2>
+${s.paragraphs.map((p) => `        <p>${esc(p)}</p>`).join("\n")}`,
+    )
+    .join("\n");
+  return `    <section class="section">
+      <div class="wrap privacy-notice">
+${blocks}
+        <p class="muted updated">Last updated: ${esc(privacy.lastUpdated)}.</p>
+      </div>
+    </section>`;
+}
+
+/* -------------------------------------------------------------- the five pages */
+
+/**
+ * One page, complete: shell, content, footer. Every page carries the banner, the
+ * disclaimer and its own copy of whatever compliance line belongs to its content,
+ * because compliance is per-page and never inherited.
+ */
+export function renderPage(ctx: RenderContext, id: PageId): string {
+  const { record, copy, delivery } = ctx;
+  const spec = PAGE_SPECS[id];
+  const body = (() => {
+    switch (id) {
+      case "services":
+        return `${pageHead(ctx, id)}
+    <section class="section">
+      <div class="wrap">
+${servicesBlock(record, 2)}
       </div>
     </section>
+
+${hoursAddressSection(ctx)}
+
+${contactCtaSection(ctx, true)}`;
+      case "about":
+        return `${pageHead(ctx, id)}
+${aboutSection(ctx, copy.about)}
+
+${hoursAddressSection(ctx)}
+
+${contactCtaSection(ctx, true)}`;
+      case "contact":
+        return `${pageHead(ctx, id)}
+${contactFormSection(ctx)}
+
+${hoursAddressSection(ctx)}`;
+      case "privacy":
+        return `${pageHead(ctx, id)}
+${privacySection(ctx)}`;
+      default:
+        return `${heroSection(ctx)}
+
+${aboutSection(ctx, copy.about.slice(0, 1))}
+
+    <section class="section section--alt" id="services">
+      <div class="wrap">
+        <h2>${esc(copy.offeringPlural.charAt(0).toUpperCase() + copy.offeringPlural.slice(1))}</h2>
+        <p class="muted">${esc(copy.servicesIntro)}</p>
+${servicesBlock(record, 3)}
+      </div>
+    </section>
+
+${hoursAddressSection(ctx)}
+
+${contactCtaSection(ctx, true)}`;
+    }
+  })();
+
+  return `<!doctype html>
+<html lang="en-CA">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Compliance: this page must never appear in search results, and must never
+       compete with the business's own site. Do not remove this line. -->
+  <meta name="robots" content="noindex, nofollow">
+  <title>${esc(pageTitle(ctx, id))}</title>
+  <meta name="description" content="${esc(pageDescription(ctx, id))}">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">${esc(copy.ui.skip)}</a>
+
+  <!-- Compliance: the proposal banner sits above everything, in normal flow, so it
+       is visible without scrolling on every screen size. Do not remove. -->
+  <div class="proposal-banner" role="note">
+    <p class="wrap">${esc(copy.banner)}</p>
+  </div>
+
+${headerBlock(ctx, id)}
+
+  <main id="main">
+${body}
   </main>
 
-  <footer class="site-footer">
-    <div class="wrap footer-grid">
-      <div>
-        <h2 class="footer-biz">${esc(record.name)}</h2>
-        <p class="footer-contact">
-${[addr ? esc(addr) : "", record.phone ? `<a href="${tel}">${esc(record.phone)}</a>` : "", record.email ? `<a href="mailto:${esc(record.email)}">${esc(record.email)}</a>` : ""].filter(Boolean).join("<br>\n        ")}
-        </p>
-        <!-- Compliance: the same disclaimer as the banner, next to the business's name
-             and contact details. Do not remove. -->
-        <p class="disclaimer">${esc(copy.footerDisclaimer)}</p>
-      </div>
-      <div>
-${copy.contactCaveat ? `        <!-- Compliance: the printed details came from public listings. Do not remove. -->
-        <p class="footer-small">${esc(copy.contactCaveat)}</p>
-` : ""}        <p class="footer-small">
-          Business details come from public mapping data (© OpenStreetMap contributors, ODbL 1.0).
-          Copy, layout and imagery: Site Sourced. No logo, photograph or text was taken from any
-          website belonging to ${esc(record.name)}. This page is marked <code>noindex</code> so it
-          never competes with the business's own site.
-        </p>
-        <p class="footer-small">
-          This demo comes down on request — reply to the email that sent it and it will be removed within a day.
-        </p>
-      </div>
-    </div>
-  </footer>
+${footerBlock(ctx, id)}
 
-  <script src="site.js" defer></script>
-</body>
+${spec.carriesForm ? `  <!-- The only page that loads a script: the form is the only thing here that needs
+       one. With JavaScript off a visitor submits the form in the ordinary way. -->
+  <script src="site.js" defer></script>\n` : ""}</body>
 </html>
 `;
 }
+
+/** Every page of one bundle, in order. */
+export function renderPages(ctx: RenderContext): RenderedPage[] {
+  return PAGE_IDS.map((id) => ({ id, file: PAGE_SPECS[id].file, html: renderPage(ctx, id) }));
+}
+
+/** The home page alone — kept for the tests and callers that only want it. */
+export function renderIndex(ctx: RenderContext): string {
+  return renderPage(ctx, "index");
+}
+
+/* -------------------------------------------------------------- the stylesheet */
 
 export function renderCss(profile: CategoryProfile, slug: string): string {
   return `/* Site Sourced demo stylesheet — ${slug}
@@ -345,7 +612,8 @@ export function renderCss(profile: CategoryProfile, slug: string): string {
    the same folder. The business's category supplies the four accent values; every
    other value is a token below, so a palette change is a change of four lines.
 
-   The design system behind these decisions is docs/design-system.md. */
+   One stylesheet serves all five pages. The design system behind these decisions is
+   docs/design-system.md. */
 
 /* ------------------------------------------------------------------ fonts */
 
@@ -455,6 +723,7 @@ a:hover { text-decoration-thickness: 2px; }
 
 .wrap { width: min(var(--wrap), 100% - var(--gutter) * 2); margin-inline: auto; }
 .muted { color: var(--muted); }
+.lead { max-width: 34em; font-size: var(--fs-lead); line-height: 1.5; color: var(--body-text); }
 
 .skip-link {
   position: absolute;
@@ -507,6 +776,31 @@ a:hover { text-decoration-thickness: 2px; }
 }
 .site-header .call-button { margin-left: auto; }
 
+/* The navigation. On a phone it takes its own full-width row under the wordmark —
+   four short labels, all visible, no menu to open and nothing to script. From 48rem
+   it sits on the wordmark's line. */
+.site-nav { flex: 1 1 100%; order: 4; }
+.site-nav ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--s-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.site-nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--body-text);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+}
+.site-nav a:hover { color: var(--ink); border-bottom-color: var(--line); }
+.site-nav a[aria-current="page"] { color: var(--accent-ink); border-bottom-color: var(--accent); }
+
 /* ---------------------------------------------------------------- buttons */
 
 .button, .call-button {
@@ -551,6 +845,30 @@ a:hover { text-decoration-thickness: 2px; }
 .call-button--muted:hover { background: var(--paper-2); color: var(--muted); }
 
 .link-quiet { display: inline-block; margin: var(--s-3) 0 0 var(--s-4); font-size: var(--fs-small); color: var(--muted); }
+.link-quiet--inline { margin-left: 0; }
+.cta-actions { margin: var(--s-5) 0 0; max-width: none; }
+
+/* --------------------------------------------------------------- eyebrow */
+
+/* Uppercase label line — category and place — with the one accent mark that is not
+   a button. Used on the hero and at the top of every other page. */
+.eyebrow {
+  margin: 0 0 var(--s-3);
+  font-size: var(--fs-label);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.eyebrow::before {
+  content: "";
+  display: inline-block;
+  width: 1.5rem;
+  height: 2px;
+  margin-right: var(--s-2);
+  vertical-align: middle;
+  background: var(--accent);
+}
 
 /* ------------------------------------------------------------------- hero */
 
@@ -578,14 +896,8 @@ a:hover { text-decoration-thickness: 2px; }
   background: linear-gradient(180deg, rgba(10, 12, 14, .58) 0%, rgba(10, 12, 14, .40) 34%, rgba(10, 12, 14, .88) 100%);
 }
 .hero-inner { align-self: end; padding: var(--s-7) 0 var(--s-6); }
-.hero-eyebrow {
-  margin: 0 0 var(--s-3);
-  font-size: var(--fs-label);
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, .9);
-}
+.hero .eyebrow { color: rgba(255, 255, 255, .9); }
+.hero .eyebrow::before { background: #fff; }
 .hero h1 { color: #fff; margin-bottom: var(--s-4); max-width: 20ch; letter-spacing: -0.02em; }
 .hero-lead { margin: 0; max-width: 30rem; font-size: var(--fs-lead); line-height: 1.5; color: rgba(255, 255, 255, .94); }
 .hero-actions { display: flex; flex-wrap: wrap; gap: var(--s-3); margin: var(--s-5) 0 0; max-width: none; }
@@ -596,6 +908,19 @@ a:hover { text-decoration-thickness: 2px; }
    its spacing is design. */
 .hero-figure, .about-figure { margin: 0; }
 .hero-caption { margin: var(--s-3) 0 0; padding-bottom: var(--s-1); font-size: var(--fs-small); }
+
+/* ----------------------------------------------------------------- page head */
+
+/* Every page but the home page opens with this band instead of a photograph: cheaper
+   on a phone than five copies of one hero, and it keeps the headline the loudest
+   thing on the page. */
+.page-head {
+  padding: var(--s-7) 0 var(--s-5);
+  background: var(--paper-2);
+  border-bottom: var(--rule);
+}
+.page-head h1 { font-size: var(--fs-h2); margin-bottom: var(--s-3); }
+.page-head .lead { margin: 0; }
 
 /* --------------------------------------------------------------- sections */
 
@@ -615,25 +940,23 @@ a:hover { text-decoration-thickness: 2px; }
 .section .muted, .muted { color: var(--muted); }
 
 .address { font-style: normal; font-weight: 600; color: var(--ink); line-height: 1.5; }
+.address-links { margin: var(--s-4) 0 0; }
+.page-head + .section { padding-top: var(--s-7); }
 
-.services { list-style: none; margin: var(--s-5) 0 0; padding: 0; display: grid; gap: var(--s-3); }
-.services li {
+/* The card: one white surface with a hairline edge, used for the service list and
+   the hours table. Defined once so the two cannot drift apart. */
+.card {
   background: var(--paper);
   border: var(--rule);
   border-radius: var(--r-lg);
-  padding: var(--s-4) var(--s-5);
   box-shadow: 0 1px 2px rgba(16, 18, 20, .03);
 }
+
+.services { list-style: none; margin: var(--s-5) 0 0; padding: 0; display: grid; gap: var(--s-3); }
+.services li.card { padding: var(--s-4) var(--s-5); }
 .services p { margin: 0; max-width: none; color: var(--muted); font-size: 0.9375rem; }
 
-.hours {
-  margin: var(--s-5) 0 0;
-  max-width: 30rem;
-  background: var(--paper);
-  border: var(--rule);
-  border-radius: var(--r-lg);
-  overflow: hidden;
-}
+.hours { margin: var(--s-5) 0 0; max-width: 30rem; overflow: hidden; }
 .hours-row {
   display: flex;
   justify-content: space-between;
@@ -681,6 +1004,8 @@ a:hover { text-decoration-thickness: 2px; }
 .form-status[data-state="error"] { color: #A3241F; }
 .form-status[data-state="ok"] { color: #1F6B3A; }
 
+.form-privacy { margin: var(--s-4) 0 0; font-size: var(--fs-small); }
+
 .contact-fallback {
   max-width: 34rem;
   margin-top: var(--s-6);
@@ -690,6 +1015,15 @@ a:hover { text-decoration-thickness: 2px; }
 .contact-fallback h3 { margin-bottom: var(--s-2); }
 .contact-fallback p { margin: 0 0 var(--s-2); }
 .contact-fallback p:last-child { margin-bottom: 0; font-size: var(--fs-small); }
+
+/* ------------------------------------------------------------- privacy page */
+
+/* A notice is read, not skimmed: one narrow measure, headings that separate the
+   questions a visitor actually asks, and no accent marks competing with the text. */
+.privacy-notice { max-width: 42rem; }
+.privacy-notice h2 { margin-top: var(--s-6); font-size: var(--fs-h3); }
+.privacy-notice h2:first-child { margin-top: 0; }
+.privacy-notice .updated { margin: var(--s-6) 0 0; padding-top: var(--s-4); border-top: var(--rule); font-size: var(--fs-small); }
 
 /* ---------------------------------------------------------------- footer */
 
@@ -717,6 +1051,21 @@ a:hover { text-decoration-thickness: 2px; }
 .site-footer code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1em; color: #E8EBEE; }
 .site-footer :focus-visible { outline-color: #fff; }
 
+/* The same four links again, plus the privacy notice: on a phone the footer is the
+   second place a visitor looks, and the privacy notice is linked from every page. */
+.footer-nav { margin: 0 0 var(--s-5); }
+.footer-nav ul { display: flex; flex-direction: column; gap: var(--s-1); margin: 0; padding: 0; list-style: none; }
+.footer-nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.25rem;
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+}
+.footer-nav a:hover { text-decoration: underline; }
+.footer-nav a[aria-current="page"] { color: #fff; text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 4px; }
+
 /* ------------------------------------------------------------ wider screens */
 
 @media (min-width: 48rem) {
@@ -726,6 +1075,13 @@ a:hover { text-decoration-thickness: 2px; }
   .services { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .two-col { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: var(--s-7); align-items: start; }
   .footer-grid { grid-template-columns: 1.1fr 0.9fr; gap: var(--s-8); }
+  .site-nav { flex: 1 1 auto; order: 2; margin-left: var(--s-6); }
+  .site-nav a { min-height: 2rem; }
+  .site-header .call-button { order: 3; }
+  .page-head { padding: var(--s-8) 0 var(--s-6); }
+  .privacy-notice h2 { font-size: var(--fs-h3); }
+  .footer-nav ul { flex-direction: row; flex-wrap: wrap; gap: var(--s-5); }
+  .footer-nav a { min-height: 2rem; }
 }
 
 @media (min-width: 64rem) {
@@ -741,11 +1097,10 @@ a:hover { text-decoration-thickness: 2px; }
 `;
 }
 
-
 /**
  * The page's only script: post the form, show the outcome. It keeps no copy of
  * anything, writes nothing to storage, and sets no analytics. Loaded from a local
- * file — nothing here is fetched from a third party.
+ * file — nothing here is fetched from a third party. Only the contact page loads it.
  */
 export function renderJs(): string {
   return `/* Site Sourced demo — contact form. No dependencies, no tracking, no storage. */
@@ -836,7 +1191,7 @@ export function renderJs(): string {
 
 /** Plain-language hand-over notes that ship inside the bundle. */
 export function renderEditingReadme(ctx: RenderContext): string {
-  const { record, form, delivery, images } = ctx;
+  const { record, form, delivery, images, privacy } = ctx;
   const businessPhase = delivery.mode === "business";
 
   const title = businessPhase
@@ -856,6 +1211,13 @@ styles.css and index.html.`
     : `The photograph is a free-to-use (CC0 / public-domain) stock photograph, not a photo
 of your business. Swap it for one of your own and the layout follows automatically:
 keep the same file name, or update the name in styles.css and index.html.`;
+
+  const privacyOpen = privacy.openItems.length > 0
+    ? `\nBefore this bundle is published, ${privacy.openItems.length} thing(s) about us are still
+unfilled on the privacy page: ${privacy.openItems.join("; ")}. The page prints our working
+inbox instead and says nothing it cannot support. Fill them in copy.ts (PRIVACY_IDENTITY)
+and rebuild.\n`
+    : "";
 
   const formSection = businessPhase
     ? `The contact form
@@ -906,11 +1268,20 @@ ${"=".repeat(title.length)}
 ${businessPhase ? "" : `DEMONSTRATION — not the business's website, and never sent to the business.
 The contact form's submissions come to Site Sourced. See "The contact form" below.
 
-`}This folder is a complete website. It is three files you will look at most:
-index.html (the words), styles.css (the colours and spacing) and site.js (the
-contact form). There is no database, no content management system and no server
-software to keep patched, so nothing here goes stale or needs a monthly update.
+`}This folder is a complete website. The pages are:
 
+  index.html      the front page
+  services.html   everything recorded for the business
+  about.html      about the business, its hours and where it is
+  contact.html    the contact form (the only page that uses site.js)
+  privacy.html    how a message sent from these pages is handled
+
+They all share styles.css (the colours and spacing), site.js (the contact form) and
+the fonts/ folder. Every link between them is an ordinary link to a file, so the site
+works with JavaScript switched off. There is no database, no content management
+system and no server software to keep patched, so nothing here goes stale or needs a
+monthly update.
+${privacyOpen}
 Opening it
 ----------
 Double-click index.html to view it in a browser. To put it on the web, upload the
@@ -918,21 +1289,22 @@ whole folder to your hosting as it is.
 
 Changing the words
 ------------------
-Open index.html in any text editor (Notepad, TextEdit, VS Code). Every sentence is
+Open any .html file in a text editor (Notepad, TextEdit, VS Code). Every sentence is
 plain text between tags. Change the text between the tags and save — do not change
 the tags themselves. For example:
 
   <h2>Opening hours</h2>   ...change only "Opening hours"
 
-The business name appears in several places (the header, the footer, the page
-title). Use Find and Replace to change them all at once.
+The business name appears in several places (the headers, the footers, the page
+titles), so use Find and Replace across all the files to change them at once. The
+navigation at the top of every page names the pages — if you rename a file, update the
+links in all five.
 
 The photograph
 --------------
 ${imageNote}
 
-${formSection}
-One recurring job
+${formSection}One recurring job
 -----------------
 ${businessPhase ? `Your domain name needs renewing once a year. Set it to auto-renew and the website
 can sit untouched indefinitely.

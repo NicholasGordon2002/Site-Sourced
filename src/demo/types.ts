@@ -163,6 +163,35 @@ export interface DemoManifest {
     external_requests_on_load: string[];
     /** Plain-language note on what the page does and does not fetch. */
     external_requests_note: string;
+    /**
+     * One row per page, because compliance is per page and never inherited: which
+     * obligations that page carries, and what the build counted on it. A reviewer
+     * (or a later audit) can see the five pages at a glance instead of trusting the
+     * one page someone happened to open.
+     */
+    per_page: {
+      file: string;
+      banner_above_the_fold: boolean;
+      prints_business_details: boolean;
+      /** How many times the published-listings caveat appears on that page. */
+      caveat_instances: number;
+      loads_site_js: boolean;
+      /** Which of that page's images are labelled AI-generated illustrations. */
+      illustration_labels: string[];
+    }[];
+  };
+  /** The privacy notice the bundle carries, and how it was chosen. */
+  privacy: {
+    file: string;
+    mode: "business" | "demo";
+    contact_email: string;
+    last_updated: string;
+    /**
+     * Facts the owner has not supplied, so the notice does not state them. An empty
+     * list means the notice is complete; anything in it is work the owner must do
+     * before a real prospect sees a page.
+     */
+    open_items: string[];
   };
   form: {
     provider: string;

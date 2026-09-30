@@ -274,6 +274,65 @@ export function to12h(hhmm: string): string {
   return `${hour}:${m} ${suffix}`;
 }
 
+/* --------------------------------------------------------------- our identity */
+
+/**
+ * What a visitor can use to reach us about a page we built.
+ *
+ * **This is the one place the owner's identity lives.** The privacy notice's "who we
+ * are" line is the only page that needs a legal name and a mailing address, and neither
+ * has been supplied yet (both are open items for the owner: they are also required for
+ * CASL-compliant outreach). Until they are filled in the privacy notice prints our
+ * working inbox as the privacy contact and says nothing about a postal address, and
+ * `privacyOpenItems()` records the gap in the bundle manifest instead of putting a
+ * bracket on a public page. `build.ts` fails any page carrying a bracketed or
+ * template-shaped value, so an unfilled field here cannot leak onto a demo.
+ *
+ * **To complete it:** replace `legalName` and `postalAddress` below with the owner's
+ * legal name and mailing address. Nothing else changes — the notice, the manifest and
+ * the open-item list all follow from this one object.
+ */
+export const PRIVACY_IDENTITY = {
+  /** Our legal name, as it should be printed on a privacy notice. Empty = not supplied. */
+  legalName: "",
+  /** Our mailing address, as it should be printed on a privacy notice. Empty = not supplied. */
+  postalAddress: "",
+  /**
+   * The address a privacy request should reach us at. While the owner has no
+   * dedicated privacy inbox this is the working inbox that already receives the
+   * demos' form submissions, and it is a real, monitored address.
+   */
+  privacyEmail: "site-sourced-311e0184@ctomail.io",
+} as const;
+
+/**
+ * The date the privacy notice's wording was last changed. A page claiming to be
+ * updated on a date nobody touched it is a false statement, so this is a constant a
+ * human moves when the copy changes — never the build time.
+ */
+export const PRIVACY_LAST_UPDATED = "29 September 2026";
+
+/**
+ * The provider's label as a visitor should read it. The relay preset's own label is
+ * the internal phrase "self-hosted / test relay", which means nothing to a visitor and
+ * must never be printed.
+ */
+export function providerLabel(form: ResolvedForm): string {
+  return form.provider.key === "relay" ? `${DEMO_OPERATOR}'s own test relay` : form.provider.label;
+}
+
+/** What the owner has not supplied yet, named as an open item rather than printed. */
+export function privacyOpenItems(): string[] {
+  const items: string[] = [];
+  if (!PRIVACY_IDENTITY.legalName.trim()) {
+    items.push("our legal name — the privacy notice prints our trading name, Site Sourced, until the owner supplies it");
+  }
+  if (!PRIVACY_IDENTITY.postalAddress.trim()) {
+    items.push("our mailing address — the privacy notice omits it until the owner supplies one (CASL also requires it for outreach)");
+  }
+  return items;
+}
+
 /** Everything the page will say, composed only from the record. */
 export interface DemoCopy {
   /** Category and place, e.g. "Barber shop · Hamilton, ON" — the hero's first line. */
@@ -302,6 +361,51 @@ export interface DemoCopy {
   banner: string;
   footerDisclaimer: string;
   offeringPlural: string;
+
+  /* ---------------------------------------------------------------- furniture
+     Everything the four-page shell prints around the record's own content: the
+     navigation labels, the page titles and leads, the call-to-action block, the
+     printed-details fallback and the footer's small print. None of it is
+     build-asserted, so all of it is ours to change — and it lives here, with the
+     rest of the prose, so a copy pass is one edit. */
+
+  /** Navigation labels, keyed by page id. Short: they sit in a phone's header. */
+  nav: Record<"index" | "services" | "about" | "contact" | "privacy", string>;
+  /** Each non-home page's `<h1>` and the one-line lead under it. */
+  pages: Record<"services" | "about" | "contact" | "privacy", { title: string; lead: string }>;
+  /** The heading over the link to the contact page, on every page but contact. */
+  contactCtaHeading: string;
+  contactCtaIntro: string;
+  contactCtaButton: string;
+  /** The printed phone number and email, next to the form or the contact link. */
+  fallback: {
+    heading: string;
+    emailIntro: string;
+    phoneIntro: string;
+    noEmail: string;
+    noPhone: string;
+  };
+  /** Footer small print (the provenance and take-down lines). */
+  footer: {
+    provenance: string;
+    takedown: string;
+  };
+  /** Labels and buttons: shell furniture a visitor reads but that is not a claim. */
+  ui: {
+    skip: string;
+    callLabel: string;
+    noPhoneNote: string;
+    directions: string;
+    osm: string;
+    submit: string;
+    fieldName: string;
+    fieldEmail: string;
+    fieldPhone: string;
+    fieldOptional: string;
+    fieldMessage: string;
+    honeypot: string;
+    privacyLink: string;
+  };
 }
 
 export function composeCopy(record: BusinessRecord, slug: string, form: ResolvedForm, delivery: FormDelivery): DemoCopy {
@@ -394,6 +498,20 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
     ? ""
     : `The contact details for ${record.name} on this page are as published in public listings — please confirm them with the business before relying on them.`;
 
+  // The four-page shell: nav labels, page titles and leads, the contact call to
+  // action, the printed-details fallback and the footer's small print. Rendered in
+  // render.ts; the words live here so a copy pass is one edit.
+  //
+  // The call to action is the one piece here that follows the delivery phase: on
+  // every page but the contact page it links to the form, and whether that form
+  // reaches the business decides the sentence. Its closing clause is the same one
+  // `contactIntro` ends with — the route a visitor takes to the business itself.
+  const contactCtaIntro = businessPhase
+    ? `Send a message to ${record.name} using the contact page, or use the phone number or email address printed with it.`
+    : `This is a demonstration site, so the message form comes to ${DEMO_OPERATOR} rather than to ${record.name}. To reach ${record.name} itself, use the phone number or email address printed with it.`;
+
+  const offeringTitle = profile.offeringPlural.charAt(0).toUpperCase() + profile.offeringPlural.slice(1);
+
   void slug;
   return {
     heroEyebrow,
@@ -411,7 +529,300 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
     banner,
     footerDisclaimer,
     offeringPlural: profile.offeringPlural,
+    nav: {
+      index: "Home",
+      services: offeringTitle,
+      about: "About",
+      contact: "Contact",
+      privacy: "Privacy",
+    },
+    pages: {
+      services: { title: offeringTitle, lead: servicesIntro },
+      about: {
+        title: `About ${record.name}`,
+        lead: `The details published for ${record.name}, and where they came from.`,
+      },
+      contact: {
+        title: businessPhase ? `Contact ${record.name}` : "Contact",
+        lead: contactIntro,
+      },
+      privacy: {
+        title: businessPhase ? `Privacy — ${record.name}` : "Privacy — a Site Sourced design proposal",
+        lead: businessPhase
+          ? `How ${record.name} handles a message sent from this website.`
+          : `How we handle a message sent from this page.`,
+      },
+    },
+    contactCtaHeading: businessPhase ? `Contact ${record.name}` : "Contact",
+    contactCtaIntro,
+    contactCtaButton: "Send a message",
+    fallback: {
+      heading: "Prefer email?",
+      emailIntro: "Write to us directly:",
+      phoneIntro: "Or call",
+      noEmail: "No email address is recorded publicly for this business — please use the phone number.",
+      noPhone: "No phone number is recorded publicly for this business.",
+    },
+    footer: {
+      provenance: `Business details come from public mapping data (© OpenStreetMap contributors, ODbL 1.0). Copy, layout and imagery: Site Sourced. No logo, photograph or text was taken from any website belonging to ${record.name}. This page is marked noindex so it never competes with the business's own site.`,
+      takedown: "This demo comes down on request — reply to the email that sent it and it will be removed within a day.",
+    },
+    ui: {
+      skip: "Skip to content",
+      callLabel: "Call",
+      noPhoneNote: "Phone number not recorded",
+      directions: "Get directions",
+      osm: "See it on OpenStreetMap",
+      submit: "Send message",
+      fieldName: "Your name",
+      fieldEmail: "Your email",
+      fieldPhone: "Your phone",
+      fieldOptional: "(optional)",
+      fieldMessage: "Message",
+      honeypot: "Leave this field empty",
+      privacyLink: "Privacy notice",
+    },
   };
+}
+
+/* -------------------------------------------------------------- privacy notice */
+
+/** One heading and its paragraphs, as the privacy page prints them. */
+export interface PrivacySection {
+  heading: string;
+  paragraphs: string[];
+}
+
+/**
+ * The privacy notice, as the page will print it.
+ *
+ * It has **two variants and one spine**, and which variant is composed is decided by
+ * `delivery.mode` — the same derivation the form-delivery notice uses, never a human's
+ * judgement (`delivery.ts`).
+ *
+ *   demo      Site Sourced is the accountable party, the recipient and the holder of
+ *             the form account: the visitor's message comes to us and the business
+ *             named on the page is not involved.
+ *   business  the client is the accountable party and the account holder, so the
+ *             demonstration sentences become false ("we do not run a website for
+ *             them") and must not be printed. What ships is the client's own notice.
+ *
+ * Shared and tokenised once: the collection / why / retention / access / complaints
+ * spine, and the processor's storage behaviour, which comes from the provider preset
+ * rather than from this file, so the page cannot drift from what the provider states.
+ */
+export interface PrivacyNotice {
+  /** The phase this notice was composed for, carried into the manifest. */
+  mode: FormDeliveryMode;
+  title: string;
+  lead: string;
+  sections: PrivacySection[];
+  /** The address the notice tells a visitor to write to. */
+  contactEmail: string;
+  /** Facts the owner has not supplied, so the page does not state them. */
+  openItems: string[];
+  lastUpdated: string;
+}
+
+export function composePrivacy(record: BusinessRecord, form: ResolvedForm, delivery: FormDelivery): PrivacyNotice {
+  const businessPhase = delivery.mode === "business";
+  const label = providerLabel(form);
+  const provider = form.provider;
+  const publishedEmail = (record.email ?? "").trim();
+  const businessName = record.name;
+  const postal = PRIVACY_IDENTITY.postalAddress.trim();
+  /** Our name as the notice prints it: the legal name when we have it, else the trading name. */
+  const operatorName = PRIVACY_IDENTITY.legalName.trim() || DEMO_OPERATOR;
+  const operatorPlace = [operatorName, postal, "Ontario, Canada"].filter(Boolean).join(", ");
+
+  const contactEmail = businessPhase ? publishedEmail : PRIVACY_IDENTITY.privacyEmail;
+  const contactRoute = contactEmail
+    ? `Email ${contactEmail}`
+    : "Use the phone number or email address printed on this page";
+
+  const collect: PrivacySection = {
+    heading: "What is collected",
+    paragraphs: [
+      "Only what you type into the contact form: your name, your email address and your message.",
+      "There are no cookies, no analytics and no tracking on this page.",
+    ],
+  };
+
+  const why: PrivacySection = {
+    heading: "Why it is collected",
+    paragraphs: [
+      "To read your message and reply to you once. Your details are not used for anything else and are not added to a mailing list.",
+      "Sending the form is not consent to any marketing.",
+    ],
+  };
+
+  const retention: PrivacySection = {
+    heading: "How long it is kept",
+    paragraphs: [
+      `It is deleted within 30 days of arriving, or sooner once it has been answered. ${provider.post_deletion}`,
+    ],
+  };
+
+  const choices: PrivacySection = {
+    heading: "Your choices",
+    paragraphs: [
+      `${contactRoute} to ask what is held about you, to correct it, or to have it deleted. We reply promptly.`,
+    ],
+  };
+
+  const complaints: PrivacySection = {
+    heading: "Complaints",
+    paragraphs: [
+      `${contactRoute} first. If we do not resolve it, you can complain to the Office of the Privacy Commissioner of Canada.`,
+    ],
+  };
+
+  if (businessPhase) {
+    return {
+      mode: delivery.mode,
+      title: `Privacy — ${businessName}`,
+      lead: `How ${businessName} handles a message sent from this website.`,
+      contactEmail,
+      openItems: [],
+      lastUpdated: PRIVACY_LAST_UPDATED,
+      sections: [
+        {
+          heading: "Who we are",
+          paragraphs: [
+            businessName && publishedEmail
+              ? `${businessName}, Ontario, Canada. Privacy contact: ${publishedEmail}.`
+              : `${businessName}, Ontario, Canada. Privacy contact: the details printed on this page.`,
+          ],
+        },
+        {
+          heading: "What this page is",
+          paragraphs: [
+            `This is ${businessName}'s own website. The contact form is set up in ${businessName}'s own account, so the message comes straight to ${businessName}. Site Sourced does not receive a copy of anything you send and does not run this website.`,
+          ],
+        },
+        collect,
+        why,
+        {
+          heading: "Where it goes",
+          paragraphs: [
+            `The form is handled by ${label}, a third-party form service. ${provider.visitor_storage({ party: businessName })}`,
+            `${label} operates internationally, so the message may be handled under the laws of the places where its servers sit.`,
+          ],
+        },
+        retention,
+        choices,
+        complaints,
+      ],
+    };
+  }
+
+  return {
+    mode: delivery.mode,
+    title: "Privacy — a Site Sourced design proposal",
+    lead: "How we handle a message sent from this page.",
+    contactEmail,
+    openItems: privacyOpenItems(),
+    lastUpdated: PRIVACY_LAST_UPDATED,
+    sections: [
+      {
+        heading: "Who we are",
+        paragraphs: [`${operatorPlace}. Privacy contact: ${PRIVACY_IDENTITY.privacyEmail}.`],
+      },
+      {
+        heading: "What this page is",
+        paragraphs: [
+          `A design proposal we built for a local business. It is not ${businessName}'s website, and we do not run a website for them. ${businessName} has not seen this page and does not receive anything you send from it.`,
+        ],
+      },
+      collect,
+      why,
+      {
+        heading: "Where it goes",
+        paragraphs: [
+          `The form is handled by ${label}, a third-party form service. ${provider.visitor_storage({ party: DEMO_OPERATOR })}`,
+          `${label} operates internationally, so the message may be handled under the laws of the places where its servers sit. Our responsibility for it continues while ${label} holds it.`,
+        ],
+      },
+      retention,
+      choices,
+      complaints,
+    ],
+  };
+}
+
+/**
+ * The privacy notice's own guard-rail problems, as sentences a build can print.
+ *
+ * Called from the single compliance self-check in `build.ts`. Every case below is one
+ * where the page would tell a visitor something untrue about their own message:
+ *
+ *   - the notice was composed for the other phase than the record describes (the
+ *     demonstration sentences are false on a delivered site, and vice versa),
+ *   - a demonstration notice that fails to say the business is not involved, or that
+ *     says the business receives the message,
+ *   - a demonstration notice naming anyone but the working inbox as the privacy
+ *     contact,
+ *   - a delivered notice that still names Site Sourced as the accountable party.
+ */
+export function privacyNoticeProblems(vars: {
+  privacy: PrivacyNotice;
+  record: BusinessRecord;
+  delivery: FormDelivery;
+}): string[] {
+  const { privacy, record, delivery } = vars;
+  const problems: string[] = [];
+  const text = [privacy.lead, ...privacy.sections.flatMap((s) => [s.heading, ...s.paragraphs])].join(" ");
+  const lower = text.toLowerCase();
+
+  if (privacy.mode !== delivery.mode) {
+    problems.push(
+      `the privacy notice is written for the ${privacy.mode} phase but the record describes the ${delivery.mode} phase (${delivery.basis}) — the wrong variant is the one place a visitor's own message is described untruthfully.`,
+    );
+  }
+
+  if (privacy.mode === "demo") {
+    if (!lower.includes(`${record.name.toLowerCase()} has not seen this page`)) {
+      problems.push(
+        `the demonstration privacy notice does not say that ${record.name} has not seen this page — that sentence is what stops the rest of the page reading as a claim about the business.`,
+      );
+    }
+    if (/receive your message|receives your message|is notified|will get your message/i.test(text)) {
+      problems.push(
+        `the demonstration privacy notice says or implies that ${record.name} receives the visitor's message, which is false while the form delivers to ${delivery.party}.`,
+      );
+    }
+    if (privacy.contactEmail.toLowerCase() !== PRIVACY_IDENTITY.privacyEmail.toLowerCase()) {
+      problems.push(
+        `the demonstration privacy notice tells a visitor to write to "${privacy.contactEmail}" rather than to our own working inbox (${PRIVACY_IDENTITY.privacyEmail}), which is the address a privacy request actually reaches.`,
+      );
+    }
+    if (/site sourced does not receive/.test(lower)) {
+      problems.push(
+        "the demonstration privacy notice says Site Sourced does not receive a copy of the message, which is the opposite of the truth while the form delivers to us.",
+      );
+    }
+  } else {
+    const who = privacy.sections[0];
+    const whoText = who ? [who.heading, ...who.paragraphs].join(" ") : "";
+    if (/site sourced/i.test(whoText)) {
+      problems.push(
+        "the delivered privacy notice names Site Sourced as the accountable party. Once the form delivers to the client, the client is the accountable party and the account holder, so the notice must name them and their own contact route.",
+      );
+    }
+    const published = (record.email ?? "").trim().toLowerCase();
+    if (!published || privacy.contactEmail.toLowerCase() !== published) {
+      problems.push(
+        `the delivered privacy notice points a privacy request at "${privacy.contactEmail}" rather than at the client's own published address (${record.email || "none recorded"}) — a request sent to us on a delivered site reaches the wrong party.`,
+      );
+    }
+    if (!lower.includes("site sourced does not receive")) {
+      problems.push(
+        "the delivered privacy notice does not say that Site Sourced does not receive a copy of the message, which is the one thing that changes when a demo becomes a client's own site.",
+      );
+    }
+  }
+
+  return problems;
 }
 
 /**
