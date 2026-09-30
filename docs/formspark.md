@@ -9,7 +9,12 @@ strings in `src/demo/forms.ts` and the visitor-facing sentence in
 form id `nsPQBCgbx`, endpoint `https://submit-form.com/nsPQBCgbx`.
 The id lives in the gitignored `pipeline/.env.local` as
 `SS_FORMSPARK_FORM_ID`; the records reference it as
-`"form_access_key": "env:SS_FORMSPARK_FORM_ID"`. No id, key or address is in git.
+`"form_access_key": "env:SS_FORMSPARK_FORM_ID"`, so a form can be swapped per client
+without editing code. **No credential is in git — but this document is tracked, and
+it does name the form id and the recipient address** (above, and again in the source
+list at the end). Neither is a secret: the id is the endpoint URL of every published
+demo page, and the address is our own working inbox. Nothing else credential-shaped
+is stored here, and no API key or token appears anywhere in this file.
 
 ## Does it deliver email on the free plan?
 
