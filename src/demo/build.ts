@@ -31,6 +31,8 @@ import {
 } from "./copy.ts";
 import type { FormDelivery } from "./delivery.ts";
 import { formDeliveryProblems, resolveDelivery } from "./delivery.ts";
+import { undeliverableAddressProblems } from "./addresses.ts";
+import { provenanceProblems } from "./provenance.ts";
 import { KEY_PLACEHOLDER, resolveForm, type ResolvedForm } from "./forms.ts";
 import { sourceImages } from "./images.ts";
 import { filesForSupplied, inspectSuppliedImage, manifestForSupplied } from "./supplied.ts";
@@ -231,6 +233,17 @@ export function complianceChecks(vars: {
   }
 
   problems.push(...formDeliveryProblems({ record, form, noticeMode: copy.formNoticeDelivery, placeholder: KEY_PLACEHOLDER }));
+  // Two rules that were each missing a half. Both are checked here, on the rendered
+  // pages — what a visitor can actually read:
+  //
+  //   - every address the bundle posts to *or prints* must be able to work, through one
+  //     shared function, so the form's recipient and the printed "contact us here" line
+  //     cannot drift apart (addresses.ts);
+  //   - every claim about where the business's details came from is derived from the
+  //     record's declared source, and a page carrying a credit the record does not
+  //     support fails here (provenance.ts).
+  problems.push(...undeliverableAddressProblems({ record, form, pages }));
+  problems.push(...provenanceProblems({ record, provenance: copy.provenance, pages, deliveryMode: delivery.mode }));
   problems.push(...privacyNoticeProblems({ privacy, record, delivery }));
   problems.push(...placeholderProblems(pages));
   return problems;
@@ -298,6 +311,12 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   if (normaliseServices(record).length === 0) warnings.push("record lists no services — the services section says so plainly rather than inventing any.");
   if (delivery.mode === "demo") {
     warnings.push(`demonstration phase: ${delivery.basis} — so the page carries the demonstration notice and no message reaches ${record.name}.`);
+  }
+  warnings.push(`provenance: ${copy.provenance.basis}.`);
+  if (copy.provenance.kind === "fictional") {
+    warnings.push(
+      `this record is a fictional example business, so the page says so instead of crediting a real source — it must not be published as anyone's site, and its printed details are examples.`,
+    );
   }
   for (const item of privacy.openItems) {
     warnings.push(`privacy notice incomplete: ${item}. The page states nothing it cannot support, but this must be filled before a real prospect sees a page.`);
@@ -480,6 +499,11 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
       phone_printed: Boolean(record.phone),
       email_printed: Boolean(record.email),
       source: record.source ?? "test fixture (fictional business)",
+      /* The declared source, and the exact lines derived from it — so a reviewer (or a
+         later audit) can see what the page claimed about its own provenance and why. */
+      source_kind: copy.provenance.kind,
+      provenance_line: copy.provenance.attribution,
+      provenance_basis: copy.provenance.basis,
     },
     files: [...files, "manifest.json"].sort(),
     images,

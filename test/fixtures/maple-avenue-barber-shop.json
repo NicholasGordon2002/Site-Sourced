@@ -10,7 +10,6 @@
     "postcode": "L8P 2P9"
   },
   "phone": "+1 905-555-0142",
-  "email": "shop@mapleavenuebarber.example",
   "hours": [
     {
       "days": "Tue–Thu",
@@ -75,5 +74,6 @@
         }
       ]
     }
-  ]
+  ],
+  "source_kind": "fictional"
 }

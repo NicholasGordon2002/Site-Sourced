@@ -5,6 +5,8 @@
  * Nothing is invented, and nothing is ever fetched from the business's own site.
  */
 
+import type { RecordSourceKind } from "./provenance.ts";
+
 /**
  * `business` — the form delivers to the business's own published address.
  * `demo` — it delivers anywhere else, so the page must say it is a demonstration.
@@ -108,6 +110,15 @@ export interface BusinessRecord {
   form_endpoint?: string;
   /** Hand-supplied imagery. When absent the generator sources CC0/PD images itself. */
   images?: ImageOverride[];
+  /**
+   * **What the page's provenance line and contact-details caveat are derived from, and
+   * therefore required.** One of `openstreetmap`, `public-listings`, `fictional` — see
+   * `provenance.ts` for what each one lets a page say. A record whose page prints the
+   * business's details without declaring this cannot be built: no attribution can be
+   * chosen on the record's behalf, and an attribution the record does not support is a
+   * false claim.
+   */
+  source_kind?: RecordSourceKind;
   /** Kept out of the page; carried into the manifest for our own records. */
   source?: string;
 }
@@ -149,6 +160,14 @@ export interface DemoManifest {
     phone_printed: boolean;
     email_printed: boolean;
     source: string;
+    /**
+     * Where the page says its details came from — the record's declared `source_kind`,
+     * the exact provenance line derived from it, and the plain-English reason. `null`
+     * means the record declared nothing, which fails the build rather than publishing.
+     */
+    source_kind: RecordSourceKind | null;
+    provenance_line: string;
+    provenance_basis: string;
   };
   files: string[];
   images: ManifestImage[];

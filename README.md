@@ -279,9 +279,44 @@ These are enforced in code, not by good intentions:
 
 `<meta name="robots" content="noindex, nofollow">`; a proposal banner above the fold
 (verified by measuring its position in the rendered page); the same disclaimer in the
-footer next to the business's name and contact details; no "© <Business Name>"; and
-ODbL attribution for the OpenStreetMap-derived details. The build fails if any of
-them is missing.
+footer next to the business's name and contact details; and no "© <Business Name>".
+The build fails if any of them is missing.
+
+Two rules that used to be half-implemented are now gates as well:
+
+- **Every address the bundle posts to *or prints* must be able to work.** One shared
+  function (`src/demo/addresses.ts`) covers the form's recipient *and* every address a
+  rendered page prints (a `mailto:` link or plain text), against one predicate. An
+  address that is merely unverified passes — the build is offline and deterministic, and
+  the printed "please confirm" caveat is what covers that case. Reserved/special-use
+  domains (RFC 2606 / RFC 6761), malformed values and empty ones fail the build.
+- **Every page states where the business's details came from — derived from the record,
+  never typed into a template.** See *Where the details came from* below.
+
+## Where the details came from
+
+A page that credits a source the record does not have is a false claim, so the record
+declares its source and everything the page says about it is derived
+(`src/demo/provenance.ts`):
+
+```json
+"source_kind": "openstreetmap" | "public-listings" | "fictional",
+"source": "free-text note for our own records (optional)"
+```
+
+| `source_kind` | What the page may say | The footer credits | The caveat on the printed details |
+| --- | --- | --- | --- |
+| `openstreetmap` | the details came from OpenStreetMap via Overpass | "© OpenStreetMap contributors", ODbL 1.0, public mapping data | the frozen "as published in public listings — please confirm" line |
+| `public-listings` | the details were read from a listing the business published | public listings; **no** mapping data | the same frozen line |
+| `fictional` | this is a made-up example business, invented to show the layout | neither; nothing was taken from a real business, a listing or a website | the fictional-example line (the frozen one would be false) |
+
+`source_kind` is **required**: a record that declares nothing fails the build, because no
+attribution can be chosen on its behalf and printing unconfirmed details with no caveat
+is not an option either. The same guard refuses a bundle whose page keeps the
+OpenStreetMap credit (or the wrong caveat) while the record declares another source, and
+refuses a `fictional` record whose form delivers to it as a client's own site. The
+manifest records the declared kind, the exact line derived from it, and why
+(`business.source_kind` / `provenance_line` / `provenance_basis`).
 
 ## Flags
 
@@ -339,11 +374,16 @@ submission can be followed end to end. Test fixtures live in `test/fixtures/` an
 
 ## Test fixtures
 
-| Fixture | Category | Exercises |
-| --- | --- | --- |
-| `maple-avenue-barber-shop.json` | Barber shop | structured hours, services with notes, AI-fallback hero |
-| `northshore-garden-works.json` | Landscaping | raw OSM `opening_hours` string, five services |
-| `king-west-dental.json` | Dental clinic | health category palette, emergency-appointment wording |
+| Fixture | Category | `source_kind` | Exercises |
+| --- | --- | --- | --- |
+| `maple-avenue-barber-shop.json` | Barber shop | `fictional` | structured hours, services with notes, AI-fallback hero |
+| `northshore-garden-works.json` | Landscaping | `fictional` | raw OSM `opening_hours` string, five services |
+| `king-west-dental.json` | Dental clinic | `fictional` | health category palette, emergency-appointment wording |
+| `red-hill-property-care.json` | Landscaping | `public-listings` | the non-OpenStreetMap provenance line, with the frozen caveat |
+
+The three original fixtures are **fictional example businesses** and say so on the page.
+None of the four carries an email address: the page cannot print one it has no business
+printing, and a fixture that never existed has no address to print.
 
 The fixtures' hero images are **AI-generated** (`test/fixtures/images/`) and both the
 manifest and the report say so; the CC0/Openverse/Commons path is the default for real

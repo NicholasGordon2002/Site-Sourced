@@ -10,7 +10,6 @@
     "postcode": "L8S 1K3"
   },
   "phone": "+1 905-555-0110",
-  "email": "front.desk@kingwestdental.example",
   "hours": [
     {
       "days": "Mon–Wed",
@@ -77,5 +76,6 @@
         }
       ]
     }
-  ]
+  ],
+  "source_kind": "fictional"
 }

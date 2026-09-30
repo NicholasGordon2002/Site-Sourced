@@ -37,6 +37,10 @@ const SLUG = "example-barber-shop";
 const RECORD: BusinessRecord = {
   name: BUSINESS_NAME,
   category: "Barber shop",
+  // A record whose details really were published, so this file exercises the *frozen*
+  // "as published in public listings — please confirm" caveat. The fictional case has
+  // its own line and its own test (test/provenance.test.ts).
+  source_kind: "public-listings",
   email: "shop@example-barber.ca",
   form_recipient: "site-sourced-311e0184@ctomail.io",
   form_delivery: "demo",

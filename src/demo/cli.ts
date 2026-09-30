@@ -70,8 +70,15 @@ Record format (one JSON object, or an array, or {"records": [...]}):
     "services": [ { "name": "Haircut", "note": "optional client wording" } ],
     "form_recipient": "the-business@example.com",   // required for a working form
     "form_provider": "formspark",                   // see src/demo/forms.ts
-    "form_access_key": "env:SS_FORMSPARK_FORM_ID"   // the id itself lives in
+    "form_access_key": "env:SS_FORMSPARK_FORM_ID",  // the id itself lives in
                                                     // gitignored .env.local, never here
+    "source_kind": "openstreetmap"                  // REQUIRED before a page prints any
+                                                    // detail: openstreetmap | public-listings
+                                                    // | fictional. The footer's provenance
+                                                    // line and the caveat on the printed
+                                                    // contact details are derived from it,
+                                                    // and a page may not credit a source the
+                                                    // record does not declare.
   }
 `;
 

@@ -23,6 +23,7 @@
  */
 import { expect, test } from "bun:test";
 
+import { undeliverableAddressProblems } from "../src/demo/addresses.ts";
 import { composeCopy, guardCopy } from "../src/demo/copy.ts";
 import { isUndeliverable, resolveDelivery } from "../src/demo/delivery.ts";
 import { formDeliveryProblems } from "../src/demo/delivery.ts";
@@ -50,7 +51,13 @@ function problemsFor(rec: BusinessRecord): string[] {
   const form = resolveForm(rec);
   const delivery = resolveDelivery(rec, form);
   const copy = composeCopy(rec, "example-barber-shop", form, delivery);
-  return formDeliveryProblems({ record: rec, form, noticeMode: copy.formNoticeDelivery, placeholder: KEY_PLACEHOLDER });
+  // The address half of the guard now lives in addresses.ts, behind one shared
+  // function covering the form's recipient *and* every printed address — see
+  // test/addresses.test.ts. This file stays about which notice a record may print.
+  return [
+    ...formDeliveryProblems({ record: rec, form, noticeMode: copy.formNoticeDelivery, placeholder: KEY_PLACEHOLDER }),
+    ...undeliverableAddressProblems({ record: rec, form, pages: [] }),
+  ];
 }
 
 // (a) The real-prospect case: the endpoint posts to the business's own published
