@@ -1,16 +1,29 @@
 {
-  "slug": "northshore-garden-works",
-  "name": "Northshore Garden Works",
+  "slug": "red-hill-property-care",
+  "name": "Red Hill Property Care",
   "category": "Landscaping",
   "category_group": "Garden & landscaping",
   "address": {
-    "street": "15 Barton Street East",
-    "city": "Stoney Creek",
+    "street": "1180 Barton Street East",
+    "city": "Hamilton",
     "province": "ON",
-    "postcode": "L8G 1A1"
+    "postcode": "L8H 2V4"
   },
-  "phone": "+1 905-555-0177",
-  "hours": "Mo-Fr 07:30-17:00; Sa 08:00-13:00",
+  "phone": "+1 905-555-0193",
+  "hours": [
+    {
+      "days": "Mon–Fri",
+      "hours": "7:30 am – 5:00 pm"
+    },
+    {
+      "days": "Sat",
+      "hours": "8:00 am – 1:00 pm"
+    },
+    {
+      "days": "Sun",
+      "hours": "Closed"
+    }
+  ],
   "services": [
     {
       "name": "Lawn cutting and edging"
@@ -19,22 +32,15 @@
       "name": "Spring and fall clean-up"
     },
     {
-      "name": "Hedge and shrub trimming"
-    },
-    {
-      "name": "Garden bed planting",
-      "note": "Yearly colour and perennial beds."
-    },
-    {
-      "name": "Snow clearing",
-      "note": "Driveways and walkways."
+      "name": "Hedge trimming"
     }
   ],
   "form_recipient": "site-sourced-311e0184@ctomail.io",
   "form_delivery": "demo",
   "form_provider": "formspark",
   "form_access_key": "env:SS_FORMSPARK_FORM_ID",
-  "source": "test fixture (fictional business — not a real company)",
+  "source_kind": "public-listings",
+  "source": "test fixture — a fictional business standing in for a record whose details were read from a public listing. It exists so the public-listings provenance line and the frozen contact-details caveat are exercised by a real build; it is never published and never contacted.",
   "images": [
     {
       "role": "hero",
@@ -56,6 +62,5 @@
         }
       ]
     }
-  ],
-  "source_kind": "fictional"
+  ]
 }

@@ -27,8 +27,16 @@
  * version.
  */
 
+import { normaliseAddress } from "./addresses.ts";
 import type { ResolvedForm } from "./forms.ts";
 import type { BusinessRecord, FormDeliveryClaim } from "./types.ts";
+
+/**
+ * Re-exported from `addresses.ts`, where the one undeliverable-address predicate now
+ * lives so that the form's recipient and every address printed on a page cannot drift
+ * apart. Kept exported here because callers and tests have always reached for it here.
+ */
+export { isUndeliverable, normaliseAddress } from "./addresses.ts";
 
 export type FormDeliveryMode = "business" | "demo";
 
@@ -49,24 +57,7 @@ export interface FormDelivery {
 /** The demo operator, as the page names it to a visitor. */
 export const DEMO_OPERATOR = "Site Sourced";
 
-/** Lower-case and strip a `mailto:` prefix, so the comparison is about the address. */
-export function normaliseAddress(value: string | undefined | null): string {
-  return (value ?? "").trim().toLowerCase().replace(/^mailto:/, "");
-}
-
-/**
- * Addresses reserved by RFC 2606 / RFC 6761 for documentation and testing. They
- * can never receive mail, so a page that posts a visitor's message to one is a
- * page that lies about delivering it.
- */
-const RESERVED_DOMAIN = /^[^@\s]+@(?:[^@\s]*\.)?(?:example|test|invalid|localhost)(?:\.(?:com|net|org))?$/i;
-
-export function isUndeliverable(address: string | undefined | null): boolean {
-  const a = normaliseAddress(address);
-  if (!a || !a.includes("@")) return true;
-  return RESERVED_DOMAIN.test(a);
-}
-
+/** What a record may assert about the form's delivery phase. */
 export const DELIVERY_CLAIMS: FormDeliveryClaim[] = ["business", "demo"];
 
 export function isDeliveryClaim(value: unknown): value is FormDeliveryClaim {
@@ -133,11 +124,16 @@ export function resolveDelivery(record: BusinessRecord, form: ResolvedForm): For
  *
  *   - the endpoint is not configured (the plan's rule: an unconfigured form
  *     endpoint must fail the build before it can reach a public path),
- *   - the endpoint delivers to an address that cannot receive mail,
  *   - the record asserts delivery to the business while delivering elsewhere
  *     (or the reverse),
  *   - the notice the page carries does not match the delivery the record and
  *     endpoint actually describe.
+ *
+ * Whether an address can work at all is **not** decided here. That is one rule
+ * covering two addresses — the form's recipient and every address a page prints as a
+ * way to reach the business — and it lives in `addresses.ts`, in one function over one
+ * predicate, so the two can never drift apart. This function no longer looks at the
+ * recipient's shape at all.
  */
 export function formDeliveryProblems(vars: {
   record: BusinessRecord;
@@ -149,7 +145,6 @@ export function formDeliveryProblems(vars: {
 }): string[] {
   const { record, form, noticeMode, placeholder } = vars;
   const problems: string[] = [];
-  const recipient = (form.recipient ?? "").trim();
 
   if (!form.endpoint.trim()) {
     problems.push(`form endpoint is empty: the record sets no endpoint and the provider preset has none, so the form has nowhere to post. A bundle with an unconfigured form endpoint must not reach a public path.`);
@@ -161,13 +156,6 @@ export function formDeliveryProblems(vars: {
     );
   } else if (!/^https?:\/\//i.test(form.endpoint)) {
     problems.push(`form endpoint "${form.endpoint}" is not an http(s) URL, so the form cannot post to it.`);
-  }
-
-  if (isUndeliverable(recipient)) {
-    problems.push(
-      `form recipient "${recipient}" is a placeholder or malformed address that cannot receive mail, so a visitor's message would be lost and the page's promise to deliver it would be false. ` +
-        `A bundle with a dead address must not reach a public path.`,
-    );
   }
 
   const actual = resolveDelivery(record, form);

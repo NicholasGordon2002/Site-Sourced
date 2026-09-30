@@ -17,6 +17,7 @@
 
 import { DEMO_OPERATOR, type FormDelivery, type FormDeliveryMode } from "./delivery.ts";
 import type { ResolvedForm } from "./forms.ts";
+import { resolveProvenance, type Provenance } from "./provenance.ts";
 import type { BusinessRecord, HoursRow, ManifestImage, ServiceItem } from "./types.ts";
 
 export interface CategoryProfile {
@@ -351,11 +352,19 @@ export interface DemoCopy {
   formNoticeDelivery: FormDeliveryMode;
   /**
    * The caveat printed with the business's phone number and email address, or "" in
-   * the business phase. The plan requires it: those details come from public
-   * listings, and the demonstration notice points a visitor at them as the way to
-   * reach the business, so they must not read as confirmed.
+   * the business phase. It is **derived from the record's declared source**
+   * (`provenance.ts`), because the claim it makes — that these details were published
+   * in public listings — is only true of some records. A fictional example business
+   * gets its own line in the same place, and the build refuses a page that carries the
+   * wrong one of the two.
    */
   contactCaveat: string;
+  /**
+   * Where the record says its details came from, and the lines derived from it. The
+   * footer's provenance sentence is `provenance.attribution`; the manifest carries the
+   * same object so a bundle records what it claimed and why.
+   */
+  provenance: Provenance;
   /** What the form's own success message may claim. */
   formSuccess: string;
   banner: string;
@@ -411,6 +420,10 @@ export interface DemoCopy {
 export function composeCopy(record: BusinessRecord, slug: string, form: ResolvedForm, delivery: FormDelivery): DemoCopy {
   const profile = profileFor(record);
   const cat = categoryLower(record);
+  // Where the details came from, and every line that depends on it. Derived from the
+  // record's `source_kind` — never typed here — so a page cannot credit a source the
+  // record does not name, or pin unconfirmed details to a listing they never appeared in.
+  const provenance = resolveProvenance(record);
   const city = (record.address?.city || "").trim();
   const province = (record.address?.province || "ON").trim();
   const place = city ? `${city}, ${province}` : province;
@@ -429,16 +442,21 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
   // is written once, in About: the hero used to open by repeating the business's own
   // name back at the visitor, which is the one thing they already know.
   const heroEyebrow = [record.category, city ? `${city}, ${province}` : province].filter(Boolean).join(" · ");
+  // "As published" is a claim about where the details came from, so it follows the
+  // record's declared source like the footer line does: a fictional example business
+  // gets the wording that belongs to it rather than one the record cannot support.
   const heroLead = serviceNames.length > 0
     ? serviceNames.join(" · ")
-    : `Hours, address and phone number as published for this ${cat}.`;
+    : provenance.published
+      ? `Hours, address and phone number as published for this ${cat}.`
+      : `Hours, address and phone number invented for this example ${cat}.`;
 
   const about: string[] = [
     `${record.name} is a ${cat}${city ? ` in ${place}` : ""}.`,
     serviceSentence
       ? `The ${profile.offeringPlural} set out below are the ones recorded for the business: ${serviceSentence}.`
       : `This is a starting point for a page of the business's own.`,
-    `Every detail here — hours, address, contact details — came from public listings. Nothing on this page was copied from another website, and anything wrong or missing can be corrected in minutes.`,
+    provenance.aboutLine,
   ];
 
   const servicesIntro = serviceSentence
@@ -489,14 +507,15 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
   const banner = `This is an unsolicited design proposal from Site Sourced. It is not affiliated with, endorsed by, or operated by ${record.name}.`;
   const footerDisclaimer = `This page is an unsolicited design proposal from Site Sourced. It is not affiliated with, endorsed by, or operated by ${record.name}.`;
 
-  // The printed phone number and email address came from public listings and were
-  // never confirmed with the business — while this page is a demonstration the
-  // notice above the form sends a visitor to exactly those details, so the caveat
-  // belongs with them rather than only in the banner. On a delivered site the client
-  // has confirmed their own details, so it is not printed.
-  const contactCaveat = businessPhase
-    ? ""
-    : `The contact details for ${record.name} on this page are as published in public listings — please confirm them with the business before relying on them.`;
+  // The printed phone number and email address came from a public source and were
+  // never confirmed with the business — while this page is a demonstration the notice
+  // above the form sends a visitor to exactly those details, so the caveat belongs with
+  // them rather than only in the banner. Which caveat, and whether there is one at all,
+  // is derived from the record's declared source: the frozen "as published in public
+  // listings" line is only true of records whose details really were published, and a
+  // fictional example business gets the line that belongs to it instead. On a delivered
+  // site the client has confirmed their own details, so it is not printed.
+  const contactCaveat = businessPhase ? "" : provenance.caveat;
 
   // The four-page shell: nav labels, page titles and leads, the contact call to
   // action, the printed-details fallback and the footer's small print. Rendered in
@@ -525,6 +544,7 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
     formNotice,
     formNoticeDelivery: delivery.mode,
     contactCaveat,
+    provenance,
     formSuccess,
     banner,
     footerDisclaimer,
@@ -540,7 +560,9 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
       services: { title: offeringTitle, lead: servicesIntro },
       about: {
         title: `About ${record.name}`,
-        lead: `The details published for ${record.name}, and where they came from.`,
+        lead: provenance.published
+          ? `The details published for ${record.name}, and where they came from.`
+          : `An invented example business, shown to demonstrate the layout of a demo page.`,
       },
       contact: {
         title: businessPhase ? `Contact ${record.name}` : "Contact",
@@ -564,7 +586,10 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
       noPhone: "No phone number is recorded publicly for this business.",
     },
     footer: {
-      provenance: `Business details come from public mapping data (© OpenStreetMap contributors, ODbL 1.0). Copy, layout and imagery: Site Sourced. No logo, photograph or text was taken from any website belonging to ${record.name}. This page is marked noindex so it never competes with the business's own site.`,
+      /* Derived from the record's declared source — see provenance.ts. It used to be
+         hard-coded to an OpenStreetMap/ODbL credit, which was false on every record
+         that never touched OSM. */
+      provenance: provenance.attribution,
       takedown: "This demo comes down on request — reply to the email that sent it and it will be removed within a day.",
     },
     ui: {

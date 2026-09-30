@@ -286,10 +286,12 @@ ${call ? `${call}\n` : ""}    </div>
 /**
  * The printed phone number and email address, next to the contact route.
  *
- * On a demonstration page these came from public listings and were never confirmed
- * with the business, so the caveat from `copy.contactCaveat` sits directly under them
- * — here and again in the footer. That is the plan's rule ("as published in public
- * listings — please confirm"), and `build.ts` counts the two instances per page.
+ * On a demonstration page they came from a public source and were never confirmed with
+ * the business, so the caveat from `copy.contactCaveat` sits directly under them — here
+ * and again in the footer. Which caveat that is comes from the record's declared source
+ * (`provenance.ts`): the frozen "as published in public listings — please confirm" line
+ * where it is true, and the fictional-example line where it is not. `build.ts` counts the
+ * two instances per page and refuses the caveat that belongs to another source.
  */
 function fallbackBlock(ctx: RenderContext): string {
   const { record, copy } = ctx;
@@ -298,7 +300,8 @@ function fallbackBlock(ctx: RenderContext): string {
           <h3>${esc(copy.fallback.heading)}</h3>
 ${record.email ? `          <p>${esc(copy.fallback.emailIntro)} <a href="mailto:${esc(record.email)}">${esc(record.email)}</a></p>` : `          <p>${esc(copy.fallback.noEmail)}</p>`}
 ${record.phone ? `          <p>${esc(copy.fallback.phoneIntro)} <a href="${tel}">${esc(record.phone)}</a>.</p>` : `          <p>${esc(copy.fallback.noPhone)}</p>`}
-${copy.contactCaveat ? `          <!-- Compliance: these details came from public listings and are unconfirmed. Do not remove. -->
+${copy.contactCaveat ? `          <!-- Compliance: the caveat that belongs with these printed details, derived from the
+               record's source. Do not remove. -->
           <p class="muted">${esc(copy.contactCaveat)}</p>\n` : ""}        </div>`;
 }
 
@@ -324,9 +327,12 @@ ${details ? `        <p class="footer-contact">\n          ${details}\n        <
         <p class="disclaimer">${esc(copy.footerDisclaimer)}</p>
       </div>
       <div>
-${copy.contactCaveat && spec.printsDetails ? `        <!-- Compliance: the printed details came from public listings. Do not remove. -->
+${copy.contactCaveat && spec.printsDetails ? `        <!-- Compliance: the caveat that belongs with the printed details, derived from the
+             record's source. Do not remove. -->
         <p class="footer-small">${esc(copy.contactCaveat)}</p>
 ` : ""}${navBlock(copy, id, "footer-nav", "Pages")}
+        <!-- Compliance: the provenance line, derived from the record's source. It may not
+             credit a source the record does not name. Do not remove. -->
         <p class="footer-small">
           ${esc(copy.footer.provenance)}
         </p>
@@ -1191,7 +1197,8 @@ export function renderJs(): string {
 
 /** Plain-language hand-over notes that ship inside the bundle. */
 export function renderEditingReadme(ctx: RenderContext): string {
-  const { record, form, delivery, images, privacy } = ctx;
+  const { record, copy, form, delivery, images, privacy } = ctx;
+  const provenance = copy.provenance;
   const businessPhase = delivery.mode === "business";
 
   const title = businessPhase
@@ -1315,9 +1322,14 @@ Built by Site Sourced
 This page is an unsolicited design proposal, not the business's official site, and
 it is marked noindex so it never competes with one. Ask and it comes down.
 ${businessPhase ? "" : `
-On a demonstration bundle the name, address, phone number and hours come from public
-mapping data to show the layout; the text is written by Site Sourced and is not the
-business's own words. Nothing on the page was copied from a website belonging to
-${record.name}.
+Where the details came from
+---------------------------
+The pages carry this provenance line, derived from the record's own source rather than
+written by hand — it is the same sentence a visitor reads in the footer:
+
+  ${provenance.attribution || "(no source is declared for this record)"}
+
+The words on the pages are written by Site Sourced and are not the business's own, and
+nothing on them was copied from a website belonging to ${record.name}.
 `}`;
 }
