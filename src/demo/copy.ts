@@ -57,7 +57,7 @@ export interface CategoryProfile {
   imageQueries: string[];
 }
 
-const PROFILES: CategoryProfile[] = [
+export const PROFILES: CategoryProfile[] = [
   {
     key: "salon",
     accent: "#9E2B23",
@@ -162,15 +162,21 @@ export function profileFor(record: BusinessRecord): CategoryProfile {
  *
  * The word is what makes the family derivation auditable: `family.ts` records in the
  * manifest which table row fired and why, and "category X contains Y" is a fact a
- * reviewer can check, where "we matched the salon profile" is not.
+ * reviewer can check, where "we matched the salon profile" is not. The returned object is
+ * what `resolveFamily` takes — it carries the profile under `key` as well, so the two
+ * cannot be passed to each other in the wrong shape.
  */
-export function profileMatch(record: BusinessRecord): { profile: CategoryProfile; matched: string | null } {
+export function profileMatch(record: BusinessRecord): { profile: CategoryProfile; key: string; matched: string | null } {
   const hay = `${record.category} ${record.category_group ?? ""}`.toLowerCase();
   for (const [key, words] of KEYWORDS) {
     const matched = words.find((w) => hay.includes(w));
-    if (matched) return { profile: PROFILES.find((p) => p.key === key)!, matched };
+    if (matched) {
+      const profile = PROFILES.find((p) => p.key === key)!;
+      return { profile, key, matched };
+    }
   }
-  return { profile: PROFILES[PROFILES.length - 1]!, matched: null };
+  const profile = PROFILES[PROFILES.length - 1]!;
+  return { profile, key: profile.key, matched: null };
 }
 
 /** Lower-cased category for use inside a sentence, e.g. "barber shop". */
@@ -505,7 +511,7 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
   const profile = matched.profile;
   // Which of the two families this page is for, from the category or the record's own
   // override, with the rule that decided it recorded for the manifest (family.ts).
-  const conversion = resolveFamily(record, { key: profile.key, matched: matched.matched });
+  const conversion = resolveFamily(record, matched);
   // The primary contact label: neutral on our own fictional fixture, the family's own on
   // anything derived from a real business's record (WORKFLOW.md rule 8).
   const contactLabel = resolvePrimaryLabel(record, conversion.family, profile.key);
