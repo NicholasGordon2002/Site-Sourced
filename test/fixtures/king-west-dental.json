@@ -30,22 +30,36 @@
   ],
   "services": [
     {
-      "name": "Check-ups and cleanings"
+      "name": "Check-ups and cleanings",
+      "note": "About half an hour, including any X-rays that are due."
     },
     {
-      "name": "Fillings"
+      "name": "Fillings",
+      "note": "Tooth-coloured fillings, usually in a single visit."
     },
     {
-      "name": "Crowns and bridges"
+      "name": "Crowns and bridges",
+      "note": "Two visits: one to prepare the tooth, one to fit the finished work."
     },
     {
-      "name": "Teeth whitening"
+      "name": "Teeth whitening",
+      "note": "Take-home trays made from an impression of your teeth."
     },
     {
       "name": "Emergency appointments",
       "note": "Call the front desk during opening hours."
     }
   ],
+  "about_paragraphs": [
+    "A general dental practice on King Street West, minutes from McMaster, with four treatment rooms and a front desk that knows most patients by name.",
+    "Most of the day is ordinary and preventive: check-ups and cleanings, fillings, and the crowns and bridges that follow a lifetime of normal wear. Patients come from Westdale, Ainslie Wood and the student blocks around the university, so September is the busiest month of the year.",
+    "Times are arranged by phone during opening hours, or through the form on this page. If something is hurting, call the front desk — the clinic holds back part of each day for people who are already in pain."
+  ],
+  "pricing_note": "Fees follow the Ontario Dental Association's suggested fee guide. A treatment plan with the amounts set out comes first, so nothing starts without a written figure.",
+  "new_client_note": "New patients are asked to arrive ten minutes early for a short health form. Bring a list of medications and any insurance details.",
+  "cancellation_note": "One business day's notice is asked for a change or a cancellation. Missed visits without notice may be charged.",
+  "direct_billing_note": "Direct billing to most major insurers. Bring your policy number and the front desk can check what is covered before treatment starts.",
+  "licence_note": "General dentists registered with the Royal College of Dental Surgeons of Ontario.",
   "form_recipient": "site-sourced-311e0184@ctomail.io",
   "form_delivery": "demo",
   "form_provider": "formspark",
