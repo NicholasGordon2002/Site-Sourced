@@ -193,8 +193,10 @@ export const PROVIDERS: Record<string, FormProvider> = {
     free_tier: "n/a",
     if_it_lapses: "the form stops delivering; the printed email address and phone number still work",
     // Our own relay is not a third party, whatever the visitor's reading: the sentence
-    // the notice prints about it is derived from this descriptor, not hard-coded.
-    service_descriptor: "a test relay we run ourselves, not a commercial form service",
+    // the notice prints about it is derived from this descriptor, not hard-coded. The
+    // label already says whose relay it is (`providerLabel`), so the descriptor adds
+    // only what the label cannot.
+    service_descriptor: "not a commercial form service",
     collection_extra: [],
     retention_facts: () => ["The endpoint this site was built with keeps no copy of the message body."],
     deletion_exception: () => "",

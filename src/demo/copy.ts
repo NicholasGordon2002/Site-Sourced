@@ -15,6 +15,8 @@
  *      in this package that fetches a business URL.
  */
 
+import { createHash } from "node:crypto";
+
 import { DEMO_OPERATOR, type FormDelivery, type FormDeliveryMode } from "./delivery.ts";
 import { collectionSentence, FORM_FIELDS } from "./fields.ts";
 import type { ResolvedForm } from "./forms.ts";
@@ -327,8 +329,41 @@ export const PRIVACY_IDENTITY = {
  * The date the privacy notice's wording was last changed. A page claiming to be
  * updated on a date nobody touched it is a false statement, so this is a constant a
  * human moves when the copy changes — never the build time.
+ *
+ * The date and the wording are sealed together by `PRIVACY_NOTICE_SEAL` below.
  */
-export const PRIVACY_LAST_UPDATED = "29 September 2026";
+export const PRIVACY_LAST_UPDATED = "4 October 2026";
+
+/**
+ * The notice's text, as a reader meets it: title, lead, then every heading and
+ * paragraph. The date is deliberately *not* part of it — the seal is over the wording
+ * the date belongs to, and folding the date in would make the two impossible to compare.
+ */
+export function privacyNoticeText(notice: PrivacyNotice): string {
+  return [notice.title, notice.lead, ...notice.sections.flatMap((s) => [s.heading, ...s.paragraphs])].join("\n");
+}
+
+/**
+ * A digest over a set of composed notices, one line per notice so the set cannot be
+ * reordered or a notice dropped without changing it.
+ */
+export function privacyNoticeDigest(notices: PrivacyNotice[]): string {
+  const hash = createHash("sha256");
+  for (const notice of notices) hash.update(`${notice.mode}\n${privacyNoticeText(notice)}\n---\n`);
+  return hash.digest("hex").slice(0, 16);
+}
+
+/**
+ * The seal: the wording `PRIVACY_LAST_UPDATED` belongs to (audit §B6).
+ *
+ * `test/privacy-notice.test.ts` composes the notice for a fixed record in both phases
+ * and compares the digest with this value. If the sentences change and the date does
+ * not, the test fails and says which two things to move together; if the date changes
+ * without the wording changing, it fails too. The digest is taken over a fixed fixture
+ * rather than over the build's own record because the notice carries the business's own
+ * name — only a fixed composition is comparable.
+ */
+export const PRIVACY_NOTICE_SEAL = "4b67653c4c04fdcb";
 
 /**
  * The provider's label as a visitor should read it. The relay preset's own label is
@@ -894,6 +929,19 @@ export function composePrivacy(
  * The last two groups are the owner's rule (WORKFLOW.md rule 7): the notice may only
  * state what is backed by a recorded fact, and both variants are checked.
  */
+
+/**
+ * A message the provider is holding back — its spam filter's copy. Named in the words a
+ * notice would reach for, so the check below catches the promise wherever it is made.
+ */
+const HELD_MESSAGE = /\b(?:spam|junk|quarantin\w*|filter\w*|held\s+back|holding|sets?\s+(?:it\s+)?aside)\b/i;
+
+/** A promise that *we* will delete it. */
+const DELETE_PROMISE = /\b(?:we|us|Site Sourced)\b[^.]*\bdelet\w+|\bdelet(?:e|es|ing)\b\s+(?:it|them|yours|the message)\b/i;
+
+/** Anything in the same sentence that says we cannot — which is the honest version. */
+const HELD_MESSAGE_CAVEAT = /\b(?:cannot|can not|can't|unable|only\b[^.]*\bcan\b|not\s+be\s+deleted|no one can|releases?\s+it|removes?\s+it)\b/i;
+
 export function privacyNoticeProblems(vars: {
   privacy: PrivacyNotice;
   record: BusinessRecord;
@@ -1000,6 +1048,21 @@ export function privacyNoticeProblems(vars: {
   if (!text.includes(form.provider.service_descriptor)) {
     problems.push(
       `the privacy notice does not describe the form service with its own recorded descriptor ("${form.provider.service_descriptor}"), so a page served by our own test relay could still call it a third-party service. The descriptor is provider-derived, never hard-coded.`,
+    );
+  }
+
+  // The one deletion promise the provider makes impossible — a message its spam filter
+  // is holding, which it keeps for 12 months and will not release early
+  // (`docs/formspark.md`). A sentence that names a held-back message and promises *we*
+  // will delete it, with nothing in the sentence saying we cannot, is the offer
+  // `research/privacy-wording.md` §4.2 says we can never keep. It is checked across the
+  // whole notice because that promise does not sit in one section: the retention
+  // section states the provider's limit and "Your choices" is where the promise would be
+  // made.
+  for (const sentence of text.split(/(?<=[.!?])\s+/)) {
+    if (!HELD_MESSAGE.test(sentence) || !DELETE_PROMISE.test(sentence) || HELD_MESSAGE_CAVEAT.test(sentence)) continue;
+    problems.push(
+      `the privacy notice promises a deletion we cannot perform: "${sentence.trim()}". ${service} holds a message its spam filter sets aside for 12 months and will not release it early, so an offer to delete one is a promise nothing can keep. Say who can remove it and when, and offer the visitor no more than that.`,
     );
   }
 

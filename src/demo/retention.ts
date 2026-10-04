@@ -202,7 +202,9 @@ export function readRetentionPractice(path = retentionLogPath()): PracticeRead {
     const match = CADENCE_LINE.exec(line);
     if (!match) continue;
     const cadence = normaliseCadence(match[1] ?? "");
-    const declaration = line.trim();
+    // The declaration as it will be quoted back — the bolded segment of the line,
+    // without the prose that follows it in the log file.
+    const declaration = (line.trim().match(/^\*\*(.+?)\*\*/)?.[1] ?? line.trim()).trim();
     if (!cadence) {
       return {
         practice: null,
