@@ -114,6 +114,36 @@ sentence shortens automatically — it is generated, not hand-written.
 - **Formspark branding** on notification emails cannot be removed on the free
   plan.
 
+## Open gaps in this record — named rather than papered over
+
+Recorded 4 October 2026, with the privacy-notice wording pass. None of these is a
+claim we make; each is a limit of what this file can support.
+
+- **The provider's own response page.** With JavaScript off (or when the fetch is
+  blocked and `site.js` falls back to a plain form post), the browser *navigates to
+  Formspark's own page*. We have never read what that page sets or loads. The privacy
+  notice's sentence is therefore scoped to "on this page" — and the scope is enforced:
+  `externalReferenceProblems` in `src/demo/build.ts` fails a bundle that loads
+  anything from another origin, carries an inline script, or runs a script other
+  than its own `site.js`.
+- **Our own mailbox.** A notification copy also lands in the working inbox
+  (`site-sourced-311e0184@ctomail.io`), hosted by a provider we have not researched.
+  The notice says the message is kept in the form service's account; it says nothing
+  about the mailbox, which is a gap rather than a clearance.
+- **Exports.** Formspark keeps export files 7 days, and an export we made would be a
+  copy we hold. We export nothing today, so the notice claims nothing about exports.
+  Anyone who starts exporting changes what the notice may say.
+- **Collection facts are Formspark's.** The IP address, approximate location and
+  request metadata are recorded in Formspark's own policy table (above). Our record
+  says nothing about IP or metadata handling by Web3Forms, StaticForms or FormSubmit,
+  so those presets carry `collection_extra: []` and their notice claims nothing
+  beyond what the visitor typed. A forward-only provider's notice cannot carry the
+  Formspark sentence until that research exists.
+- **Deleting a quarantined submission.** "cannot be deleted early" is Formspark's
+  wording; whether the paid REST API can remove a quarantined submission is
+  unverified. The notice prints only the provider's own statement, never a route we
+  have not confirmed.
+
 ## Sources (all fetched 2026-09-28)
 
 - https://formspark.io/legal/privacy-policy/ (effective 22 August 2026)

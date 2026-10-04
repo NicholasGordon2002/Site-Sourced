@@ -481,6 +481,37 @@ provider preset, so the page cannot claim more privacy than the provider
 actually gives. **Formspark keeps submissions in the client's account**; the
 evidence, with quotes and dates, is in `docs/formspark.md`. Update that file
 before changing what a page says.
+### The privacy notice, and what it is allowed to say
+The privacy notice is composed at build time from two recorded facts and nothing
+else (WORKFLOW.md rule 7 — it binds the demonstration page *and* a paying client's
+own page, and both are checked):
+
+- **Provider facts** — what the form service itself does — quoted into the preset
+  in `src/demo/forms.ts` from `docs/formspark.md` (`retention_facts`,
+  `collection_extra`, `deletion_exception`, `service_descriptor`). They print as
+  their own sentences, never appended to one of ours.
+- **Our own declared practice** — how often we go through the form account and
+  delete what is in it — read from `ops/retention-log.md`, the one file that
+  declares it. `SS_RETENTION_LOG` points the build at another copy. With
+  **no cadence declared, the build refuses the bundle** rather than printing a
+  softer sentence, and under the declared cadence `none` the notice prints **no
+  window and no number at all**: a build that prints one fails.
+- **The collection list** comes from `FORM_FIELDS` in `src/demo/fields.ts` — the
+  same list the form is rendered from — and is checked against the fields the
+  rendered contact page actually asks for, so the notice can never name fewer of
+  them than the page collects.
+- **The client's variant** prints no window on the client's behalf (we do not
+  operate their account), names the client as the one who deletes, and gives the
+  visitor the route to ask.
+
+The wording and the date are sealed together: `PRIVACY_LAST_UPDATED` and
+`PRIVACY_NOTICE_SEAL` in `src/demo/copy.ts`, held by the last test in
+`test/privacy-notice.test.ts`. When the notice's sentences change, that test fails
+and names the two values to move together — in the same commit. `manifest.json`
+records what the retention section was composed from (`privacy.retention`) and the
+field list the collection sentence names (`privacy.collection_fields`), so a
+reviewer reads the basis rather than inferring it.
+
 
 ### Regenerating the demo bundles
 

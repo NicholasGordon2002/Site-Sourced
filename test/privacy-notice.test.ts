@@ -36,6 +36,7 @@ import {
   RETENTION_HEADING,
   type PrivacyNotice,
 } from "../src/demo/copy.ts";
+import { externalReferenceProblems } from "../src/demo/build.ts";
 import { resolveDelivery } from "../src/demo/delivery.ts";
 import { resolveForm } from "../src/demo/forms.ts";
 import { profileFor, composeCopy } from "../src/demo/copy.ts";
@@ -284,6 +285,27 @@ test("a place the record never carried is not printed on the client's behalf", (
   const derived = composed(hamilton);
   expect(sectionText(derived.privacy, "Who we are")).toContain(`${CLIENT.name}, Hamilton, ON`);
   expect(problemsFor(derived.privacy, hamilton)).toEqual([]);
+});
+
+/* ------------------------------------------------- "no tracking on this page" (§4.8) */
+
+test("a page that loads anything from another origin fails the no-tracking sentence", () => {
+  const page = { file: "index.html", html: `<img src="images/hero.jpg"><script src="site.js"></script>` };
+  // The sentence the notice prints is only true if nothing the page loads leaves it.
+  expect(externalReferenceProblems({ pages: [page], css: "body{font-family:sans-serif}", js: "void 0;" })).toEqual([]);
+
+  const thirdParty = { file: "index.html", html: `<img src="https://cdn.example.com/hero.jpg"><script src="https://cdn.example.com/a.js"></script>` };
+  const problems = externalReferenceProblems({ pages: [thirdParty], css: "", js: "" }).join("\n");
+  expect(problems).toContain("loads a script from another origin");
+  expect(problems).toContain("loads https://cdn.example.com/hero.jpg from another origin");
+
+  // An inline script, a second script file, a stylesheet that pulls a font, and a
+  // script that reaches for a cookie: each is one of the ways the sentence stops being
+  // true, and each is refused on its own name.
+  expect(externalReferenceProblems({ pages: [{ file: "index.html", html: `<script>alert(1)</script>` }], css: "", js: "" }).join("\n")).toContain("inline <script>");
+  expect(externalReferenceProblems({ pages: [{ file: "index.html", html: `<script src="analytics.js"></script>` }], css: "", js: "" }).join("\n")).toContain("site.js is the bundle's only script");
+  expect(externalReferenceProblems({ pages: [], css: `@import url("https://fonts.example.com/x.css");`, js: "" }).join("\n")).toContain("the stylesheet pulls a file from another origin");
+  expect(externalReferenceProblems({ pages: [], css: "", js: `document.cookie = "a=1";` }).join("\n")).toContain('site.js uses a cookie');
 });
 
 /* ------------------------------------------------------------- the wording is sealed */
