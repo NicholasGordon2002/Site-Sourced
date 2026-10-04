@@ -381,7 +381,7 @@ ${hero ? `        <!-- The hero is a real <img>, not a CSS background: it carrie
           <h1>${esc(record.name)}</h1>
           <p class="hero-lead">${esc(copy.heroLead)}</p>
           <p class="hero-actions">
-${record.phone ? `            <a class="button button--paper" href="${tel}">${esc(copy.ui.callLabel)} ${esc(record.phone)}</a>\n` : ""}            <a class="button button--ghost" href="${PAGE_SPECS.contact.file}">${esc(copy.contactCtaButton)}</a>
+${record.phone ? `            <a class="button button--paper" href="${tel}">${esc(copy.ui.callLabel)} ${esc(record.phone)}</a>\n` : ""}            <a class="button button--ghost" href="${PAGE_SPECS.contact.file}">${esc(copy.contactLabel.label)}</a>
           </p>
         </div>
       </div>
@@ -435,7 +435,7 @@ function contactCtaSection(ctx: RenderContext, alt: boolean): string {
       <div class="wrap">
         <h2>${esc(copy.contactCtaHeading)}</h2>
         <p class="muted">${esc(copy.contactCtaIntro)}</p>
-        <p class="cta-actions"><a class="button" href="${PAGE_SPECS.contact.file}">${esc(copy.contactCtaButton)}</a></p>
+        <p class="cta-actions"><a class="button" href="${PAGE_SPECS.contact.file}">${esc(copy.contactLabel.label)}</a></p>
 ${fallbackBlock(ctx)}
       </div>
     </section>`;

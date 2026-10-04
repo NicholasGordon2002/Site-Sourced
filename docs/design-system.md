@@ -273,7 +273,10 @@ Order matters; this is the order a phone user meets it.
    - lead: the recorded services as a single line (`Haircut · Beard trim · Hot shave · Kids' cut`),
      or, if none are recorded, a plain line saying the page lists the details published for the
      business. Never a sentence that restates the name.
-   - actions: `Call …` (paper button) and `Send a message` (ghost button).
+   - actions: `Call …` (paper button) and the page's **primary contact label** (ghost button) —
+     `Contact Us` on our own fictional fixture, the conversion family's own label
+     (`Request an appointment` / `Ask for a quote` / `Send a message`) on a build from a real
+     business's record. See "The primary contact action", below.
    - Hero copy is assembled in `composeCopy()`, from the record only. The words "On this page:"
      and the "X is a Y in Z" restatement are gone: the identity sentence lives once, in About.
 4. **About** — three short paragraphs from the record, plus the about photograph when there is one.
@@ -317,6 +320,31 @@ The demo never speaks as the business. Every sentence is either data from the re
 recorded publicly"), or a sentence that is plainly ours ("This is a demonstration site: the form
 below sends your message to Site Sourced"). No "we", no "our team", no claim we cannot source.
 Anything that reads as the business's own words is a defect.
+
+### The primary contact action, and the two families
+
+Every page carries one loud thing: the link to the contact page, labelled with the page's
+**primary contact label**, and the notice under the form that names who receives the message.
+Both are derived, never typed into a page (`src/demo/family.ts`; `composeCopy()` in `copy.ts`):
+
+| The build is for | Label | Why |
+| --- | --- | --- |
+| Our own fictional fixture (`source_kind: "fictional"`) | `Contact Us` | The owner's decision of 4 October (WORKFLOW.md rule 8): our invented business is a sales piece about Site Sourced, not about a particular business. Its form submit button stays the plain `Send message` |
+| A real business's record — a personalised demo, or a client's own site | `Request an appointment` (appointment) / `Ask for a quote` (inquiry, trades and landscaping) / `Send a message` (inquiry, everything else) | The family's own call to action: what the page actually asks for |
+
+Which family a build is for is **derived from the record's category** (with the classification
+table in `family.ts`, overridable by a `conversion_family` field on the record), and the rule
+that fired is recorded in `manifest.json`. The honesty rule that goes with each family is a
+build check, not a style guide: an **appointment** page may *request* a time and may never
+*book* one — no "book", "available", "slot", "confirmed", "instant" or "same-day"; an
+**inquiry** page may pass on a question and may never promise a price, a timeline, a visit or a
+service area. A word is allowed only where the record itself carries it, where the record
+carries a booking page, or where the sentence denies the claim ("This is a request, not a
+confirmed booking."). The check is `familyHonestyProblems()`; its tests are in
+`test/family.test.ts`.
+
+No variant may print "Book Now" while the build has no booking page — a neutral label is not a
+licence to claim a booking.
 
 ---
 

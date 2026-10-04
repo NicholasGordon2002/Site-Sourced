@@ -6,6 +6,7 @@
  */
 
 import type { RecordSourceKind } from "./provenance.ts";
+import type { ConversionFamily } from "./family.ts";
 
 /**
  * `business` — the form delivers to the business's own published address.
@@ -84,6 +85,23 @@ export interface BusinessRecord {
   category: string;
   /** Optional human grouping from the lead engine, e.g. "Salons & barbers". */
   category_group?: string;
+  /**
+   * Which of the two conversion families the page is built for. **Optional, and not a
+   * switch**: when the record leaves it out the family is derived from `category` /
+   * `category_group` by the classification table in `family.ts`, and either way the rule
+   * that decided it is recorded in the manifest (`conversion.basis`). A value that is
+   * neither `"appointment"` nor `"inquiry"` fails the build.
+   */
+  conversion_family?: ConversionFamily;
+  /**
+   * The business's own booking page, when one was recorded. The family honesty guard
+   * reads it today: with a booking page in the record, "book" is a true word about a link
+   * that really books, and without one the word is refused on an appointment page
+   * (`family.ts`). Rendering it — the booking row, its derived notice and the three
+   * modes (`none`/`demo`/`business`) — is the booking-link session's work; nothing here
+   * invents a URL, and a record that carries none prints none.
+   */
+  booking_url?: string;
   address?: Partial<RecordAddress>;
   phone?: string;
   email?: string;
@@ -171,6 +189,26 @@ export interface DemoManifest {
   };
   files: string[];
   images: ManifestImage[];
+  /**
+   * Which conversion family this bundle is for, how that was worked out, and the primary
+   * contact label it carries with its own basis. Both are derived from the record — the
+   * family from the classification table or the record's override, the label from where
+   * the record came from — so a reviewer reads the result and the reason together instead
+   * of inferring either from the page.
+   */
+  conversion: {
+    family: ConversionFamily;
+    /** "record override" when the record names the family, "category table" otherwise. */
+    source: "record override" | "category table";
+    /** The rule that fired, in plain English. */
+    basis: string;
+    /** The category profile the record's words selected, and the word that did it. */
+    category_profile: string;
+    matched_category_word: string | null;
+    contact_label: string;
+    contact_label_source: "fictional fixture" | "family-aware";
+    contact_label_basis: string;
+  };
   compliance: {
     robots_meta: string;
     banner_text: string;
