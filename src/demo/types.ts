@@ -111,6 +111,14 @@ export interface BusinessRecord {
   /** Any extra facts we hold and may print (never used to invent anything). */
   notes?: string;
   /**
+   * The business's own account of itself, one paragraph per entry, in the order they are
+   * printed. Printed verbatim (escaped) inside the About section and nowhere else. Absent
+   * or empty → the About section prints exactly what it prints today: the identity line,
+   * the services summary and the provenance line, and the field never appears in the
+   * manifest as content that was meant to be there. A gap is never filled with generic copy.
+   */
+  about_paragraphs?: string[];
+  /**
    * The record's own facts for the extras card (`family-render.ts`), each printed
    * verbatim when present and **absent from the page when they are not** — a gap is
    * never filled with generic copy. `service_area` is the business's own claim, so it
@@ -255,6 +263,18 @@ export interface DemoManifest {
     extras: { label: string; value: string; source: "verbatim" | "boolean-derived"; field: string }[];
     /** The service-card action's label, and the query parameter it carries. */
     service_action: { label: string; parameter: string };
+    /**
+     * Whether the record carries its own About narrative, and how the page uses it —
+     * recorded so a reviewer reads the decision rather than inferring it. `paragraphs`
+     * is the number of narrative paragraphs the record carries; `excerpt_paragraphs` is
+     * how many of the composed About paragraphs the home page shows.
+     */
+    narrative: {
+      paragraphs: number;
+      excerpt_paragraphs: number;
+      field: "about_paragraphs";
+      basis: string;
+    };
   };
   compliance: {
     robots_meta: string;

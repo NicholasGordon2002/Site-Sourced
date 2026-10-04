@@ -13,13 +13,16 @@
   "hours": "Mo-Fr 07:30-17:00; Sa 08:00-13:00",
   "services": [
     {
-      "name": "Lawn cutting and edging"
+      "name": "Lawn cutting and edging",
+      "note": "Weekly, every second week, or one-off, on a standing day."
     },
     {
-      "name": "Spring and fall clean-up"
+      "name": "Spring and fall clean-up",
+      "note": "Beds turned over, leaves and debris taken away."
     },
     {
-      "name": "Hedge and shrub trimming"
+      "name": "Hedge and shrub trimming",
+      "note": "Shaped by hand; trimmings cleared and taken away."
     },
     {
       "name": "Garden bed planting",
@@ -30,6 +33,15 @@
       "note": "Driveways and walkways."
     }
   ],
+  "about_paragraphs": [
+    "A two-truck crew working out of a yard on Barton Street in Stoney Creek, with a trailer that is either full of clippings or full of snow, depending on the month.",
+    "The season sets the work: lawns cut on a standing rotation from April to the end of October, hedges shaped in June and early July, beds turned over in May, leaves cleared through October and November, and snow shovelled and plowed from the same two trucks in winter.",
+    "Properties are mostly small residential — townhouse rows, corner lots and a few shopfronts along the lake. Long-standing clients get a standing day each week, so the same faces turn up, and the same two people do the work from the first cut to the snow."
+  ],
+  "service_area": "Stoney Creek, Winona, Binbrook and the east end of Hamilton.",
+  "pricing_note": "The work is quoted per property rather than by the hour, and a full season is quoted the same way once the yard has been seen.",
+  "new_client_note": "New clients are easiest to fit in at the start of a season. Spring clean-ups and the first cut of the year are the two busiest stretches.",
+  "licence_note": "Registered Ontario business with WSIB coverage for the crew.",
   "form_recipient": "site-sourced-311e0184@ctomail.io",
   "form_delivery": "demo",
   "form_provider": "formspark",

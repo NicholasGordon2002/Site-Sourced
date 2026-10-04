@@ -350,9 +350,24 @@ export function wholeWordPattern(phrase: string): RegExp {
   return new RegExp(`(^|[^a-z])${escaped}([^a-z]|$)`, "i");
 }
 
-/** Does the record itself carry this word or phrase? The positive-control allowance. */
+/**
+ * Does the record itself carry this word or phrase? The positive-control allowance.
+ *
+ * Two ways the record "carries" a hit:
+ *
+ *   - the word appears in the record's own prose — a recorded service or a pricing note;
+ *   - the hit is the label for a field the record carries (the extras card's "Service
+ *     area" label for `service_area`), which is the record's own claim rendered under our
+ *     label rather than a claim we invented.
+ *
+ * The second case exists because field names use underscores while the page's labels use
+ * spaces: "service area" never appears verbatim in the record, yet a record carrying
+ * `service_area` is precisely the record whose page may print that label.
+ */
 function recordCarries(record: BusinessRecord, hit: string): boolean {
-  return wholeWordPattern(hit).test(JSON.stringify(record));
+  if (wholeWordPattern(hit).test(JSON.stringify(record))) return true;
+  const key = hit.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  return key !== "" && Object.prototype.hasOwnProperty.call(record, key);
 }
 
 /**
