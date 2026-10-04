@@ -633,7 +633,7 @@ function sectionHtml(ctx: RenderContext, id: PageId, section: SectionId): string
     case "hero":
       return heroSection(ctx);
     case "about-short":
-      return aboutSection(ctx, ctx.copy.about.slice(0, 1));
+      return aboutSection(ctx, ctx.copy.about.slice(0, ctx.copy.aboutExcerptLength));
     case "about-full":
       return aboutSection(ctx, ctx.copy.about);
     case "services":

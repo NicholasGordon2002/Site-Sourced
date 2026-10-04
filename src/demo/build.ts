@@ -23,9 +23,11 @@ import {
   composeCopy,
   composePrivacy,
   familyFields,
+  fictionalNarrativeProblems,
   guardCopy,
   illustrationLabel,
   isIllustrativeImage,
+  narrativeParagraphs,
   normaliseServices,
   privacyNoticeProblems,
   profileFor,
@@ -278,6 +280,7 @@ export function complianceChecks(vars: {
   // to be the label the build resolved, so the manifest's own record is a fact.
   problems.push(...familyProblems({ record, family: copy.conversion.family }));
   problems.push(...familyHonestyProblems({ pages, record, family: copy.conversion.family }));
+  problems.push(...fictionalNarrativeProblems(record));
   problems.push(...contactLabelProblems({ pages, label: copy.contactLabel }));
   problems.push(...submitLabelProblems({ pages, label: copy.contactLabel }));
   // The family rendering layer: the fields the form asks for, the days the
@@ -669,6 +672,8 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
     }
   }
 
+  const narrativeCount = narrativeParagraphs(record).length;
+
   const manifest: DemoManifest = {
     generator: GENERATOR,
     generated_at: ctx.generatedAt,
@@ -721,6 +726,15 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
       service_action: {
         label: copy.conversion.family === "appointment" ? copy.ui.serviceActionRequest : copy.ui.serviceActionAsk,
         parameter: "service",
+      },
+      narrative: {
+        paragraphs: narrativeCount,
+        excerpt_paragraphs: copy.aboutExcerptLength,
+        field: "about_paragraphs",
+        basis:
+          narrativeCount > 0
+            ? `the record carries ${narrativeCount} paragraph${narrativeCount === 1 ? "" : "s"} in \`about_paragraphs\`, printed verbatim; the home page shows the first one as an excerpt`
+            : "the record carries no `about_paragraphs`, so the About section is the identity line, the services sentence and the provenance line",
       },
     },
     compliance: {

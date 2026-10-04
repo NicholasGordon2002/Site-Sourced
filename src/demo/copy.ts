@@ -19,6 +19,7 @@ import { createHash } from "node:crypto";
 
 import { DEMO_OPERATOR, type FormDelivery, type FormDeliveryMode } from "./delivery.ts";
 import {
+  familyRules,
   resolveFamily,
   resolvePrimaryLabel,
   wholeWordPattern,
@@ -237,6 +238,16 @@ export function normaliseServices(record: BusinessRecord): ServiceItem[] {
     .filter((s) => s.name.length > 0);
 }
 
+/**
+ * The record's About narrative paragraphs, trimmed and empty-filtered, in the order they
+ * are printed. One array element is one paragraph; the trim/filter is done here once so
+ * the copy, the manifest count and the fictional-narrative guard all read the same list
+ * instead of each re-deriving it.
+ */
+export function narrativeParagraphs(record: BusinessRecord): string[] {
+  return (record.about_paragraphs ?? []).map((p) => p.trim()).filter(Boolean);
+}
+
 export function normaliseHours(record: BusinessRecord): { rows: HoursRow[]; note: string } {
   const h = record.hours;
   if (Array.isArray(h)) {
@@ -426,6 +437,12 @@ export interface DemoCopy {
   /** What the record says the business offers, as one line. */
   heroLead: string;
   about: string[];
+  /**
+   * On `DemoCopy`, per record: how many of `about[]` the home page shows — the identity
+   * line, plus the record's own opening paragraph when it has one. The rest is the About
+   * page's.
+   */
+  aboutExcerptLength: number;
   servicesIntro: string;
   hoursIntro: string;
   locationIntro: string;
@@ -661,10 +678,17 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
       ? `Hours, address and phone number as published for this ${cat}.`
       : `Hours, address and phone number invented for this example ${cat}.`;
 
+  // The record's own narrative, spliced between the identity line and the services
+  // sentence. Built as an array rather than indexed: the narrative moves the positions
+  // the old code relied on, so the services sentence and the provenance line are no
+  // longer `about[1]` / `about[2]` on a record that carries one.
+  const narrative = narrativeParagraphs(record);
+  const offeringTitle = profile.offeringPlural.charAt(0).toUpperCase() + profile.offeringPlural.slice(1);
   const about: string[] = [
     `${record.name} is a ${cat}${city ? ` in ${place}` : ""}.`,
+    ...narrative,
     serviceSentence
-      ? `The ${profile.offeringPlural} set out below are the ones recorded for the business: ${serviceSentence}.`
+      ? `The ${profile.offeringPlural} recorded for ${record.name} are on the ${offeringTitle} page: ${serviceSentence}.`
       : `This is a starting point for a page of the business's own.`,
     provenance.aboutLine,
   ];
@@ -755,13 +779,12 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
   // two of them follow the delivery mode (design spec §3). Empty for Family A.
   const steps = conversion.family === "inquiry" ? inquirySteps(delivery.mode, { business: record.name, us: DEMO_OPERATOR }) : [];
 
-  const offeringTitle = profile.offeringPlural.charAt(0).toUpperCase() + profile.offeringPlural.slice(1);
-
   void slug;
   return {
     heroEyebrow,
     heroLead,
     about,
+    aboutExcerptLength: narrative.length > 0 ? 2 : 1,
     servicesIntro,
     hoursIntro,
     locationIntro,
@@ -1400,4 +1423,52 @@ export function guardCopy(html: string, record: BusinessRecord): string[] {
     if (pattern.test(hay) && !pattern.test(own)) hits.push(phrase);
   }
   return hits;
+}
+
+/**
+ * The fictional-narrative guard (design spec F1, lead-ratified).
+ *
+ * `guardCopy` and the family honesty guard both allow a phrase that also appears in the
+ * record itself, because a real client's own words are not ours to edit. On a fictional
+ * fixture there is no client: the record is our own invention, so that exemption would let
+ * an invented narrative smuggle a banned or family-rule-breaking word past both guards
+ * simply by sitting in the record. So when `source_kind` is `"fictional"`, the
+ * `about_paragraphs` strings must clear `BANNED` and the family word rules on their own,
+ * with no record exemption.
+ *
+ * The designer's fixture content passes this stricter version (it was authored against
+ * exactly this check), so it lands green; the check exists to keep a future invented
+ * narrative from slipping a claim past the guards it would otherwise exempt.
+ */
+export function fictionalNarrativeProblems(record: BusinessRecord): string[] {
+  if (record.source_kind !== "fictional") return [];
+  const narrative = narrativeParagraphs(record);
+  if (narrative.length === 0) return [];
+  const problems: string[] = [];
+  const text = narrative.join(" ");
+  const lower = text.toLowerCase();
+
+  for (const phrase of BANNED) {
+    if (bannedPattern(phrase).test(lower)) {
+      problems.push(
+        `the fictional record's about_paragraphs contain the banned phrase "${phrase}", which an invented narrative may not carry — a real client's own words are exempt, but a fictional narrative must clear the guard on its own.`,
+      );
+    }
+  }
+
+  // The family word rules, on their own: no record exemption, no booking-page allowance,
+  // and no denial allowance. An invented narrative must not say what its family may not.
+  const family = resolveFamily(record, profileMatch(record)).family;
+  for (const rule of familyRules(family)) {
+    const flags = rule.pattern.flags.includes("g") ? rule.pattern.flags : `${rule.pattern.flags}g`;
+    const pattern = new RegExp(rule.pattern.source, flags);
+    const hit = pattern.exec(lower);
+    if (hit) {
+      problems.push(
+        `the fictional record's about_paragraphs say "${hit[0]}" — a page in the ${family} family ${rule.claim} (${rule.allowed}). On a fictional fixture the narrative must clear the family word rules on its own.`,
+      );
+    }
+  }
+
+  return problems;
 }
