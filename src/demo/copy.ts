@@ -25,7 +25,15 @@ import {
   type FamilyResolution,
   type PrimaryLabel,
 } from "./family.ts";
-import { collectionSentence, FORM_FIELDS } from "./fields.ts";
+import {
+  collectionSentence,
+  formFieldSets,
+  openDays,
+  type FamilyFields,
+  type FieldSpec,
+  type FormLabels,
+} from "./fields.ts";
+import { inquirySteps, type ExtraLabels } from "./family-render.ts";
 import type { ResolvedForm } from "./forms.ts";
 import { resolveProvenance, type Provenance } from "./provenance.ts";
 import {
@@ -388,7 +396,7 @@ export function privacyNoticeDigest(notices: PrivacyNotice[]): string {
  * rather than over the build's own record because the notice carries the business's own
  * name — only a fixed composition is comparable.
  */
-export const PRIVACY_NOTICE_SEAL = "4b67653c4c04fdcb";
+export const PRIVACY_NOTICE_SEAL = "94cb76ec07ab3614";
 
 /**
  * The provider's label as a visitor should read it. The relay preset's own label is
@@ -444,6 +452,21 @@ export interface DemoCopy {
   provenance: Provenance;
   /** What the form's own success message may claim. */
   formSuccess: string;
+  /**
+   * The sentence under the submit button, derived by **delivery mode and family**
+   * (design spec §2, lead ruling 1). It is the qualifier the button needs: on an
+   * appointment page "this is a request, not a confirmed booking"; on a demonstration
+   * page, that nothing here is booked or reaches the business. It is never a promise,
+   * and it is data rather than markup, so both modes render the same paragraph.
+   */
+  formNote: string;
+  /**
+   * Family B's "How an inquiry works", three lines, **derived from `delivery.mode`**
+   * (design spec §3, lead ruling 2). Empty for Family A, whose page carries no such
+   * block. The heading is here too, because the section is the family's own.
+   */
+  stepsHeading: string;
+  steps: string[];
   banner: string;
   footerDisclaimer: string;
   offeringPlural: string;
@@ -489,21 +512,112 @@ export interface DemoCopy {
     takedown: string;
   };
   /** Labels and buttons: shell furniture a visitor reads but that is not a claim. */
-  ui: {
-    skip: string;
-    callLabel: string;
-    noPhoneNote: string;
-    directions: string;
-    osm: string;
-    submit: string;
-    fieldName: string;
-    fieldEmail: string;
-    fieldPhone: string;
-    fieldOptional: string;
-    fieldMessage: string;
-    honeypot: string;
-    privacyLink: string;
-  };
+  ui: UiCopy;
+}
+
+/**
+ * The words the form and the family furniture print, in one place, so a copy pass is
+ * one edit — and so `fields.ts` can name the labels each control uses without holding
+ * any prose of its own (`FormLabels`) and `family-render.ts` can label the extras card
+ * (`ExtraLabels`).
+ *
+ * Every one of these is a label, not a claim: the sentences that *are* claims — the
+ * delivery notice, the privacy notice, the banner — are derived elsewhere and are
+ * frozen or composed, never listed here.
+ */
+export interface UiCopy extends FormLabels, ExtraLabels {
+  skip: string;
+  callLabel: string;
+  noPhoneNote: string;
+  directions: string;
+  osm: string;
+  honeypot: string;
+  privacyLink: string;
+  /** The service-card action, per family. It asks for the thing; it never promises a price. */
+  serviceActionRequest: string;
+  serviceActionAsk: string;
+}
+
+export const UI: UiCopy = {
+  skip: "Skip to content",
+  callLabel: "Call",
+  noPhoneNote: "Phone number not recorded",
+  directions: "Get directions",
+  osm: "See it on OpenStreetMap",
+  honeypot: "Leave this field empty",
+  privacyLink: "Privacy notice",
+
+  /* The two families' fields (fields.ts decides which of these a build uses). */
+  fieldName: "Your name",
+  fieldEmail: "Your email",
+  fieldPhone: "Your phone",
+  fieldService: "What do you need?",
+  fieldPreferredDays: "Preferred day(s)",
+  fieldPreferredTime: "Preferred time",
+  fieldBeenBefore: "Have you been here before?",
+  fieldExtra: "Anything to add?",
+  fieldJobType: "Type of job",
+  fieldJobLocation: "Where is the job?",
+  fieldJobDescription: "Describe what you need",
+  fieldHowSoon: "How soon?",
+  fieldReachYou: "How should they reach you?",
+  fieldOptional: "(optional)",
+
+  legendYourDetails: "Your details",
+  legendTheAppointment: "The appointment",
+  legendAboutTheJob: "About the job",
+
+  optionNotSure: "Not sure",
+  optionSomethingElse: "Something else",
+  optionNoPreference: "No preference",
+  optionMorning: "Morning",
+  optionAfternoon: "Afternoon",
+  optionFlexible: "Flexible",
+  optionNextFewWeeks: "In the next few weeks",
+  optionAsSoonAsPossible: "As soon as possible",
+  optionEmergency: "Emergency",
+  optionYes: "Yes",
+  optionNo: "No",
+  optionEmail: "Email",
+  optionPhone: "Phone",
+
+  /* The extras card: the record's own facts, or nothing (design spec §4). */
+  extrasHeading: "Good to know",
+  extraServiceArea: "Service area",
+  extraLicensing: "Licensing",
+  extraPricing: "Pricing",
+  extraNewClients: "New clients",
+  extraCancellations: "Cancellations",
+  extraWalkIns: "Walk-ins",
+  extraDirectBilling: "Direct billing",
+  walkInsWelcome: "Walk-ins welcome.",
+
+  /* The service-card action (§6). Family-aware; never a price. */
+  serviceActionRequest: "Request this",
+  serviceActionAsk: "Ask about this",
+};
+
+/**
+ * The field set this build carries: the family's own, minus everything the record
+ * cannot support, with the omission and its reason recorded.
+ *
+ * `familyFields` is the **one** place the record is read for the form, so the form the
+ * page renders, the list the manifest prints and the collection sentence the privacy
+ * notice carries are all composed from the same object — which is what makes those
+ * three impossible to drift apart (`collectionProblems` checks the rendered page
+ * against the notice anyway, because a shared function is not a proof).
+ */
+export function familyFields(record: BusinessRecord): FamilyFields {
+  const matched = profileMatch(record);
+  const family = resolveFamily(record, matched).family;
+  return formFieldSets({
+    family,
+    profileKey: matched.key,
+    services: normaliseServices(record).map((s) => s.name),
+    days: openDays(normaliseHours(record).rows),
+    emergencyService: record.emergency_service === true,
+    labels: UI,
+  });
 }
 
 export function composeCopy(record: BusinessRecord, slug: string, form: ResolvedForm, delivery: FormDelivery): DemoCopy {
@@ -625,6 +739,22 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
     ? `Send a message to ${record.name} using the contact page, or use the phone number or email address printed with it.`
     : `This is a demonstration site, so the message form comes to ${DEMO_OPERATOR} rather than to ${record.name}. To reach ${record.name} itself, use the phone number or email address printed with it.`;
 
+  // The sentence under the submit button. Derived from the delivery the record
+  // describes and the family it is for — never typed into the template — because it is
+  // the one line that keeps the button honest: a request is not a booking, and on a
+  // demonstration page the message does not reach the business named above it.
+  const formNote = businessPhase
+    ? conversion.family === "appointment"
+      ? `This is a request, not a confirmed booking. ${record.name} will contact you to agree a time.`
+      : `Describe the job and ${record.name} will get back to you.`
+    : conversion.family === "appointment"
+      ? "Nothing here is booked."
+      : `Nothing here reaches ${record.name}.`;
+
+  // Family B's opening move, as data: the same three <li>s render in both phases, and
+  // two of them follow the delivery mode (design spec §3). Empty for Family A.
+  const steps = conversion.family === "inquiry" ? inquirySteps(delivery.mode, { business: record.name, us: DEMO_OPERATOR }) : [];
+
   const offeringTitle = profile.offeringPlural.charAt(0).toUpperCase() + profile.offeringPlural.slice(1);
 
   void slug;
@@ -638,6 +768,9 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
     contactIntro,
     contactHeading,
     formNotice,
+    formNote,
+    stepsHeading: "How an inquiry works",
+    steps,
     formNoticeDelivery: delivery.mode,
     contactCaveat,
     provenance,
@@ -689,21 +822,7 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
       provenance: provenance.attribution,
       takedown: "This demo comes down on request — reply to the email that sent it and it will be removed within a day.",
     },
-    ui: {
-      skip: "Skip to content",
-      callLabel: "Call",
-      noPhoneNote: "Phone number not recorded",
-      directions: "Get directions",
-      osm: "See it on OpenStreetMap",
-      submit: "Send message",
-      fieldName: "Your name",
-      fieldEmail: "Your email",
-      fieldPhone: "Your phone",
-      fieldOptional: "(optional)",
-      fieldMessage: "Message",
-      honeypot: "Leave this field empty",
-      privacyLink: "Privacy notice",
-    },
+    ui: UI,
   };
 }
 
@@ -803,7 +922,7 @@ export function composePrivacy(
   const collect: PrivacySection = {
     heading: "What is collected",
     paragraphs: [
-      collectionSentence(),
+      collectionSentence(familyFields(record).fields),
       ...provider.collection_extra,
       "There are no cookies, no analytics and no tracking on this page.",
     ],
@@ -1149,8 +1268,15 @@ export function collectionProblems(vars: {
   pages: { file: string; html: string }[];
   privacy: PrivacyNotice;
   form: ResolvedForm;
+  /**
+   * The fields this family's set carries — the same list the form is rendered from and
+   * the notice is composed from (`familyFields`). Passed in rather than re-derived so
+   * the check is comparing the notice with the build's own decision, not with a second
+   * derivation that could make the same mistake twice.
+   */
+  fields: FieldSpec[];
 }): string[] {
-  const { pages, privacy, form } = vars;
+  const { pages, privacy, form, fields } = vars;
   const problems: string[] = [];
   const contact = pages.find((p) => p.html.includes('id="contact-form"'));
   if (!contact) {
@@ -1162,7 +1288,9 @@ export function collectionProblems(vars: {
 
   const formHtml = contact.html.slice(contact.html.indexOf("<form"), contact.html.indexOf("</form>"));
   const rendered = new Set<string>();
-  for (const m of formHtml.matchAll(/<(?:input|textarea)[^>]*\bname="([^"]+)"/g)) {
+  // `select` is in the list as well as `input` and `textarea`: a field the visitor
+  // answers from a menu is still a field the notice has to name.
+  for (const m of formHtml.matchAll(/<(?:input|textarea|select)[^>]*\bname="([^"]+)"/g)) {
     const name = m[1]!;
     // The honeypot and the provider's hidden instructions are not fields a visitor
     // fills in, so they are not part of what the notice says is collected.
@@ -1171,7 +1299,7 @@ export function collectionProblems(vars: {
   }
   for (const m of formHtml.matchAll(/<input[^>]*type="hidden"[^>]*\bname="([^"]+)"/g)) rendered.delete(m[1]!);
 
-  const known = new Map(FORM_FIELDS.map((f) => [f.name, f]));
+  const known = new Map(fields.map((f) => [f.name, f]));
   for (const name of rendered) {
     if (!known.has(name)) {
       problems.push(
@@ -1182,7 +1310,7 @@ export function collectionProblems(vars: {
 
   const collectionSection = privacy.sections.find((s) => s.heading === "What is collected");
   const collectionText = collectionSection ? collectionSection.paragraphs.join(" ") : "";
-  const expected = collectionSentence();
+  const expected = collectionSentence(fields);
   if (!collectionText.includes(expected)) {
     problems.push(
       `the privacy notice's collection sentence does not match the fields the form renders. The form asks for ${[...rendered].join(", ")}, so the notice must say: "${expected}" (got: "${collectionText}"). A visitor must be told everything the form collects.`,

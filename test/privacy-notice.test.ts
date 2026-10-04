@@ -27,6 +27,7 @@ import { expect, test } from "bun:test";
 
 import {
   collectionProblems,
+  familyFields,
   composePrivacy,
   PRIVACY_LAST_UPDATED,
   PRIVACY_NOTICE_SEAL,
@@ -137,12 +138,27 @@ test("a Formspark notice that omits what the service records besides the typed f
   expect(problems).toContain("does not state what the form service records besides the fields the visitor types");
 });
 
-test("the collection sentence names every field the page asks for, phone number included", () => {
-  const record = BASE;
-  const { privacy } = composed(record);
-  expect(sectionText(privacy, "What is collected")).toContain("your phone number if you give one");
+test("the collection sentence names every field the family's form asks for", () => {
+  // The appointment family makes the phone number **required**, so the notice states it
+  // plainly rather than hedging it — the hedge belongs to the inquiry family, where the
+  // phone is optional (fields.ts: the two families' own sets).
+  const appointment = composed(BASE).privacy;
+  const sentence = sectionText(appointment, "What is collected");
+  expect(sentence).toContain("your name, your phone number, your preferred time");
+  expect(sentence).not.toContain("your phone number if you give one");
+
+  // The inquiry family asks the different questions a quoted job starts with, and its
+  // optional phone number keeps the condition the published page needed.
+  const inquiry: BusinessRecord = { ...BASE, name: "Example Garden Works", category: "Landscaping" };
+  const inquirySentence = sectionText(composed(inquiry).privacy, "What is collected");
+  expect(inquirySentence).toContain("your description of the job");
+  expect(inquirySentence).toContain("your timeframe");
+  expect(inquirySentence).toContain("your phone number if you give one");
+  expect(inquirySentence).not.toContain("your preferred time");
 
   // ...and the check compares the notice with the page the visitor is actually shown.
+  const record = BASE;
+  const { privacy } = composed(record);
   const form = resolveForm(record);
   const delivery = resolveDelivery(record, form);
   const ctx: RenderContext = {
@@ -157,16 +173,32 @@ test("the collection sentence names every field the page asks for, phone number 
     generatedAt: "2026-10-04T00:00:00.000Z",
   };
   const rendered = renderPages(ctx);
-  expect(collectionProblems({ pages: rendered, privacy, form })).toEqual([]);
+  const fields = familyFields(record).fields;
+  expect(collectionProblems({ pages: rendered, privacy, form, fields })).toEqual([]);
+
+  // A field the page asks for and the fields list does not know cannot be named by the
+  // notice, so it is refused by name.
+  const withExtra = rendered.map((page) =>
+    page.file === "contact.html"
+      ? {
+          ...page,
+          html: page.html.replace(
+            '<p class="form-actions">',
+            '<select name="budget"><option value="x">x</option></select><p class="form-actions">',
+          ),
+        }
+      : page,
+  );
+  expect(collectionProblems({ pages: withExtra, privacy, form, fields }).join("\n")).toContain('asks for a "budget" field');
 
   // The published sentence — name, email and message, with the phone number missing —
-  // is refused, and the refusal names the field it left out.
+  // is refused, and the refusal names the fields the form really asks for.
   const doctored = edit(privacy, "What is collected", () => [
     "Only what you type into the contact form: your name, your email address and your message.",
   ]);
-  const problems = collectionProblems({ pages: rendered, privacy: doctored, form }).join("\n");
+  const problems = collectionProblems({ pages: rendered, privacy: doctored, form, fields }).join("\n");
   expect(problems).toContain("does not match the fields the form renders");
-  expect(problems).toContain("The form asks for name, email, phone, message");
+  expect(problems).toContain("The form asks for name, phone, email, time, message");
 });
 
 /* ------------------------------------------------------- retention and deletion (§2) */

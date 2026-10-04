@@ -110,6 +110,28 @@ export interface BusinessRecord {
   services?: (string | ServiceItem)[];
   /** Any extra facts we hold and may print (never used to invent anything). */
   notes?: string;
+  /**
+   * The record's own facts for the extras card (`family-render.ts`), each printed
+   * verbatim when present and **absent from the page when they are not** — a gap is
+   * never filled with generic copy. `service_area` is the business's own claim, so it
+   * is the one thing that may say where it works, and only because they said it.
+   */
+  service_area?: string;
+  licence_note?: string;
+  pricing_note?: string;
+  new_client_note?: string;
+  cancellation_note?: string;
+  /**
+   * A boolean, and the one extras line a boolean produces: `true` prints the single
+   * fixed line "Walk-ins welcome." (lead ruling 4, approved 30 Sept). `false` and
+   * absent print nothing. The manifest records the line as boolean-derived rather
+   * than verbatim, because it is the record's assertion rendered in our words.
+   */
+  accepts_walk_ins?: boolean;
+  /** Offered as an option in "How soon?" only; never a 24/7 claim of its own. */
+  emergency_service?: boolean;
+  /** Printed only for the dental and health profiles, where direct billing applies. */
+  direct_billing_note?: string;
   /** Where the contact form delivers. Required for a usable form. */
   form_recipient: string;
   /**
@@ -208,6 +230,31 @@ export interface DemoManifest {
     contact_label: string;
     contact_label_source: "fictional fixture" | "family-aware";
     contact_label_basis: string;
+    /**
+     * What the family rendering layer put on the pages, recorded so a reviewer reads
+     * the result rather than inferring it (WORKFLOW.md rule 6). Every one of these is
+     * derived — the four families' furniture, the fields a record can support, the
+     * section order, the days the hours rows state as open.
+     */
+    form: {
+      /** The submit button's own label, which is the family's call to action. */
+      submit_label: string;
+      /** The sentence under the button, derived from the delivery mode and the family. */
+      note_under_button: string;
+      legends: string[];
+      fields: string[];
+      /** Fields this family's set carries but this record cannot support, and why. */
+      omitted: { field: string; why: string }[];
+      preferred_days: { days: string[]; basis: string };
+    };
+    /** The order the page blocks were rendered in, per page. */
+    section_order: Record<string, string[]>;
+    /** Family B's three steps, as derived from the delivery mode; empty for Family A. */
+    steps: string[];
+    /** The extras card's lines: the record's own words, and the one boolean-derived line. */
+    extras: { label: string; value: string; source: "verbatim" | "boolean-derived"; field: string }[];
+    /** The service-card action's label, and the query parameter it carries. */
+    service_action: { label: string; parameter: string };
   };
   compliance: {
     robots_meta: string;
@@ -289,7 +336,10 @@ export interface DemoManifest {
     stores_submissions: string;
     free_tier: string;
     if_it_lapses: string;
+    /** The same list the privacy notice's collection sentence is composed from. */
     fields: string[];
+    /** The submit button's label, as the family rendering layer resolved it. */
+    submit_label: string;
     fallback_shown: string;
   };
   handoff: {

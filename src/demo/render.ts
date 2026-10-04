@@ -36,10 +36,11 @@
 import type { BusinessRecord, ManifestImage } from "./types.ts";
 import type { DemoCopy, PrivacyNotice } from "./copy.ts";
 import type { CategoryProfile } from "./copy.ts";
-import { normaliseHours, normaliseServices } from "./copy.ts";
+import { familyFields, normaliseHours, normaliseServices } from "./copy.ts";
 import { illustrationLabel, isIllustrativeImage } from "./copy.ts";
 import type { FormDelivery } from "./delivery.ts";
-import { FORM_FIELDS, type FormField } from "./fields.ts";
+import type { FieldGroup, FieldSpec } from "./fields.ts";
+import { SECTION_ORDER, extrasLines, type SectionId } from "./family-render.ts";
 import type { ResolvedForm } from "./forms.ts";
 
 export interface RenderContext {
@@ -158,16 +159,37 @@ function hoursBlock(record: BusinessRecord): string {
  * section heading on the home page, `h2` on a page whose `h1` is the offering
  * itself, so no page skips a heading level.
  */
-function servicesBlock(record: BusinessRecord, level: 2 | 3): string {
+/**
+ * The link a service card carries to the form, with the recorded service name in the
+ * query string (design spec §6).
+ *
+ * The parameter is inert on a static host: with JavaScript off the select keeps its
+ * default and the `#form` fragment still jumps to the form. With JavaScript on —
+ * `site.js` is loaded by the contact page and nothing else — it preselects the option
+ * whose value equals the parameter, case-insensitively. The option values are the
+ * recorded service names **verbatim**, which is what makes that match possible at all.
+ * The apostrophe is percent-encoded explicitly: `encodeURIComponent` leaves it alone,
+ * and escaping it into `&#39;` afterwards would put the link and its own check in
+ * disagreement about what the parameter says.
+ */
+function serviceActionHref(name: string): string {
+  return `contact.html?service=${encodeURIComponent(name).replace(/'/g, "%27")}#form`;
+}
+
+function servicesBlock(record: BusinessRecord, level: 2 | 3, copy: DemoCopy): string {
   const services = normaliseServices(record);
   const heading = `h${level}`;
   if (services.length === 0) {
     return `        <p class="muted">Nothing is recorded yet — this is where the business's ${esc(copyOffering(record))} would be listed.</p>`;
   }
+  // The action asks for the thing; it never promises a price, which is why Family B
+  // says "Ask about this" and never "Get a quote" (design spec §6).
+  const action = copy.conversion.family === "appointment" ? copy.ui.serviceActionRequest : copy.ui.serviceActionAsk;
   return `        <ul class="services">\n${services
     .map(
       (s) =>
-        `          <li class="card"><${heading}>${esc(s.name)}</${heading}>${s.note ? `<p>${esc(s.note)}</p>` : ""}</li>`,
+        `          <li class="card"><${heading}>${esc(s.name)}</${heading}>${s.note ? `<p>${esc(s.note)}</p>` : ""}` +
+        `<p class="service-action"><a class="link-quiet link-quiet--inline" href="${esc(serviceActionHref(s.name))}">${esc(action)}</a></p></li>`,
     )
     .join("\n")}\n        </ul>`;
 }
@@ -449,32 +471,94 @@ ${fallbackBlock(ctx)}
  * defect the published page shipped — an optional phone number the notice never
  * mentioned), and the notice cannot name a field the page does not ask for.
  */
-function formFieldHtml(copy: DemoCopy, field: FormField): string {
-  const label =
-    field.optional
-      ? `${esc(copy.ui[field.labelKey])} <span class="optional">${esc(copy.ui.fieldOptional)}</span>`
-      : esc(copy.ui[field.labelKey]);
+function fieldLabel(copy: DemoCopy, field: FieldSpec): string {
+  const text = esc(copy.ui[field.labelKey]);
+  return field.optional ? `${text} <span class="optional">${esc(copy.ui.fieldOptional)}</span>` : text;
+}
+
+/**
+ * One field, drawn from the family's own set (`familyFields`) — the same object the
+ * manifest lists and the privacy notice's collection sentence is composed from.
+ *
+ * Three controls, each working with JavaScript off:
+ *
+ *   - a text/email/tel/textarea field, exactly as before;
+ *   - a `select` with the **native** picker (no custom arrow, no script, better on a
+ *     phone than anything we would draw);
+ *   - a chip group — checkbox or radio — where the control is visually hidden but
+ *     focusable, so it still posts, still works by keyboard, and needs no `:has()`
+ *     (the checked state is drawn from the sibling `<span>`, which every browser we
+ *     care about supports).
+ *
+ * The `required` attribute follows the field's own flag, never the `(optional)`
+ * marker: a select whose default is one of its own options is never empty but is
+ * equally not something a visitor could fail to answer.
+ */
+function fieldHtml(copy: DemoCopy, field: FieldSpec): string {
+  const label = fieldLabel(copy, field);
+
+  if (field.control === "checkbox" || field.control === "radio") {
+    const chips = (field.options ?? [])
+      .map(
+        (option) =>
+          `              <label class="chip"><input type="${field.control}" name="${field.name}" value="${esc(option)}"${
+            field.preselected === option ? " checked" : ""
+          }><span class="chip-text">${esc(option)}</span></label>`,
+      )
+      .join("\n");
+    return `          <fieldset class="field choice-group${field.name === "days" ? " choice-group--days" : ""}">
+            <legend>${label}</legend>
+            <div class="choice-wrap">
+${chips}
+            </div>
+          </fieldset>`;
+  }
+
   const attrs = [
     `id="${field.id}"`,
     `name="${field.name}"`,
-    `type="${field.type === "textarea" ? "text" : field.type}"`,
     field.autocomplete ? `autocomplete="${field.autocomplete}"` : "",
-    field.optional ? "" : "required",
+    field.required ? "required" : "",
   ]
     .filter(Boolean)
     .join(" ");
+
+  if (field.control === "select") {
+    const options = (field.options ?? [])
+      .map(
+        (option) =>
+          `              <option value="${esc(option)}"${field.preselected === option ? " selected" : ""}>${esc(option)}</option>`,
+      )
+      .join("\n");
+    return `          <div class="field">
+            <label for="${field.id}">${label}</label>
+            <select ${attrs}>
+${options}
+            </select>
+          </div>`;
+  }
+
   const control =
-    field.type === "textarea"
-      ? `            <textarea ${attrs} rows="5"></textarea>`
-      : `            <input ${attrs}>`;
+    field.control === "textarea"
+      ? `            <textarea ${attrs} rows="${field.rows ?? 5}"></textarea>`
+      : `            <input type="${field.control}" ${attrs}>`;
   return `          <div class="field">
             <label for="${field.id}">${label}</label>
 ${control}
           </div>`;
 }
 
+/** One fieldset: a short small-caps legend over the fields it groups. */
+function fieldGroupHtml(copy: DemoCopy, group: FieldGroup, index: number): string {
+  return `          <fieldset class="field-group${index > 0 ? " field-group--second" : ""}">
+            <legend class="field-group-legend">${esc(group.legend)}</legend>
+${group.fields.map((field) => fieldHtml(copy, field)).join("\n")}
+          </fieldset>`;
+}
+
 function contactFormSection(ctx: RenderContext): string {
   const { copy, form } = ctx;
+  const fields = familyFields(ctx.record);
   const honeypot = form.provider.key === "web3forms" ? "botcheck" : "_gotcha";
   const hidden = Object.entries(form.hiddenFields)
     .map(([k, v]) => `            <input type="hidden" name="${esc(k)}" value="${esc(v)}">`)
@@ -490,13 +574,19 @@ function contactFormSection(ctx: RenderContext): string {
         <form class="contact-form" id="contact-form" method="POST" action="${esc(form.endpoint)}"
               data-encode="${esc(form.provider.encode)}" data-success="${esc(copy.formSuccess)}"
               data-failure="Sorry, that didn't send. Please use the email address or phone number below.">
-${FORM_FIELDS.map((field) => formFieldHtml(copy, field)).join("\n")}
+${fields.groups.map((group, index) => fieldGroupHtml(copy, group, index)).join("\n")}
           <div class="hp" aria-hidden="true">
             <label for="cf-${honeypot}">${esc(copy.ui.honeypot)}</label>
             <input id="cf-${honeypot}" name="${honeypot}" type="text" tabindex="-1" autocomplete="off">
           </div>
+          <input type="hidden" name="request_type" value="${esc(copy.conversion.family)}">
 ${hidden}
-          <button class="button" type="submit">${esc(copy.ui.submit)}</button>
+          <p class="form-actions"><button class="button" type="submit">${esc(copy.contactLabel.submit)}</button></p>
+          <!-- The qualifier the button needs, derived from the delivery mode and the
+               family: on an appointment page it is the request-not-a-booking line, and
+               on a demonstration page it says nothing here is booked. Do not reword
+               without the record behind it. -->
+          <p class="form-note">${esc(copy.formNote)}</p>
           <p class="form-status" id="form-status" role="status" aria-live="polite"></p>
         </form>
 
@@ -530,55 +620,123 @@ ${blocks}
  * disclaimer and its own copy of whatever compliance line belongs to its content,
  * because compliance is per-page and never inherited.
  */
+/**
+ * One block of a page, drawn. The blocks each page carries, and their order, come from
+ * `SECTION_ORDER` in `family-render.ts`, so a family's page shape is **data**: Family B's
+ * home page carries its "How an inquiry works" between the recorded services and the
+ * hours, and Family A's does not, without either of them being a branch in the template.
+ */
+function sectionHtml(ctx: RenderContext, id: PageId, section: SectionId): string {
+  switch (section) {
+    case "head":
+      return pageHead(ctx, id);
+    case "hero":
+      return heroSection(ctx);
+    case "about-short":
+      return aboutSection(ctx, ctx.copy.about.slice(0, 1));
+    case "about-full":
+      return aboutSection(ctx, ctx.copy.about);
+    case "services":
+      return id === "index" ? servicesHomeSection(ctx) : servicesPageSection(ctx);
+    case "how":
+      return stepsSection(ctx);
+    case "hours":
+      return hoursAddressSection(ctx);
+    case "extras":
+      return extrasSection(ctx);
+    case "form":
+      return contactFormSection(ctx);
+    case "privacy":
+      return privacySection(ctx);
+    case "cta":
+      return contactCtaSection(ctx, true);
+  }
+}
+
+/** The services block as the home page shows it: the offering noun as its heading. */
+function servicesHomeSection(ctx: RenderContext): string {
+  const { record, copy } = ctx;
+  const title = copy.offeringPlural.charAt(0).toUpperCase() + copy.offeringPlural.slice(1);
+  return `    <section class="section section--alt" id="services">
+      <div class="wrap">
+        <h2>${esc(title)}</h2>
+        <p class="muted">${esc(copy.servicesIntro)}</p>
+${servicesBlock(record, 3, copy)}
+      </div>
+    </section>`;
+}
+
+/** The services block as its own page shows it: the `h1` is the offering, so no `h2`. */
+function servicesPageSection(ctx: RenderContext): string {
+  return `    <section class="section" id="services">
+      <div class="wrap">
+${servicesBlock(ctx.record, 2, ctx.copy)}
+      </div>
+    </section>`;
+}
+
+/**
+ * Family B's three steps — describe the job, who receives it, who answers — as a
+ * process list rather than a claim. The lines are data (`copy.steps`, derived from the
+ * delivery mode by `inquirySteps`), so both phases render the same markup and only the
+ * words change; Family A has no such block and `copy.steps` is empty there.
+ */
+function stepsSection(ctx: RenderContext): string {
+  const { copy } = ctx;
+  if (copy.steps.length === 0) return "";
+  const items = copy.steps
+    .map(
+      (step, index) =>
+        `          <li><span class="step-num" aria-hidden="true">${index + 1}</span><span class="step-text">${esc(step)}</span></li>`,
+    )
+    .join("\n");
+  return `    <section class="section" id="how">
+      <div class="wrap">
+        <h2>${esc(copy.stepsHeading)}</h2>
+        <ol class="steps">
+${items}
+        </ol>
+      </div>
+    </section>`;
+}
+
+/**
+ * The extras card: the record's own facts, one per line, in the client's words. A
+ * record with none of them renders **no card at all** — no heading, no empty list, no
+ * generic filler (design spec §4).
+ */
+function extrasSection(ctx: RenderContext): string {
+  const { copy, record, profile } = ctx;
+  const lines = extrasLines({ record, profileKey: profile.key, labels: copy.ui });
+  if (lines.length === 0) return "";
+  const items = lines
+    .map((line) => `          <div class="extras-item"><dt>${esc(line.label)}</dt><dd>${esc(line.value)}</dd></div>`)
+    .join("\n");
+  return `    <section class="section" id="extras">
+      <div class="wrap">
+        <h2>${esc(copy.ui.extrasHeading)}</h2>
+        <dl class="card extras">
+${items}
+        </dl>
+      </div>
+    </section>`;
+}
+
+/**
+ * One page, complete: shell, content, footer. Every page carries the banner, the
+ * disclaimer and its own copy of whatever compliance line belongs to its content,
+ * because compliance is per-page and never inherited.
+ */
 export function renderPage(ctx: RenderContext, id: PageId): string {
   const { record, copy, delivery } = ctx;
   const spec = PAGE_SPECS[id];
-  const body = (() => {
-    switch (id) {
-      case "services":
-        return `${pageHead(ctx, id)}
-    <section class="section">
-      <div class="wrap">
-${servicesBlock(record, 2)}
-      </div>
-    </section>
-
-${hoursAddressSection(ctx)}
-
-${contactCtaSection(ctx, true)}`;
-      case "about":
-        return `${pageHead(ctx, id)}
-${aboutSection(ctx, copy.about)}
-
-${hoursAddressSection(ctx)}
-
-${contactCtaSection(ctx, true)}`;
-      case "contact":
-        return `${pageHead(ctx, id)}
-${contactFormSection(ctx)}
-
-${hoursAddressSection(ctx)}`;
-      case "privacy":
-        return `${pageHead(ctx, id)}
-${privacySection(ctx)}`;
-      default:
-        return `${heroSection(ctx)}
-
-${aboutSection(ctx, copy.about.slice(0, 1))}
-
-    <section class="section section--alt" id="services">
-      <div class="wrap">
-        <h2>${esc(copy.offeringPlural.charAt(0).toUpperCase() + copy.offeringPlural.slice(1))}</h2>
-        <p class="muted">${esc(copy.servicesIntro)}</p>
-${servicesBlock(record, 3)}
-      </div>
-    </section>
-
-${hoursAddressSection(ctx)}
-
-${contactCtaSection(ctx, true)}`;
-    }
-  })();
+  // The page's blocks, in this family's order. A block that renders nothing — the
+  // extras card on a record with no extras, the steps on an appointment page — is
+  // dropped rather than left as an empty section.
+  const body = SECTION_ORDER[copy.conversion.family][id]
+    .map((section) => sectionHtml(ctx, id, section))
+    .filter((block) => block !== "")
+    .join("\n\n");
 
   return `<!doctype html>
 <html lang="en-CA">
@@ -994,9 +1152,47 @@ a:hover { text-decoration-thickness: 2px; }
 
 .about-photo { margin-top: var(--s-4); border-radius: var(--r-lg); }
 
+/* --------------------------------------------------------------- how it works */
+
+/* Family B's three steps. The same metric rhythm as .hours-row and .extras-item, so
+   the page has one list language rather than three. */
+.steps { list-style: none; margin: var(--s-5) 0 0; padding: 0; max-width: 34rem; }
+.steps li { display: flex; gap: var(--s-4); padding: var(--s-3) 0; border-bottom: var(--rule); }
+.steps li:last-child { border-bottom: 0; }
+.step-num {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--r-sm);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: var(--fs-small);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.step-text { color: var(--ink); }
+
+/* The extras card: the record's own facts, in the client's own words. Identical
+   metrics to .hours-row, so the two cards read as siblings. */
+.extras { margin: var(--s-5) 0 0; max-width: 34rem; overflow: hidden; }
+.extras-item { padding: var(--s-3) var(--s-4); border-bottom: var(--rule); }
+.extras-item:last-child { border-bottom: 0; }
+.extras-item dt {
+  margin: 0 0 var(--s-1);
+  font-size: var(--fs-label);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.extras-item dd { margin: 0; font-size: 0.9375rem; color: var(--ink); }
+
 /* ------------------------------------------------------------ contact + form */
 
-.form-notice {
+.form-notice,
+.notice {
   margin: var(--s-5) 0;
   padding: var(--s-4) var(--s-5);
   background: var(--accent-soft);
@@ -1006,11 +1202,31 @@ a:hover { text-decoration-thickness: 2px; }
   font-size: 0.9375rem;
 }
 
+/* The form is two field sets — your details, then the request itself (design spec §2).
+   The vocabulary it needs beyond the text input: a fieldset, a small-caps legend, a
+   native select, and a chip group for checkboxes and radios. No new tokens: every value
+   below is one of the tokens above. */
+fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+
+.field-group { margin-top: var(--s-4); }
+.field-group--second { border-top: var(--rule); margin-top: var(--s-5); padding-top: var(--s-5); }
+.field-group-legend {
+  display: block;
+  width: 100%;
+  margin: 0 0 var(--s-4);
+  padding: 0;
+  font-size: var(--fs-label);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
 .contact-form { max-width: 34rem; margin-top: var(--s-5); }
 .field { margin-bottom: var(--s-4); }
 .field label { display: block; margin-bottom: var(--s-2); font-weight: 600; font-size: 0.9375rem; color: var(--ink); }
 .optional { font-weight: 400; color: var(--muted); }
-.field input, .field textarea {
+.field input, .field textarea, .field select {
   width: 100%;
   padding: 0.7rem 0.8rem;
   border: var(--rule);
@@ -1020,7 +1236,43 @@ a:hover { text-decoration-thickness: 2px; }
   font: inherit;
 }
 .field textarea { min-height: 8rem; resize: vertical; }
-.field input:focus-visible, .field textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.field input:focus-visible, .field textarea:focus-visible, .field select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* The select keeps the browser's own picker: it is better on a phone than anything we
+   would draw, it needs no script, and it costs nothing. */
+.field select { min-height: 2.75rem; }
+
+/* Choice chips: one component for checkboxes and radios. The input is visually hidden
+   but focusable, so the group still posts with JavaScript off and works by keyboard. */
+.choice-group { margin-bottom: var(--s-4); }
+.choice-group legend { display: block; margin-bottom: var(--s-2); padding: 0; font-weight: 600; font-size: 0.9375rem; color: var(--ink); }
+.choice-wrap { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.chip { display: inline-flex; position: relative; cursor: pointer; }
+.chip input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.chip-text {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+  padding: 0.4rem 0.9rem;
+  border: var(--rule);
+  border-radius: var(--r-md);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+.chip input:checked + .chip-text { background: var(--accent-soft); border-color: var(--accent); }
+.chip input:focus-visible + .chip-text { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* The preferred days, if the record states any, read as a date-picker strip rather
+   than as a form: 52x44 chips, five to seven to a row. */
+.choice-group--days .choice-wrap { display: grid; grid-template-columns: repeat(auto-fit, minmax(3.25rem, 1fr)); gap: var(--s-2); }
+.choice-group--days .chip-text { width: 100%; }
+
+.form-actions { margin: var(--s-5) 0 0; }
+.form-actions .button { width: 100%; }
+.form-note { margin: var(--s-3) 0 0; max-width: 34rem; font-size: var(--fs-small); color: var(--muted); }
 
 .hp { position: absolute; left: -9999px; height: 0; overflow: hidden; }
 
@@ -1103,6 +1355,7 @@ a:hover { text-decoration-thickness: 2px; }
   .site-nav a { min-height: 2rem; }
   .site-header .call-button { order: 3; }
   .page-head { padding: var(--s-8) 0 var(--s-6); }
+  .form-actions .button { width: auto; }
   .privacy-notice h2 { font-size: var(--fs-h3); }
   .footer-nav ul { flex-direction: row; flex-wrap: wrap; gap: var(--s-5); }
   .footer-nav a { min-height: 2rem; }
@@ -1130,6 +1383,23 @@ export function renderJs(): string {
   return `/* Site Sourced demo — contact form. No dependencies, no tracking, no storage. */
 (function () {
   "use strict";
+
+  // A service card links here as contact.html?service=<recorded name>#form. The query
+  // string does nothing by itself: with this script off the select keeps its default and
+  // the #form fragment still lands on the form. With it, the option whose value matches
+  // the parameter (case-insensitively) is selected — the option values are the recorded
+  // service names verbatim, which is the only reason that match can be made at all.
+  var service = document.getElementById("cf-service");
+  if (service) {
+    var wanted = null;
+    try { wanted = new URLSearchParams(window.location.search).get("service"); } catch (err) { wanted = null; }
+    if (wanted) {
+      var lower = wanted.toLowerCase();
+      for (var i = 0; i < service.options.length; i++) {
+        if (service.options[i].value.toLowerCase() === lower) { service.selectedIndex = i; break; }
+      }
+    }
+  }
 
   var form = document.getElementById("contact-form");
   if (!form) return;

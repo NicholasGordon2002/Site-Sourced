@@ -172,9 +172,21 @@ export function familyProblems(vars: { record: BusinessRecord; family: Conversio
 
 /* ------------------------------------------------------------------ the label */
 
-/** The primary contact label a build carries, and why. Recorded in the manifest. */
+/**
+ * The primary contact label a build carries, and why. Recorded in the manifest.
+ *
+ * The CTA label and the form's submit label are one decision, not two: on a build from
+ * a real business's record they are the same words, and on our own fictional fixture
+ * the call to action is the neutral `Contact Us` while the button under the form stays
+ * the plain `Send message` (WORKFLOW.md rule 8, owner decision 4 October). Resolved
+ * together here so no renderer has to remember the pairing — it renders what this
+ * returns, and `submitLabelProblems` fails the build if a page prints anything else.
+ */
 export interface PrimaryLabel {
+  /** The call to action on the hero, the CTA band and the service cards. */
   label: string;
+  /** The label on the form's submit button. */
+  submit: string;
   /** Which rule chose it: the owner's fictional-fixture decision, or the family. */
   source: "fictional fixture" | "family-aware";
   basis: string;
@@ -192,6 +204,15 @@ export const FAMILY_LABELS: Record<ConversionFamily, string> = {
  * and the notice naming who receives the message stays under the button.
  */
 export const NEUTRAL_CONTACT_LABEL = "Contact Us";
+
+/**
+ * The submit button's label on our own fictional fixture: the plainest thing a button
+ * that posts a message can say. It is not a family's call to action, because the
+ * fixture's page is a sales piece about Site Sourced rather than about a business —
+ * but it also makes no claim the page cannot keep, which is why it is `Send message`
+ * and never anything that sounds like a booking.
+ */
+export const NEUTRAL_SUBMIT_LABEL = "Send message";
 
 /** Family B's quote-shaped profiles: the ones whose job starts with a described scope. */
 const QUOTE_PROFILES = ["trades", "landscaping"];
@@ -219,6 +240,7 @@ export function resolvePrimaryLabel(
   if (record.source_kind === "fictional") {
     return {
       label: NEUTRAL_CONTACT_LABEL,
+      submit: NEUTRAL_SUBMIT_LABEL,
       source: "fictional fixture",
       basis:
         `the record is a fictional fixture (source_kind "fictional"), so the primary contact label is the neutral "${NEUTRAL_CONTACT_LABEL}" rather than a family's own call to action: ` +
@@ -234,6 +256,7 @@ export function resolvePrimaryLabel(
         : FAMILY_LABELS.inquiry;
   return {
     label,
+    submit: label,
     source: "family-aware",
     basis:
       `the record describes a real business (source_kind "${record.source_kind ?? "not declared"}"), so the primary contact label is the ${family} family's own (WORKFLOW.md rule 8; template-system.md §2.3–§2.4)` +
@@ -459,6 +482,47 @@ export function contactLabelProblems(vars: {
         );
       }
     }
+  }
+  return problems;
+}
+
+/**
+ * The form's submit button prints the label the build resolved, and only that.
+ *
+ * The submit label is the family's call to action (`Request an appointment` / `Ask for
+ * a quote` / `Send a message`) — lead ruling 1 of 30 Sept, which supersedes
+ * `template-system.md` §2.4's "Send inquiry" and the old `copy.ui.submit`. On our own
+ * fictional fixture it is the plain `Send message` while the call to action stays the
+ * neutral `Contact Us`: one decision, two strings, both from `resolvePrimaryLabel`.
+ *
+ * The check exists because the button is the one place a page could quietly promise
+ * something ("Book Now") that the family honesty guard would only catch if the word
+ * were already on its list — and because the manifest's `conversion.form.submit_label`
+ * has to be a fact about the bundle rather than a note about it.
+ */
+export function submitLabelProblems(vars: {
+  pages: { file: string; html: string }[];
+  label: PrimaryLabel;
+}): string[] {
+  const { pages, label } = vars;
+  const problems: string[] = [];
+  let seen = 0;
+  for (const page of pages) {
+    for (const m of page.html.matchAll(/<button\b[^>]*type="submit"[^>]*>([\s\S]*?)<\/button>/g)) {
+      seen += 1;
+      const printed = m[1]!.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
+      if (printed !== label.submit) {
+        problems.push(
+          `${page.file}: the submit button prints "${printed}" while the build resolved "${label.submit}" (${label.source}: ${label.basis}). ` +
+            `The button's label is the family's own call to action, resolved in src/demo/family.ts — edit it there, not in the template.`,
+        );
+      }
+    }
+  }
+  if (seen === 0) {
+    problems.push(
+      "no rendered page carries a submit button, so the form cannot be submitted at all — the contact page must always carry one.",
+    );
   }
   return problems;
 }
