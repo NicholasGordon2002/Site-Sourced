@@ -31,6 +31,7 @@ import {
   slugify,
 } from "./copy.ts";
 import { FORM_FIELDS } from "./fields.ts";
+import { contactLabelProblems, familyHonestyProblems, familyProblems } from "./family.ts";
 import { currentRetentionPractice, PRACTICE_FILE, readRetentionPractice, type RetentionPractice } from "./retention.ts";
 import type { FormDelivery } from "./delivery.ts";
 import { formDeliveryProblems, resolveDelivery } from "./delivery.ts";
@@ -269,6 +270,14 @@ export function complianceChecks(vars: {
   // operator practice in `ops/retention-log.md` (WORKFLOW.md rule 7).
   problems.push(...privacyNoticeProblems({ privacy, record, delivery, form, practice }));
   problems.push(...collectionProblems({ pages, privacy, form }));
+  // Which family this page is for, and whether it keeps that family's promises:
+  // an appointment page may request a time and never book one, an inquiry page may pass
+  // on a question and never promise a price, a timeline, a visit or a service area
+  // (WORKFLOW.md rule 3; template-system.md checklist #17). The label the page prints has
+  // to be the label the build resolved, so the manifest's own record is a fact.
+  problems.push(...familyProblems({ record, family: copy.conversion.family }));
+  problems.push(...familyHonestyProblems({ pages, record, family: copy.conversion.family }));
+  problems.push(...contactLabelProblems({ pages, label: copy.contactLabel }));
   problems.push(...externalReferenceProblems({ pages, css: vars.css ?? "", js: vars.js ?? "" }));
   problems.push(...placeholderProblems(pages));
   return problems;
@@ -647,6 +656,19 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
     },
     files: [...files, "manifest.json"].sort(),
     images,
+    /* Which family the page converts for, the rule that decided it, and the primary
+       contact label with its own basis — derived in family.ts, recorded here so a
+       reviewer reads the result and the reason together. */
+    conversion: {
+      family: copy.conversion.family,
+      source: copy.conversion.source,
+      basis: copy.conversion.basis,
+      category_profile: copy.conversion.category_profile,
+      matched_category_word: copy.conversion.matched_category_word,
+      contact_label: copy.contactLabel.label,
+      contact_label_source: copy.contactLabel.source,
+      contact_label_basis: copy.contactLabel.basis,
+    },
     compliance: {
       robots_meta: "noindex, nofollow",
       banner_text: copy.banner,

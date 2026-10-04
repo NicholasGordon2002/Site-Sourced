@@ -18,6 +18,13 @@
 import { createHash } from "node:crypto";
 
 import { DEMO_OPERATOR, type FormDelivery, type FormDeliveryMode } from "./delivery.ts";
+import {
+  resolveFamily,
+  resolvePrimaryLabel,
+  wholeWordPattern,
+  type FamilyResolution,
+  type PrimaryLabel,
+} from "./family.ts";
 import { collectionSentence, FORM_FIELDS } from "./fields.ts";
 import type { ResolvedForm } from "./forms.ts";
 import { resolveProvenance, type Provenance } from "./provenance.ts";
@@ -147,11 +154,23 @@ const KEYWORDS: [string, string[]][] = [
 
 /** Pick the page profile from the record's category words. Never throws. */
 export function profileFor(record: BusinessRecord): CategoryProfile {
+  return profileMatch(record).profile;
+}
+
+/**
+ * The profile the record's category selects, **and the word that selected it**.
+ *
+ * The word is what makes the family derivation auditable: `family.ts` records in the
+ * manifest which table row fired and why, and "category X contains Y" is a fact a
+ * reviewer can check, where "we matched the salon profile" is not.
+ */
+export function profileMatch(record: BusinessRecord): { profile: CategoryProfile; matched: string | null } {
   const hay = `${record.category} ${record.category_group ?? ""}`.toLowerCase();
   for (const [key, words] of KEYWORDS) {
-    if (words.some((w) => hay.includes(w))) return PROFILES.find((p) => p.key === key)!;
+    const matched = words.find((w) => hay.includes(w));
+    if (matched) return { profile: PROFILES.find((p) => p.key === key)!, matched };
   }
-  return PROFILES[PROFILES.length - 1];
+  return { profile: PROFILES[PROFILES.length - 1]!, matched: null };
 }
 
 /** Lower-cased category for use inside a sentence, e.g. "barber shop". */
@@ -437,7 +456,19 @@ export interface DemoCopy {
   /** The heading over the link to the contact page, on every page but contact. */
   contactCtaHeading: string;
   contactCtaIntro: string;
-  contactCtaButton: string;
+  /**
+   * The primary contact label the call to action carries, and the rule that chose it.
+   * The label itself is `contactLabel.label` — one place, so the hero button, the CTA
+   * band, the manifest and the honesty guard cannot disagree about what the page asks a
+   * visitor to do (WORKFLOW.md rule 8, owner decision 4 October).
+   */
+  contactLabel: PrimaryLabel;
+  /**
+   * Which conversion family this build is for, and how that was derived from the record.
+   * Carried into the manifest, and the family whose honesty rules `complianceChecks`
+   * enforces on every page.
+   */
+  conversion: FamilyResolution;
   /** The printed phone number and email, next to the form or the contact link. */
   fallback: {
     heading: string;
@@ -470,7 +501,14 @@ export interface DemoCopy {
 }
 
 export function composeCopy(record: BusinessRecord, slug: string, form: ResolvedForm, delivery: FormDelivery): DemoCopy {
-  const profile = profileFor(record);
+  const matched = profileMatch(record);
+  const profile = matched.profile;
+  // Which of the two families this page is for, from the category or the record's own
+  // override, with the rule that decided it recorded for the manifest (family.ts).
+  const conversion = resolveFamily(record, { key: profile.key, matched: matched.matched });
+  // The primary contact label: neutral on our own fictional fixture, the family's own on
+  // anything derived from a real business's record (WORKFLOW.md rule 8).
+  const contactLabel = resolvePrimaryLabel(record, conversion.family, profile.key);
   const cat = categoryLower(record);
   // Where the details came from, and every line that depends on it. Derived from the
   // record's `source_kind` — never typed here — so a page cannot credit a source the
@@ -629,7 +667,8 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
     },
     contactCtaHeading: businessPhase ? `Contact ${record.name}` : "Contact",
     contactCtaIntro,
-    contactCtaButton: "Send a message",
+    contactLabel,
+    conversion,
     fallback: {
       heading: "Prefer email?",
       emailIntro: "Write to us directly:",
@@ -1204,13 +1243,13 @@ const BANNED = [
 
 /**
  * Whole-word matcher for a banned phrase, so "generated" does not trip "rated".
+ *
+ * The implementation lives in `family.ts` (`wholeWordPattern`) because the family honesty
+ * guard asks the same question — does the page say this word, and does the record already
+ * say it — and one matcher is enough for both.
  */
 function bannedPattern(phrase: string): RegExp {
-  const escaped = phrase
-    .split("")
-    .map((ch) => ("\\^$.*+?()[]{}|".includes(ch) ? `\\${ch}` : ch))
-    .join("");
-  return new RegExp(`(^|[^a-z])${escaped}([^a-z]|$)`, "i");
+  return wholeWordPattern(phrase);
 }
 
 /**
