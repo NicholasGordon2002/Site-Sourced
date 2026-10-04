@@ -251,6 +251,27 @@ tokens only.
 | Footer | `.site-footer` | Ink surface, two columns from `48rem`: identity + contact + disclaimer left; small print right |
 | Micro print | `.footer-small` | `--fs-small` (0.875rem) at `--footer-ink`. Never below 14px — this is the legal text and it must be readable, not merely present |
 
+### The family layer's own components (built 4 Oct; `src/demo/family-render.ts` + `src/demo/render.ts`)
+
+The form and the two family blocks use five components beyond the original list. Each is
+built from the existing tokens above — **no new token, no new font, no new request** — and
+each works with JavaScript off:
+
+| Component | Classes | What it is for |
+| --- | --- | --- |
+| A group of fields | `.field-group`, `.field-group--second`, `.field-group-legend` | The form is two field sets ("Your details", then the request). The legend is the small-caps label; the second group carries the top rule that separates the visitor from the request. |
+| A menu | `.field select` | The service/type-of-job/how-soon questions use the **native** picker: it is better on a phone than anything we would draw, it needs no script, and it is one rule on top of `.field input`. |
+| Choice chips | `.choice-group`, `.choice-wrap`, `.chip`, `.chip-text`, `.choice-group--days` | One component for checkbox and radio answers. The input is visually hidden but focusable, so the group posts with JavaScript off, works by keyboard, and needs no `:has()` — the checked state is drawn from the sibling `<span>`. The days group alone becomes a grid of equal chips (52×44), because it is a date-picker strip rather than a form. |
+| The action and its qualifier | `.form-actions`, `.form-note` | The submit button is the family's own call to action (below), and the sentence under it is the qualifier the button needs: on an appointment page "this is a request, not a confirmed booking", on a demonstration page "nothing here reaches {business}". |
+| A process list and the extras card | `.steps`, `.step-num`, `.step-text`; `.extras`, `.extras-item` | Family B's three lines, and the record's own facts. Both use the same metric rhythm as `.hours-row` (padding `--s-3 --s-4`, one rule between rows), so the page has one list language rather than three. |
+| The service-card action | `.service-action`, `.link-quiet--inline` | `Request this` / `Ask about this` on each service card — a quiet link, never a second button, and never a price. It carries the recorded service in `?service=`, which the form's own select matches. |
+
+**Two notices, one selector.** `.notice` is now the base selector and `.form-notice` sits
+beside it (`copy.ts`/`render.ts`): the **delivery notice keeps `.form-notice` exactly as it
+was**, byte for byte, because that is the element the existing assertions and the privacy
+tests measure, and the base selector exists so a second notice elsewhere can share the
+style without sharing that name. Do not rename one to the other.
+
 ### Icons and graphics
 
 No icon font, no sprite from a third party. Any icon is inline SVG with `stroke="currentColor"`
@@ -348,7 +369,7 @@ licence to claim a booking.
 
 ---
 
-## 7. The four-page structure (S2)
+## 7. The five-page structure, ordered per family (S2)
 
 One template, four pages, same header and footer on each. S1 builds the home page; S2 adds the
 rest by reusing these sections rather than inventing new ones.
@@ -372,6 +393,26 @@ rest by reusing these sections rather than inventing new ones.
   per bundle, never copied by hand.
 
 ---
+
+### The section order is data (`family-render.ts`)
+
+Each page is a list of named blocks, and the list is per family — so the two families'
+page shapes differ in one place today without a branch in the template, and any future
+difference belongs in the same table:
+
+| Page | Appointment (A) | Inquiry (B) |
+| --- | --- | --- |
+| `index.html` | hero, about (excerpt), services, hours, CTA | hero, about (excerpt), services, **how an inquiry works**, hours, CTA |
+| `services.html` | page head, services, hours, CTA | same |
+| `about.html` | page head, about, hours, extras, CTA | same |
+| `contact.html` | page head, form, hours | same |
+| `privacy.html` | page head, privacy notice | same |
+
+The page count is **five**, not four: the privacy notice is a page of its own and every
+bundle carries it. A block that renders nothing — the extras card on a record with no
+extras, the steps on an appointment page — is dropped rather than left as an empty
+section, and `familyRenderingProblems` fails the build if a page loses a block it should
+have or renders its blocks in another order (a rule in prose would rot: `WORKFLOW.md` 6).
 
 ## 8. Weight budget
 
@@ -486,3 +527,11 @@ re-encoding (§8); the three remaining pages and the navigation (§7); the icon 
 schematic map; the remaining category accents (§3); and the placeholder patterns for the
 no-photograph fallback, which S1 leaves as the existing gradient treatment so that the fallback
 still has somewhere to live.
+
+## 13. Where the family layer's CSS lives (4 Oct)
+
+The components in §5 are added to the same `styles.css` the template already emits — one
+stylesheet, one request, no inlined critical path and no third-party origin. They add no
+token (§3, §4 are unchanged), no font (§2) and no new file to the bundle; the measured
+weight in §8 is unaffected (the fixtures build at 138–139 KB at 360px, against a 400 KB
+target).

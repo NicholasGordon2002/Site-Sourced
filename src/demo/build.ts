@@ -22,6 +22,7 @@ import {
   collectionProblems,
   composeCopy,
   composePrivacy,
+  familyFields,
   guardCopy,
   illustrationLabel,
   isIllustrativeImage,
@@ -30,8 +31,8 @@ import {
   profileFor,
   slugify,
 } from "./copy.ts";
-import { FORM_FIELDS } from "./fields.ts";
-import { contactLabelProblems, familyHonestyProblems, familyProblems } from "./family.ts";
+import { contactLabelProblems, familyHonestyProblems, familyProblems, submitLabelProblems } from "./family.ts";
+import { SECTION_ORDER, extrasLines, familyRenderingProblems, type PageKey } from "./family-render.ts";
 import { currentRetentionPractice, PRACTICE_FILE, readRetentionPractice, type RetentionPractice } from "./retention.ts";
 import type { FormDelivery } from "./delivery.ts";
 import { formDeliveryProblems, resolveDelivery } from "./delivery.ts";
@@ -269,7 +270,7 @@ export function complianceChecks(vars: {
   // by a recorded fact — a provider fact from `docs/formspark.md`, or the one declared
   // operator practice in `ops/retention-log.md` (WORKFLOW.md rule 7).
   problems.push(...privacyNoticeProblems({ privacy, record, delivery, form, practice }));
-  problems.push(...collectionProblems({ pages, privacy, form }));
+  problems.push(...collectionProblems({ pages, privacy, form, fields: familyFields(record).fields }));
   // Which family this page is for, and whether it keeps that family's promises:
   // an appointment page may request a time and never book one, an inquiry page may pass
   // on a question and never promise a price, a timeline, a visit or a service area
@@ -278,6 +279,27 @@ export function complianceChecks(vars: {
   problems.push(...familyProblems({ record, family: copy.conversion.family }));
   problems.push(...familyHonestyProblems({ pages, record, family: copy.conversion.family }));
   problems.push(...contactLabelProblems({ pages, label: copy.contactLabel }));
+  problems.push(...submitLabelProblems({ pages, label: copy.contactLabel }));
+  // The family rendering layer: the fields the form asks for, the days the
+  // preferred-days control may offer, the extras card's lines, the three inquiry steps
+  // and the order the page's blocks are rendered in — each derived, each checked on the
+  // rendered page rather than trusted (WORKFLOW.md rule 6).
+  {
+    const fields = familyFields(record);
+    const extras = extrasLines({ record, profileKey: copy.conversion.category_profile, labels: copy.ui });
+    problems.push(
+      ...familyRenderingProblems({
+        pages,
+        record,
+        fields: fields.fields.map((f) => ({ name: f.name, id: f.id })),
+        openDays: fields.preferredDays.days,
+        steps: copy.steps,
+        extras,
+        order: SECTION_ORDER[copy.conversion.family] as unknown as Record<string, string[]>,
+        pageKeys: { index: "index", services: "services", about: "about", contact: "contact", privacy: "privacy" } satisfies Record<string, PageKey>,
+      }),
+    );
+  }
   problems.push(...externalReferenceProblems({ pages, css: vars.css ?? "", js: vars.js ?? "" }));
   problems.push(...placeholderProblems(pages));
   return problems;
@@ -437,6 +459,12 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   // team file that declares it (`ops/retention-log.md`). A missing or unreadable
   // declaration is a build failure, not a softer sentence: the notice's retention half
   // may only state what a recorded fact supports.
+  // The form this build renders: the family's own field set, minus everything the
+  // record cannot support (`fields.ts`). Derived once here and carried into the
+  // manifest, the self-check and the page — the same object, so the page, the notice
+  // and the manifest cannot disagree about what is asked for.
+  const fields = familyFields(record);
+  const extras = extrasLines({ record, profileKey: copy.conversion.category_profile, labels: copy.ui });
   const practiceRead = readRetentionPractice();
   const practice = practiceRead.practice;
   // The privacy notice is composed for the same phase as the form notice, from the
@@ -448,7 +476,11 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   if (form.warning) warnings.push(form.warning);
   if (!record.phone) warnings.push("record has no phone number — the header call button and the contact fallback are weaker without one.");
   if (!record.email) warnings.push("record has no email address — the form fallback line has no address to print.");
-  if (normaliseServices(record).length === 0) warnings.push("record lists no services — the services section says so plainly rather than inventing any.");
+  if (normaliseServices(record).length === 0) warnings.push("record lists no services — the services section says so plainly rather than inventing any, and the form asks for no service.");
+  for (const item of fields.omitted) {
+    warnings.push(`the form does not ask "${item.field}": ${item.why}`);
+  }
+  warnings.push(`preferred days: ${fields.preferredDays.basis}`);
   if (delivery.mode === "demo") {
     warnings.push(`demonstration phase: ${delivery.basis} — so the page carries the demonstration notice and no message reaches ${record.name}.`);
   }
@@ -668,6 +700,28 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
       contact_label: copy.contactLabel.label,
       contact_label_source: copy.contactLabel.source,
       contact_label_basis: copy.contactLabel.basis,
+      /* What the family rendering layer actually put on the pages: the fields the form
+         asks for (and the ones this record could not support, with the reason), the
+         labels it rendered, the under-button note, the days the hours rows state as
+         open, the section order, Family B's three steps, the extras lines and the
+         service-card action. A reviewer reads the result and the reason together. */
+      form: {
+        submit_label: copy.contactLabel.submit,
+        note_under_button: copy.formNote,
+        legends: fields.groups.map((group) => group.legend),
+        fields: fields.fields.map((field) => field.manifest),
+        omitted: fields.omitted.map((item) => ({ field: item.field, why: item.why })),
+        preferred_days: { days: fields.preferredDays.days, basis: fields.preferredDays.basis },
+      },
+      section_order: Object.fromEntries(
+        PAGE_IDS.map((id) => [PAGE_SPECS[id].file, SECTION_ORDER[copy.conversion.family][id] as string[]]),
+      ),
+      steps: copy.steps,
+      extras: extras.map((line) => ({ label: line.label, value: line.value, source: line.source, field: line.field })),
+      service_action: {
+        label: copy.conversion.family === "appointment" ? copy.ui.serviceActionRequest : copy.ui.serviceActionAsk,
+        parameter: "service",
+      },
     },
     compliance: {
       robots_meta: "noindex, nofollow",
@@ -709,7 +763,7 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
       },
       /* The field list the notice's collection sentence is composed from — the same
          list the form itself is rendered from (fields.ts). */
-      collection_fields: FORM_FIELDS.map((f) => f.manifest),
+      collection_fields: fields.fields.map((f) => f.manifest),
     },
     form: {
       provider: form.provider.label,
@@ -732,7 +786,8 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
       stores_submissions: form.provider.stores_submissions,
       free_tier: form.provider.free_tier,
       if_it_lapses: form.provider.if_it_lapses,
-      fields: FORM_FIELDS.map((f) => f.manifest),
+      fields: fields.fields.map((f) => f.manifest),
+      submit_label: copy.contactLabel.submit,
       fallback_shown:
         delivery.mode === "business"
           ? `The form sits next to ${record.email ? `the business's email address (${record.email})` : "no recorded email address"} and phone number, so an enquiry still reaches the business if the relay is ever down.`
