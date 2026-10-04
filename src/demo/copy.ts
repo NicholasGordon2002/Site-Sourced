@@ -15,9 +15,21 @@
  *      in this package that fetches a business URL.
  */
 
+import { createHash } from "node:crypto";
+
 import { DEMO_OPERATOR, type FormDelivery, type FormDeliveryMode } from "./delivery.ts";
+import { collectionSentence, FORM_FIELDS } from "./fields.ts";
 import type { ResolvedForm } from "./forms.ts";
 import { resolveProvenance, type Provenance } from "./provenance.ts";
+import {
+  currentRetentionPractice,
+  practiceSentence,
+  replyLine,
+  retentionProblems,
+  routeFor,
+  type RetentionCadence,
+  type RetentionPractice,
+} from "./retention.ts";
 import type { BusinessRecord, HoursRow, ManifestImage, ServiceItem } from "./types.ts";
 
 export interface CategoryProfile {
@@ -304,14 +316,54 @@ export const PRIVACY_IDENTITY = {
    * demos' form submissions, and it is a real, monitored address.
    */
   privacyEmail: "site-sourced-311e0184@ctomail.io",
+  /**
+   * Where *we* are, as our own notice states it. This is a fact about us rather than
+   * about a business, so it is declared here with the rest of our identity — it is never
+   * borrowed for a client's page, whose place comes from the record's own address and is
+   * dropped when the record has none (`composePrivacy`).
+   */
+  region: "Ontario, Canada",
 } as const;
 
 /**
  * The date the privacy notice's wording was last changed. A page claiming to be
  * updated on a date nobody touched it is a false statement, so this is a constant a
  * human moves when the copy changes — never the build time.
+ *
+ * The date and the wording are sealed together by `PRIVACY_NOTICE_SEAL` below.
  */
-export const PRIVACY_LAST_UPDATED = "29 September 2026";
+export const PRIVACY_LAST_UPDATED = "4 October 2026";
+
+/**
+ * The notice's text, as a reader meets it: title, lead, then every heading and
+ * paragraph. The date is deliberately *not* part of it — the seal is over the wording
+ * the date belongs to, and folding the date in would make the two impossible to compare.
+ */
+export function privacyNoticeText(notice: PrivacyNotice): string {
+  return [notice.title, notice.lead, ...notice.sections.flatMap((s) => [s.heading, ...s.paragraphs])].join("\n");
+}
+
+/**
+ * A digest over a set of composed notices, one line per notice so the set cannot be
+ * reordered or a notice dropped without changing it.
+ */
+export function privacyNoticeDigest(notices: PrivacyNotice[]): string {
+  const hash = createHash("sha256");
+  for (const notice of notices) hash.update(`${notice.mode}\n${privacyNoticeText(notice)}\n---\n`);
+  return hash.digest("hex").slice(0, 16);
+}
+
+/**
+ * The seal: the wording `PRIVACY_LAST_UPDATED` belongs to (audit §B6).
+ *
+ * `test/privacy-notice.test.ts` composes the notice for a fixed record in both phases
+ * and compares the digest with this value. If the sentences change and the date does
+ * not, the test fails and says which two things to move together; if the date changes
+ * without the wording changing, it fails too. The digest is taken over a fixed fixture
+ * rather than over the build's own record because the notice carries the business's own
+ * name — only a fixed composition is comparable.
+ */
+export const PRIVACY_NOTICE_SEAL = "4b67653c4c04fdcb";
 
 /**
  * The provider's label as a visitor should read it. The relay preset's own label is
@@ -647,9 +699,45 @@ export interface PrivacyNotice {
   /** Facts the owner has not supplied, so the page does not state them. */
   openItems: string[];
   lastUpdated: string;
+  /**
+   * What the retention section was composed from — the declared operator practice and
+   * the provider's own facts. Carried so the build (and a reviewer) can check the
+   * printed sentences against the facts that are supposed to back them, and so the
+   * manifest records the basis rather than the reader having to infer it.
+   */
+  retention: PrivacyRetentionBasis;
 }
 
-export function composePrivacy(record: BusinessRecord, form: ResolvedForm, delivery: FormDelivery): PrivacyNotice {
+/** The heading the retention section prints, and the key the guard looks it up by. */
+export const RETENTION_HEADING = "How long it is kept";
+
+export interface PrivacyRetentionBasis {
+  /** The declared routine, or null when no practice could be read. */
+  cadence: RetentionCadence | null;
+  /** The window the notice prints — "" when the declared routine supports no number. */
+  window: string;
+  /** The sentence printed about our own routine, or "" on a client's own site. */
+  practiceSentence: string;
+  /** The provider's own facts, as printed. */
+  providerFacts: string[];
+  /** Where the declaration was read from (the team file, or an override). */
+  source: string;
+}
+
+/**
+ * The privacy notice, composed from recorded facts and nothing else.
+ *
+ * `practice` is the declared operator practice (`retention.ts` reads it from
+ * `ops/retention-log.md`). It is a parameter rather than a hidden read so the build reads
+ * it once and can fail loudly when it is missing, and so a test can compose the notice
+ * for any routine the log might declare.
+ */
+export function composePrivacy(
+  record: BusinessRecord,
+  form: ResolvedForm,
+  delivery: FormDelivery,
+  practice: RetentionPractice | null = currentRetentionPractice(),
+): PrivacyNotice {
   const businessPhase = delivery.mode === "business";
   const label = providerLabel(form);
   const provider = form.provider;
@@ -658,17 +746,20 @@ export function composePrivacy(record: BusinessRecord, form: ResolvedForm, deliv
   const postal = PRIVACY_IDENTITY.postalAddress.trim();
   /** Our name as the notice prints it: the legal name when we have it, else the trading name. */
   const operatorName = PRIVACY_IDENTITY.legalName.trim() || DEMO_OPERATOR;
-  const operatorPlace = [operatorName, postal, "Ontario, Canada"].filter(Boolean).join(", ");
+  const operatorPlace = [operatorName, postal, PRIVACY_IDENTITY.region.trim()].filter(Boolean).join(", ");
+  /** The party whose account holds the message: the client, or us while this is a demo. */
+  const party = businessPhase ? businessName : DEMO_OPERATOR;
 
   const contactEmail = businessPhase ? publishedEmail : PRIVACY_IDENTITY.privacyEmail;
-  const contactRoute = contactEmail
-    ? `Email ${contactEmail}`
-    : "Use the phone number or email address printed on this page";
+  const route = routeFor(contactEmail);
 
+  // Composed from the fields the form renders (fields.ts), so the notice can never name
+  // fewer of them than the page asks for, and never one it does not ask for.
   const collect: PrivacySection = {
     heading: "What is collected",
     paragraphs: [
-      "Only what you type into the contact form: your name, your email address and your message.",
+      collectionSentence(),
+      ...provider.collection_extra,
       "There are no cookies, no analytics and no tracking on this page.",
     ],
   };
@@ -681,26 +772,65 @@ export function composePrivacy(record: BusinessRecord, form: ResolvedForm, deliv
     ],
   };
 
-  const retention: PrivacySection = {
-    heading: "How long it is kept",
-    paragraphs: [
-      `It is deleted within 30 days of arriving, or sooner once it has been answered. ${provider.post_deletion}`,
-    ],
+  // The provider's behaviour is not ours to change, so it is quoted into the provider
+  // preset from docs/formspark.md and printed as its **own sentences** — never appended
+  // mid-sentence, which is how a lower-case brand name and a missing full stop shipped.
+  const providerFacts = provider.retention_facts({ service: label, party });
+  const providerFactsText = providerFacts.join(" ");
+  // Our half of the retention section comes from the one declared practice. With no
+  // declared cadence the sentence is left out entirely and the build fails (a claim with
+  // no recorded fact behind it), rather than printing a routine nobody agreed to run.
+  const practiceLine =
+    !businessPhase && practice ? practiceSentence(practice, route) : "";
+  // On a client's own site the account is theirs, so we may not print a timetable on
+  // their behalf (WORKFLOW.md rule 8): the notice states the provider's facts, names the
+  // client as the one who deletes, and gives the visitor the route to ask.
+  const clientLine = businessPhase
+    ? `The account this form sends to is ${businessName}'s own, and ${businessName} deletes messages from it. We do not run that account and cannot promise a timetable for it. ${route.lead} to ask for yours to be deleted.`
+    : "";
+
+  const retentionSection: PrivacySection = {
+    heading: RETENTION_HEADING,
+    paragraphs: [providerFactsText, practiceLine || clientLine].filter((p) => p.length > 0),
   };
 
+  // The one deletion promise the provider makes impossible, when it makes one: it is
+  // provider-derived, so a provider that holds nothing back prints nothing.
+  const deletionException = provider.deletion_exception({ service: label });
+  const reply = practice ? replyLine(practice) : "";
   const choices: PrivacySection = {
     heading: "Your choices",
     paragraphs: [
-      `${contactRoute} to ask what is held about you, to correct it, or to have it deleted. We reply promptly.`,
+      [
+        `${route.lead} to ask what is held about you, to correct it, or to have it deleted.`,
+        businessPhase ? "" : reply,
+        deletionException,
+      ]
+        .filter(Boolean)
+        .join(" "),
     ],
   };
 
   const complaints: PrivacySection = {
     heading: "Complaints",
     paragraphs: [
-      `${contactRoute} first. If we do not resolve it, you can complain to the Office of the Privacy Commissioner of Canada.`,
+      `${route.lead} first. If we do not resolve it, you can complain to the Office of the Privacy Commissioner of Canada.`,
     ],
   };
+
+  const retention: PrivacyRetentionBasis = {
+    cadence: practice?.cadence ?? null,
+    window: practice?.window ?? "",
+    practiceSentence: practiceLine,
+    providerFacts,
+    source: practice?.source ?? "no retention practice declared",
+  };
+
+  // The client's notice names the client and no place we did not derive: a province or
+  // country we were never told is a claim about them, not about our record.
+  const businessPlace = [businessName, (record.address?.city ?? "").trim(), (record.address?.province ?? "").trim()]
+    .filter(Boolean)
+    .join(", ");
 
   if (businessPhase) {
     return {
@@ -710,13 +840,14 @@ export function composePrivacy(record: BusinessRecord, form: ResolvedForm, deliv
       contactEmail,
       openItems: [],
       lastUpdated: PRIVACY_LAST_UPDATED,
+      retention,
       sections: [
         {
           heading: "Who we are",
           paragraphs: [
-            businessName && publishedEmail
-              ? `${businessName}, Ontario, Canada. Privacy contact: ${publishedEmail}.`
-              : `${businessName}, Ontario, Canada. Privacy contact: the details printed on this page.`,
+            businessPlace && publishedEmail
+              ? `${businessPlace}. Privacy contact: ${publishedEmail}.`
+              : `${businessPlace}. Privacy contact: the details printed on this page.`,
           ],
         },
         {
@@ -730,11 +861,11 @@ export function composePrivacy(record: BusinessRecord, form: ResolvedForm, deliv
         {
           heading: "Where it goes",
           paragraphs: [
-            `The form is handled by ${label}, a third-party form service. ${provider.visitor_storage({ party: businessName })}`,
+            `The form is handled by ${label}, ${provider.service_descriptor}. ${provider.visitor_storage({ party: businessName })}`,
             `${label} operates internationally, so the message may be handled under the laws of the places where its servers sit.`,
           ],
         },
-        retention,
+        retentionSection,
         choices,
         complaints,
       ],
@@ -748,6 +879,7 @@ export function composePrivacy(record: BusinessRecord, form: ResolvedForm, deliv
     contactEmail,
     openItems: privacyOpenItems(),
     lastUpdated: PRIVACY_LAST_UPDATED,
+    retention,
     sections: [
       {
         heading: "Who we are",
@@ -756,7 +888,7 @@ export function composePrivacy(record: BusinessRecord, form: ResolvedForm, deliv
       {
         heading: "What this page is",
         paragraphs: [
-          `A design proposal we built for a local business. It is not ${businessName}'s website, and we do not run a website for them. ${businessName} has not seen this page and does not receive anything you send from it.`,
+          `An unsolicited design proposal from ${DEMO_OPERATOR}, made for a local business that has not asked for it. It is not ${businessName}'s website, and we do not run a website for them. ${businessName} has not seen this page and does not receive anything you send from it.`,
         ],
       },
       collect,
@@ -764,11 +896,11 @@ export function composePrivacy(record: BusinessRecord, form: ResolvedForm, deliv
       {
         heading: "Where it goes",
         paragraphs: [
-          `The form is handled by ${label}, a third-party form service. ${provider.visitor_storage({ party: DEMO_OPERATOR })}`,
+          `The form is handled by ${label}, ${provider.service_descriptor}. ${provider.visitor_storage({ party: DEMO_OPERATOR })}`,
           `${label} operates internationally, so the message may be handled under the laws of the places where its servers sit. Our responsibility for it continues while ${label} holds it.`,
         ],
       },
-      retention,
+      retentionSection,
       choices,
       complaints,
     ],
@@ -787,17 +919,43 @@ export function composePrivacy(record: BusinessRecord, form: ResolvedForm, deliv
  *     says the business receives the message,
  *   - a demonstration notice naming anyone but the working inbox as the privacy
  *     contact,
- *   - a delivered notice that still names Site Sourced as the accountable party.
+ *   - a delivered notice that still names Site Sourced as the accountable party,
+ *   - a notice that leaves out a fact the provider's own record states (what the service
+ *     logs besides the typed fields, what it keeps and for how long, the one message it
+ *     will not release early),
+ *   - a retention section that prints a window the declared operator routine does not
+ *     support, or names nobody as the party who deletes.
+ *
+ * The last two groups are the owner's rule (WORKFLOW.md rule 7): the notice may only
+ * state what is backed by a recorded fact, and both variants are checked.
  */
+
+/**
+ * A message the provider is holding back — its spam filter's copy. Named in the words a
+ * notice would reach for, so the check below catches the promise wherever it is made.
+ */
+const HELD_MESSAGE = /\b(?:spam|junk|quarantin\w*|filter\w*|held\s+back|holding|sets?\s+(?:it\s+)?aside)\b/i;
+
+/** A promise that *we* will delete it. */
+const DELETE_PROMISE = /\b(?:we|us|Site Sourced)\b[^.]*\bdelet\w+|\bdelet(?:e|es|ing)\b\s+(?:it|them|yours|the message)\b/i;
+
+/** Anything in the same sentence that says we cannot — which is the honest version. */
+const HELD_MESSAGE_CAVEAT = /\b(?:cannot|can not|can't|unable|only\b[^.]*\bcan\b|not\s+be\s+deleted|no one can|releases?\s+it|removes?\s+it)\b/i;
+
 export function privacyNoticeProblems(vars: {
   privacy: PrivacyNotice;
   record: BusinessRecord;
   delivery: FormDelivery;
+  form: ResolvedForm;
+  /** The declared operator practice, as read from `ops/retention-log.md`. */
+  practice: RetentionPractice | null;
 }): string[] {
-  const { privacy, record, delivery } = vars;
+  const { privacy, record, delivery, form, practice } = vars;
   const problems: string[] = [];
   const text = [privacy.lead, ...privacy.sections.flatMap((s) => [s.heading, ...s.paragraphs])].join(" ");
   const lower = text.toLowerCase();
+  const service = providerLabel(form);
+  const party = privacy.mode === "business" ? record.name : DEMO_OPERATOR;
 
   if (privacy.mode !== delivery.mode) {
     problems.push(
@@ -843,6 +1001,153 @@ export function privacyNoticeProblems(vars: {
     if (!lower.includes("site sourced does not receive")) {
       problems.push(
         "the delivered privacy notice does not say that Site Sourced does not receive a copy of the message, which is the one thing that changes when a demo becomes a client's own site.",
+      );
+    }
+    // The client's notice may not state a place we were never given: a province or
+    // country invented on their behalf is a claim about them, not about our record.
+    // Checked on the "Who we are" section alone, which is where a place would appear —
+    // the complaints section names the Office of the Privacy Commissioner of Canada,
+    // and that is a fact about the regulator, not a claim about the client.
+    const whoParagraph = (privacy.sections.find((s) => s.heading === "Who we are")?.paragraphs.join(" ") ?? "").toLowerCase();
+    const address = `${record.address?.city ?? ""} ${record.address?.province ?? ""}`.toLowerCase();
+    for (const place of ["ontario", "canada"]) {
+      if (whoParagraph.includes(place) && !address.includes(place)) {
+        problems.push(
+          `the client's privacy notice prints "${place}" although the record carries no such place — a place we did not derive is a claim about the client that our record cannot support. Derive it from the record's address or leave it out.`,
+        );
+      }
+    }
+  }
+
+  // The demonstration notice must say the page was not asked for: that framing is the
+  // one thing that stops the whole notice reading as if the business commissioned it.
+  if (privacy.mode === "demo" && !/unsolicited/i.test(text)) {
+    problems.push(
+      `the demonstration privacy notice does not say the page is unsolicited, which is the one framing that stops the notice reading as something ${record.name} asked us to write. Expected the words "unsolicited" on the page.`,
+    );
+  }
+
+  // Every fact the provider's own record states must be on the page. The provider's
+  // behaviour is not ours to soften, and this is the check that keeps `docs/formspark.md`
+  // and the printed notice coupled: drop a fact from the preset or from the notice and
+  // the build fails.
+  for (const fact of form.provider.retention_facts({ service, party })) {
+    if (fact && !text.includes(fact)) {
+      problems.push(
+        `the privacy notice does not state a retention fact the provider's own record carries, so a visitor is told less than the service actually does: "${fact}". The facts are quoted from docs/formspark.md into the provider preset in forms.ts; change the record and the preset together.`,
+      );
+    }
+  }
+  for (const fact of form.provider.collection_extra) {
+    if (fact && !text.includes(fact)) {
+      problems.push(
+        `the privacy notice's collection section does not state what the form service records besides the fields the visitor types: "${fact}". Omitting it understates what is captured, which is the class of claim this rule forbids.`,
+      );
+    }
+  }
+  if (!text.includes(form.provider.service_descriptor)) {
+    problems.push(
+      `the privacy notice does not describe the form service with its own recorded descriptor ("${form.provider.service_descriptor}"), so a page served by our own test relay could still call it a third-party service. The descriptor is provider-derived, never hard-coded.`,
+    );
+  }
+
+  // The one deletion promise the provider makes impossible — a message its spam filter
+  // is holding, which it keeps for 12 months and will not release early
+  // (`docs/formspark.md`). A sentence that names a held-back message and promises *we*
+  // will delete it, with nothing in the sentence saying we cannot, is the offer
+  // `research/privacy-wording.md` §4.2 says we can never keep. It is checked across the
+  // whole notice because that promise does not sit in one section: the retention
+  // section states the provider's limit and "Your choices" is where the promise would be
+  // made.
+  for (const sentence of text.split(/(?<=[.!?])\s+/)) {
+    if (!HELD_MESSAGE.test(sentence) || !DELETE_PROMISE.test(sentence) || HELD_MESSAGE_CAVEAT.test(sentence)) continue;
+    problems.push(
+      `the privacy notice promises a deletion we cannot perform: "${sentence.trim()}". ${service} holds a message its spam filter sets aside for 12 months and will not release it early, so an offer to delete one is a promise nothing can keep. Say who can remove it and when, and offer the visitor no more than that.`,
+    );
+  }
+
+  // The retention section, against the declared practice and the provider's facts.
+  const retentionSection = privacy.sections.find((s) => s.heading === RETENTION_HEADING);
+  const retentionText = retentionSection ? retentionSection.paragraphs.join(" ") : "";
+  if (!retentionSection) {
+    problems.push(
+      `the privacy notice carries no "${RETENTION_HEADING}" section, so it says nothing about how long a message is kept — the one place a visitor looks for it.`,
+    );
+  } else {
+    problems.push(
+      ...retentionProblems({
+        text: retentionText,
+        providerFacts: privacy.retention.providerFacts,
+        practiceSentence: privacy.retention.practiceSentence,
+        practice,
+        mode: privacy.mode,
+        party,
+      }),
+    );
+  }
+
+  return problems;
+}
+
+/**
+ * The collection list, against the fields the page actually renders.
+ *
+ * The privacy notice may name every field the form asks for and no other, and it must
+ * name all of them: the published page listed name, email and message while the form
+ * also asked for a phone number, which is exactly the understatement this rule forbids.
+ *
+ * The check runs on the rendered contact page rather than on the composer's own output,
+ * so it is the page and the notice that are compared — a future edit to the form in
+ * `render.ts` that forgets the notice fails the build.
+ */
+export function collectionProblems(vars: {
+  pages: { file: string; html: string }[];
+  privacy: PrivacyNotice;
+  form: ResolvedForm;
+}): string[] {
+  const { pages, privacy, form } = vars;
+  const problems: string[] = [];
+  const contact = pages.find((p) => p.html.includes('id="contact-form"'));
+  if (!contact) {
+    problems.push(
+      "no rendered page carries the contact form, so the privacy notice's collection list cannot be checked against the fields a visitor is actually asked for.",
+    );
+    return problems;
+  }
+
+  const formHtml = contact.html.slice(contact.html.indexOf("<form"), contact.html.indexOf("</form>"));
+  const rendered = new Set<string>();
+  for (const m of formHtml.matchAll(/<(?:input|textarea)[^>]*\bname="([^"]+)"/g)) {
+    const name = m[1]!;
+    // The honeypot and the provider's hidden instructions are not fields a visitor
+    // fills in, so they are not part of what the notice says is collected.
+    if (name.startsWith("_") || name === "botcheck" || /type="hidden"/.test(m[0]!)) continue;
+    rendered.add(name);
+  }
+  for (const m of formHtml.matchAll(/<input[^>]*type="hidden"[^>]*\bname="([^"]+)"/g)) rendered.delete(m[1]!);
+
+  const known = new Map(FORM_FIELDS.map((f) => [f.name, f]));
+  for (const name of rendered) {
+    if (!known.has(name)) {
+      problems.push(
+        `the contact form on ${contact.file} asks for a "${name}" field that the privacy notice has no phrase for, so the notice cannot say it is collected. Add it to FORM_FIELDS in fields.ts (and to the notice's list) or stop asking for it.`,
+      );
+    }
+  }
+
+  const collectionSection = privacy.sections.find((s) => s.heading === "What is collected");
+  const collectionText = collectionSection ? collectionSection.paragraphs.join(" ") : "";
+  const expected = collectionSentence();
+  if (!collectionText.includes(expected)) {
+    problems.push(
+      `the privacy notice's collection sentence does not match the fields the form renders. The form asks for ${[...rendered].join(", ")}, so the notice must say: "${expected}" (got: "${collectionText}"). A visitor must be told everything the form collects.`,
+    );
+  }
+  // A provider whose record states it logs more than the typed fields must say so.
+  for (const fact of form.provider.collection_extra) {
+    if (!collectionText.includes(fact)) {
+      problems.push(
+        `the privacy notice's collection section omits what ${providerLabel(form)} records besides the typed fields: "${fact}"`,
       );
     }
   }

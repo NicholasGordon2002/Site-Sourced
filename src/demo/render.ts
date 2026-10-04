@@ -39,6 +39,7 @@ import type { CategoryProfile } from "./copy.ts";
 import { normaliseHours, normaliseServices } from "./copy.ts";
 import { illustrationLabel, isIllustrativeImage } from "./copy.ts";
 import type { FormDelivery } from "./delivery.ts";
+import { FORM_FIELDS, type FormField } from "./fields.ts";
 import type { ResolvedForm } from "./forms.ts";
 
 export interface RenderContext {
@@ -440,6 +441,38 @@ ${fallbackBlock(ctx)}
     </section>`;
 }
 
+/**
+ * The form's own fields, rendered from `FORM_FIELDS`.
+ *
+ * One source of truth: the same list feeds the privacy notice's collection sentence and
+ * the bundle manifest, so the page cannot ask for a field the notice does not name (the
+ * defect the published page shipped — an optional phone number the notice never
+ * mentioned), and the notice cannot name a field the page does not ask for.
+ */
+function formFieldHtml(copy: DemoCopy, field: FormField): string {
+  const label =
+    field.optional
+      ? `${esc(copy.ui[field.labelKey])} <span class="optional">${esc(copy.ui.fieldOptional)}</span>`
+      : esc(copy.ui[field.labelKey]);
+  const attrs = [
+    `id="${field.id}"`,
+    `name="${field.name}"`,
+    `type="${field.type === "textarea" ? "text" : field.type}"`,
+    field.autocomplete ? `autocomplete="${field.autocomplete}"` : "",
+    field.optional ? "" : "required",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const control =
+    field.type === "textarea"
+      ? `            <textarea ${attrs} rows="5"></textarea>`
+      : `            <input ${attrs}>`;
+  return `          <div class="field">
+            <label for="${field.id}">${label}</label>
+${control}
+          </div>`;
+}
+
 function contactFormSection(ctx: RenderContext): string {
   const { copy, form } = ctx;
   const honeypot = form.provider.key === "web3forms" ? "botcheck" : "_gotcha";
@@ -457,22 +490,7 @@ function contactFormSection(ctx: RenderContext): string {
         <form class="contact-form" id="contact-form" method="POST" action="${esc(form.endpoint)}"
               data-encode="${esc(form.provider.encode)}" data-success="${esc(copy.formSuccess)}"
               data-failure="Sorry, that didn't send. Please use the email address or phone number below.">
-          <div class="field">
-            <label for="cf-name">${esc(copy.ui.fieldName)}</label>
-            <input id="cf-name" name="name" type="text" autocomplete="name" required>
-          </div>
-          <div class="field">
-            <label for="cf-email">${esc(copy.ui.fieldEmail)}</label>
-            <input id="cf-email" name="email" type="email" autocomplete="email" required>
-          </div>
-          <div class="field">
-            <label for="cf-phone">${esc(copy.ui.fieldPhone)} <span class="optional">${esc(copy.ui.fieldOptional)}</span></label>
-            <input id="cf-phone" name="phone" type="tel" autocomplete="tel">
-          </div>
-          <div class="field">
-            <label for="cf-message">${esc(copy.ui.fieldMessage)}</label>
-            <textarea id="cf-message" name="message" rows="5" required></textarea>
-          </div>
+${FORM_FIELDS.map((field) => formFieldHtml(copy, field)).join("\n")}
           <div class="hp" aria-hidden="true">
             <label for="cf-${honeypot}">${esc(copy.ui.honeypot)}</label>
             <input id="cf-${honeypot}" name="${honeypot}" type="text" tabindex="-1" autocomplete="off">

@@ -211,6 +211,21 @@ export interface DemoManifest {
      * before a real prospect sees a page.
      */
     open_items: string[];
+    /**
+     * What the retention section was composed from, so a reviewer can see the basis
+     * rather than infer it: the declared operator practice (`ops/retention-log.md`),
+     * the window it supports (null when it supports no number at all), and the
+     * provider's own facts as printed.
+     */
+    retention: {
+      declared_cadence: string | null;
+      window_printed: string | null;
+      practice_sentence: string | null;
+      provider_facts: string[];
+      source: string;
+    };
+    /** The fields the collection sentence names — the same list the form renders. */
+    collection_fields: string[];
   };
   form: {
     provider: string;

@@ -19,6 +19,7 @@ import { dirname, join, relative } from "node:path";
 import type { BundleResult, BusinessRecord, DemoManifest, ManifestImage } from "./types.ts";
 import type { DemoCopy, PrivacyNotice } from "./copy.ts";
 import {
+  collectionProblems,
   composeCopy,
   composePrivacy,
   guardCopy,
@@ -29,6 +30,8 @@ import {
   profileFor,
   slugify,
 } from "./copy.ts";
+import { FORM_FIELDS } from "./fields.ts";
+import { currentRetentionPractice, PRACTICE_FILE, readRetentionPractice, type RetentionPractice } from "./retention.ts";
 import type { FormDelivery } from "./delivery.ts";
 import { formDeliveryProblems, resolveDelivery } from "./delivery.ts";
 import { undeliverableAddressProblems } from "./addresses.ts";
@@ -133,8 +136,19 @@ export function complianceChecks(vars: {
   images: ManifestImage[];
   /** The privacy notice this bundle carries, composed for the same phase. */
   privacy: PrivacyNotice;
+  /**
+   * The declared operator practice (`ops/retention-log.md`). The build reads it once and
+   * passes it in; a caller that leaves it out gets the current declaration, so a missing
+   * one is still a failure rather than a silently softer notice.
+   */
+  practice?: RetentionPractice | null;
+  /** The stylesheet, so the check can see whether it loads anything externally. */
+  css?: string;
+  /** The bundle's only script, so the no-tracking sentence can be checked, not asserted. */
+  js?: string;
 }): string[] {
   const { pages, record, copy, form, delivery, images, privacy } = vars;
+  const practice = vars.practice === undefined ? currentRetentionPractice() : vars.practice;
   const problems: string[] = [];
   const illustrative = images.filter(isIllustrativeImage);
   const label = illustrationLabel(record.name);
@@ -182,9 +196,14 @@ export function complianceChecks(vars: {
       if (delivery.mode === "demo" && !html.includes("demonstration site")) {
         problems.push(`${on}: this bundle is in the demonstration phase but the page does not say so in words a visitor would recognise`);
       }
-    } else {
-      // The privacy notice prints none of the business's details: a notice about our
-      // own handling is not the place to repeat an unconfirmed phone number.
+    } else if (delivery.mode === "demo") {
+      // On a demonstration page the privacy notice prints none of the business's
+      // details: a notice about our own handling is not the place to repeat an
+      // unconfirmed phone number or email address.
+      //
+      // On a client's own site the notice must do the opposite — the account is theirs,
+      // so their own contact address is the route a visitor is given (`composePrivacy`,
+      // lead ruling in WORKFLOW.md rule 8). That is why this check is demo-only.
       if (caveat && html.includes(esc(caveat))) {
         problems.push(`${on}: carries the published-listings caveat although it prints none of the business's contact details — the caveat belongs only with the details it qualifies`);
       }
@@ -244,8 +263,114 @@ export function complianceChecks(vars: {
   //     support fails here (provenance.ts).
   problems.push(...undeliverableAddressProblems({ record, form, pages }));
   problems.push(...provenanceProblems({ record, provenance: copy.provenance, pages, deliveryMode: delivery.mode }));
-  problems.push(...privacyNoticeProblems({ privacy, record, delivery }));
+  // The privacy notice, both halves of it: the phase checks that already existed, plus
+  // the owner's rule that every sentence about collection, storage or deletion is backed
+  // by a recorded fact — a provider fact from `docs/formspark.md`, or the one declared
+  // operator practice in `ops/retention-log.md` (WORKFLOW.md rule 7).
+  problems.push(...privacyNoticeProblems({ privacy, record, delivery, form, practice }));
+  problems.push(...collectionProblems({ pages, privacy, form }));
+  problems.push(...externalReferenceProblems({ pages, css: vars.css ?? "", js: vars.js ?? "" }));
   problems.push(...placeholderProblems(pages));
+  return problems;
+}
+
+/**
+ * The bundle loads nothing from anywhere else, and `site.js` is its only script.
+ *
+ * This is what makes the privacy notice's sentence — "There are no cookies, no analytics
+ * and no tracking on this page" — an enforced fact rather than an assurance someone
+ * remembers. It is checked on every page and on the stylesheet:
+ *
+ *   - no inline `<script>`, and no `<script src>` other than the bundle's own `site.js`;
+ *   - nothing a page *loads* (script, stylesheet, image, frame, media, `srcset`) comes
+ *     from another origin;
+ *   - the stylesheet imports and points at no other origin either;
+ *   - the script itself touches no cookie, no web storage and no tracking beacon.
+ *
+ * Two things are deliberately **not** covered, and both are named in the manifest so a
+ * reader sees the boundary rather than assuming it:
+ *
+ *   - an `<a href>` to another site (the OpenStreetMap directions link) is navigation a
+ *     visitor chooses, not a resource the page fetches;
+ *   - the form's `action` is where a submission is *posted* when the visitor submits —
+ *     the one outbound request the page can make, and the reason the notice says "on this
+ *     page" rather than "never". With JavaScript off the browser navigates to that
+ *     service's own page, whose behaviour is not ours (docs/formspark.md records it).
+ */
+export function externalReferenceProblems(vars: { pages: RenderedPage[]; css: string; js: string }): string[] {
+  const { pages, css, js } = vars;
+  const problems: string[] = [];
+  const external = (value: string) => /^(?:https?:)?\/\//i.test(value.trim());
+
+  for (const page of pages) {
+    const on = `on ${page.file}`;
+
+    for (const tag of page.html.matchAll(/<script\b([^>]*)>/gi)) {
+      const attrs = tag[1] ?? "";
+      const src = /\bsrc="([^"]*)"/i.exec(attrs)?.[1]?.trim() ?? "";
+      if (!src) {
+        problems.push(
+          `${on}: carries an inline <script>. The privacy notice tells a visitor there is no tracking on the page, and nothing about an inline script can be read in the page source a visitor is looking at — keep the bundle's script in site.js.`,
+        );
+        continue;
+      }
+      if (external(src)) {
+        problems.push(
+          `${on}: loads a script from another origin (${src}). The page must load nothing from the network, or the "no cookies, no analytics and no tracking on this page" sentence it prints stops being true.`,
+        );
+      } else if (src !== "site.js") {
+        problems.push(
+          `${on}: loads the script "${src}". site.js is the bundle's only script; a second one is a file nobody has read for what it does.`,
+        );
+      }
+    }
+
+    for (const tag of page.html.matchAll(/<(?:link|img|iframe|source|embed|object|video|audio)\b[^>]*>/gi)) {
+      const element = tag[0]!;
+      for (const attr of ["href", "src", "data", "poster"]) {
+        const value = new RegExp(`\\b${attr}="([^"]*)"`, "i").exec(element)?.[1]?.trim() ?? "";
+        if (value && external(value)) {
+          problems.push(
+            `${on}: loads ${value} from another origin, so the page's "no tracking on this page" sentence is not something we can check. Every file a page needs must sit in its own folder.`,
+          );
+        }
+      }
+      for (const set of element.matchAll(/srcset="([^"]*)"/gi)) {
+        for (const candidate of (set[1] ?? "").split(",")) {
+          const value = candidate.trim().split(/\s+/)[0] ?? "";
+          if (value && external(value)) {
+            problems.push(`${on}: its srcset asks another origin for ${value}, which the page cannot be loading.`);
+          }
+        }
+      }
+    }
+  }
+
+  for (const [what, pattern] of [
+    ["an @import", /@import\s+(?:url\(\s*)?['"]?\s*(?:https?:)?\/\//i],
+    ["a url()", /url\(\s*['"]?\s*(?:https?:)?\/\//i],
+  ] as [string, RegExp][]) {
+    if (pattern.test(css)) {
+      problems.push(
+        `the stylesheet pulls a file from another origin (${what}), so a page using it is not the self-contained file the privacy notice describes. Fonts and images are bundled for exactly this reason.`,
+      );
+    }
+  }
+
+  for (const [what, pattern] of [
+    ["a cookie", /document\s*\.\s*cookie/i],
+    ["web storage", /\b(?:localStorage|sessionStorage|indexedDB)\b/i],
+    ["a tracking beacon", /\b(?:sendBeacon|new\s+Image\b)/i],
+    ["a direct XHR", /\bXMLHttpRequest\b/i],
+    ["an analytics call", /\b(?:gtag|dataLayer|analytics|mixpanel|segment|plausible|fathom)\b/i],
+  ] as [string, RegExp][]) {
+    if (pattern.test(js)) {
+      problems.push(
+        `site.js uses ${what}, which the privacy notice's "no cookies, no analytics and no tracking on this page" sentence says it does not. Either the script changes or the sentence does.`,
+      );
+    }
+  }
+
   return problems;
 }
 
@@ -299,11 +424,17 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   const form = resolveForm(record);
   const delivery = resolveDelivery(record, form);
   const copy = composeCopy(record, slug, form, delivery);
+  // The operator practice the privacy notice is allowed to print, read once from the
+  // team file that declares it (`ops/retention-log.md`). A missing or unreadable
+  // declaration is a build failure, not a softer sentence: the notice's retention half
+  // may only state what a recorded fact supports.
+  const practiceRead = readRetentionPractice();
+  const practice = practiceRead.practice;
   // The privacy notice is composed for the same phase as the form notice, from the
   // same derivation — never a flag someone set. Anything the owner has not supplied
   // (today: our legal name and mailing address) is recorded as an open item rather
   // than printed as a placeholder.
-  const privacy = composePrivacy(record, form, delivery);
+  const privacy = composePrivacy(record, form, delivery, practice);
   const warnings: string[] = [];
   if (form.warning) warnings.push(form.warning);
   if (!record.phone) warnings.push("record has no phone number — the header call button and the contact fallback are weaker without one.");
@@ -313,6 +444,11 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
     warnings.push(`demonstration phase: ${delivery.basis} — so the page carries the demonstration notice and no message reaches ${record.name}.`);
   }
   warnings.push(`provenance: ${copy.provenance.basis}.`);
+  warnings.push(
+    practice
+      ? `retention practice: "${practice.cadence}" — ${practice.routine} (${practice.declaration}, read from ${practice.source}). The privacy notice's retention sentence is composed from this and nothing else.`
+      : `retention practice: none declared — the privacy notice's retention section carries only the provider's facts, and the build fails until ${PRACTICE_FILE} declares a cadence.`,
+  );
   if (copy.provenance.kind === "fictional") {
     warnings.push(
       `this record is a fictional example business, so the page says so instead of crediting a real source — it must not be published as anyone's site, and its printed details are examples.`,
@@ -385,7 +521,11 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   const favicon = renderFavicon(record, profile);
   const readme = renderEditingReadme(ctx);
 
-  const problems = [...problemsBeforeWrite, ...complianceChecks({ pages, record, copy, form, delivery, images, privacy })];
+  const problems = [
+    ...problemsBeforeWrite,
+    ...practiceRead.problems,
+    ...complianceChecks({ pages, record, copy, form, delivery, images, privacy, practice, css, js }),
+  ];
   if (problems.length > 0) await fail(`compliance self-check failed for ${slug}:\n  - ${problems.join("\n  - ")}`);
 
   const files: string[] = [];
@@ -535,6 +675,19 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
       contact_email: privacy.contactEmail,
       last_updated: privacy.lastUpdated,
       open_items: privacy.openItems,
+      // What the retention section was composed from: the one declared operator
+      // practice, and the provider's own facts as printed. A reviewer can see the basis
+      // without reconstructing it from the page.
+      retention: {
+        declared_cadence: privacy.retention.cadence,
+        window_printed: privacy.retention.window || null,
+        practice_sentence: privacy.retention.practiceSentence || null,
+        provider_facts: privacy.retention.providerFacts,
+        source: privacy.retention.source,
+      },
+      /* The field list the notice's collection sentence is composed from — the same
+         list the form itself is rendered from (fields.ts). */
+      collection_fields: FORM_FIELDS.map((f) => f.manifest),
     },
     form: {
       provider: form.provider.label,
@@ -557,7 +710,7 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
       stores_submissions: form.provider.stores_submissions,
       free_tier: form.provider.free_tier,
       if_it_lapses: form.provider.if_it_lapses,
-      fields: ["name", "email", "phone (optional)", "message"],
+      fields: FORM_FIELDS.map((f) => f.manifest),
       fallback_shown:
         delivery.mode === "business"
           ? `The form sits next to ${record.email ? `the business's email address (${record.email})` : "no recorded email address"} and phone number, so an enquiry still reaches the business if the relay is ever down.`

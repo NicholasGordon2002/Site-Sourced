@@ -30,11 +30,32 @@ export interface FormProvider {
   /** Whether a submission is stored by the provider. */
   stores_submissions: string;
   /**
-   * What is left of a submission after we delete it there — one plain sentence the
-   * privacy notice prints, so the page states the provider's own post-deletion
-   * behaviour rather than promising an erasure the provider does not make.
+   * How the notice describes this provider to a visitor. Provider-derived, because a
+   * hard-coded "a third-party form service" contradicts itself the moment the provider
+   * is our own test relay.
    */
-  post_deletion: string;
+  service_descriptor: string;
+  /**
+   * What the provider itself records **besides** what the visitor typed — the IP
+   * address, the approximate location worked out from it, the request metadata. The
+   * privacy notice's collection list is built from the form's own rendered fields plus
+   * this, so the list cannot understate what is captured. Empty means our provider
+   * record says nothing about extra collection, and then the page claims nothing.
+   */
+  collection_extra: string[];
+  /**
+   * The provider's own retention facts, one sentence each, sentence case, quoted from
+   * `docs/formspark.md`. The notice prints these as their **own sentences** — never
+   * glued mid-sentence onto one of ours, which is how a lower-case brand name and a
+   * missing full stop reached a published page.
+   */
+  retention_facts: (vars: { service: string; party: string }) => string[];
+  /**
+   * The one deletion promise this provider makes impossible, stated honestly — a
+   * spam-held submission it will not release early. "" when the provider holds nothing
+   * back, because the notice must not invent a limit that does not exist.
+   */
+  deletion_exception: (vars: { service: string }) => string;
   needs_account: string;
   who_owns_the_account: string;
   free_tier: string;
@@ -72,7 +93,13 @@ export const PROVIDERS: Record<string, FormProvider> = {
     who_owns_the_account: "the client: they create the access key with their own address, so it is theirs to rotate or revoke",
     free_tier: "free plan: 250 submissions per month, no card, no monthly bill",
     if_it_lapses: "the form stops delivering; the page still shows the client's email address and phone number, so an enquiry is never lost",
-    post_deletion: "the relay states it forwards the message and keeps no copy, so there is nothing of yours left there to delete",
+    service_descriptor: "a third-party form service",
+    // Our record says nothing about extra collection for this provider (see
+    // research/privacy-wording.md, "What could not be confirmed"), so the notice
+    // claims nothing beyond the form's own fields.
+    collection_extra: [],
+    retention_facts: () => ["The relay states it forwards the message and keeps no copy, so there is nothing of yours left there to delete."],
+    deletion_exception: () => "",
     visitor_storage: ({ party }) => `The form passes your message to ${party} by email; the relay does not keep a copy.`,
     url: "https://web3forms.com/",
   },
@@ -95,7 +122,20 @@ export const PROVIDERS: Record<string, FormProvider> = {
     who_owns_the_account: "whoever's account holds the form — the form id belongs to it, so they can read, export or delete submissions themselves. In a delivered site that is the client's own account; on a demonstration page it is Site Sourced's",
     free_tier: "free plan: 250 submissions, 10 forms, 5 team members; more submissions are a one-off bundle, never a subscription",
     if_it_lapses: "the form stops accepting new submissions once the allowance is spent (recent ones are held back rather than discarded, and released by buying a bundle); the printed email address and phone number still work",
-    post_deletion: "formspark keeps a deleted submission recoverable for a further 30 days under its own policy",
+    service_descriptor: "a third-party form service",
+    // Quoted from docs/formspark.md, which quotes Formspark's own privacy policy:
+    // the IP address and the approximate location derived from it are kept 12 months
+    // independently of the message, and request metadata travels with the submission.
+    collection_extra: [
+      "The form service also records what comes with any web form, without you typing it: your IP address (the number that identifies the connection you are using), an approximate location worked out from that address, and basic request information such as your browser and the page or site you came from.",
+    ],
+    retention_facts: ({ service }) => [
+      `Your message is kept in ${service}'s account until it is deleted there, and ${service} never removes it by itself.`,
+      `A message its spam filter sets aside is kept for 12 months and cannot be deleted earlier, and a deleted message stays recoverable in ${service}'s records for a further 30 days.`,
+      `${service} also keeps the IP address and approximate location it recorded for 12 months, whether or not your message is still there.`,
+    ],
+    deletion_exception: ({ service }) =>
+      `If ${service}'s spam filter is holding a message, only ${service} can remove it, and ${service} releases it after 12 months.`,
     visitor_storage: ({ party }) =>
       `Formspark emails it to ${party} and also keeps a copy in ${party}'s own Formspark account until ${party} deletes it.`,
     url: "https://documentation.formspark.io/",
@@ -116,7 +156,10 @@ export const PROVIDERS: Record<string, FormProvider> = {
     who_owns_the_account: "the client: they generate the key with their own address",
     free_tier: "free plan (low monthly submission cap); paid plans exist but are not needed at a small business's volume",
     if_it_lapses: "the form stops delivering; the printed email address and phone number still work",
-    post_deletion: "the relay states it emails the message on and keeps no copy, so there is nothing of yours left there to delete",
+    service_descriptor: "a third-party form service",
+    collection_extra: [],
+    retention_facts: () => ["The relay states it emails the message on and keeps no copy, so there is nothing of yours left there to delete."],
+    deletion_exception: () => "",
     visitor_storage: ({ party }) => `The form passes your message to ${party} by email; the relay does not keep a copy.`,
     url: "https://www.staticforms.xyz/",
   },
@@ -131,7 +174,10 @@ export const PROVIDERS: Record<string, FormProvider> = {
     who_owns_the_account: "nobody — the address itself is the credential, which is also its weakness",
     free_tier: "free, no published monthly cap",
     if_it_lapses: "the form stops delivering; the printed email address and phone number still work",
-    post_deletion: "the relay has no dashboard, so no copy of your message is left there after delivery",
+    service_descriptor: "a third-party form service",
+    collection_extra: [],
+    retention_facts: () => ["The relay has no dashboard, so no copy of your message is left there after delivery."],
+    deletion_exception: () => "",
     visitor_storage: ({ party }) => `The form emails your message to ${party}; there is no dashboard holding a copy.`,
     url: "https://formsubmit.co/",
   },
@@ -146,7 +192,14 @@ export const PROVIDERS: Record<string, FormProvider> = {
     who_owns_the_account: "whoever runs the endpoint",
     free_tier: "n/a",
     if_it_lapses: "the form stops delivering; the printed email address and phone number still work",
-    post_deletion: "the endpoint this site was built with keeps no copy of the message body",
+    // Our own relay is not a third party, whatever the visitor's reading: the sentence
+    // the notice prints about it is derived from this descriptor, not hard-coded. The
+    // label already says whose relay it is (`providerLabel`), so the descriptor adds
+    // only what the label cannot.
+    service_descriptor: "not a commercial form service",
+    collection_extra: [],
+    retention_facts: () => ["The endpoint this site was built with keeps no copy of the message body."],
+    deletion_exception: () => "",
     visitor_storage: ({ party }) =>
       `The form posts your message to the endpoint this site was built with, a self-hosted relay run by ${party} — no commercial form service is involved.`,
     url: "",
