@@ -387,8 +387,8 @@ rest by reusing these sections rather than inventing new ones.
 - The current page is marked with `aria-current="page"` and a small accent underline.
 - Each page repeats the banner, the footer disclaimer and the contact caveat in full. Compliance
   is per-page, never inherited.
-- `noindex, nofollow` on every page, plus `rel="canonical"` to nothing — the demo must never
-  compete with the business's real site.
+- `noindex, nofollow` on every page, plus `rel="canonical"` to nothing — the demo never
+  appears in search results.
 - The contact page keeps the same form markup and the same delivery notice; the notice is derived
   per bundle, never copied by hand.
 

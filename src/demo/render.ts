@@ -18,7 +18,7 @@
  *   1. the proposal banner is the first content element, in normal flow;
  *   2. the same disclaimer sits next to the business's name in the footer, and the
  *      printed-details caveat sits with the details it belongs to;
- *   3. `noindex, nofollow`, so a proposal never competes with the business's own site.
+ *   3. `noindex, nofollow`, so a proposal never appears in search results.
  *
  * `site.js` is loaded by the contact page and by nothing else: the form is the only
  * thing on the site that needs script, so every other page works with JavaScript off
@@ -736,8 +736,7 @@ export function renderPage(ctx: RenderContext, id: PageId): string {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <!-- Compliance: this page must never appear in search results, and must never
-       compete with the business's own site. Do not remove this line. -->
+  <!-- Compliance: this page must never appear in search results. Do not remove this line. -->
   <meta name="robots" content="noindex, nofollow">
   <title>${esc(pageTitle(ctx, id))}</title>
   <meta name="description" content="${esc(pageDescription(ctx, id))}">
@@ -1601,7 +1600,7 @@ year, set to auto-renew.`}
 Built by Site Sourced
 ---------------------
 This page is an unsolicited design proposal, not the business's official site, and
-it is marked noindex so it never competes with one. Ask and it comes down.
+it is marked noindex, so it does not appear in search results. Ask and it comes down.
 ${businessPhase ? "" : `
 Where the details came from
 ---------------------------
@@ -1611,6 +1610,6 @@ written by hand — it is the same sentence a visitor reads in the footer:
   ${provenance.attribution || "(no source is declared for this record)"}
 
 The words on the pages are written by Site Sourced and are not the business's own, and
-nothing on them was copied from a website belonging to ${record.name}.
+nothing on them was copied from any other website.
 `}`;
 }
