@@ -40,7 +40,7 @@ import type { FormDelivery } from "./delivery.ts";
 import { formDeliveryProblems, resolveDelivery } from "./delivery.ts";
 import { undeliverableAddressProblems } from "./addresses.ts";
 import { provenanceProblems } from "./provenance.ts";
-import { KEY_PLACEHOLDER, resolveForm, type ResolvedForm } from "./forms.ts";
+import { KEY_PLACEHOLDER, notificationSubject, resolveForm, type ResolvedForm } from "./forms.ts";
 import { sourceImages } from "./images.ts";
 import { filesForSupplied, inspectSuppliedImage, manifestForSupplied } from "./supplied.ts";
 import { BUDGET, imageBudgetProblems, kb, pageLoadout, weightProblems } from "./weight.ts";
@@ -458,6 +458,11 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   const form = resolveForm(record);
   const delivery = resolveDelivery(record, form);
   const copy = composeCopy(record, slug, form, delivery);
+  // The notification email's title is family- and phase-derived, and the key it sits
+  // under is provider-specific — so it is set here, after both are known, against the
+  // key the provider reads (forms.ts `notificationSubject`). `resolveForm` runs earlier
+  // and carries no phase parameter.
+  form.hiddenFields[form.provider.subjectField] = notificationSubject(record.name, copy.conversion.family, delivery.mode);
   // The operator practice the privacy notice is allowed to print, read once from the
   // team file that declares it (`ops/retention-log.md`). A missing or unreadable
   // declaration is a build failure, not a softer sentence: the notice's retention half

@@ -36,7 +36,7 @@ import {
   visibleSentences,
   type ConversionFamily,
 } from "../src/demo/family.ts";
-import { resolveForm } from "../src/demo/forms.ts";
+import { notificationSubject, resolveForm } from "../src/demo/forms.ts";
 import { renderPages, type RenderContext, type RenderedPage } from "../src/demo/render.ts";
 import type { BusinessRecord, ManifestImage } from "../src/demo/types.ts";
 
@@ -375,4 +375,12 @@ test("each fixture derives the family and the label its own record decides", () 
     const rendered = render(rec);
     expect(`${slug}: ${checks(rendered).join(" | ")}`).toBe(`${slug}: `);
   }
+});
+
+/* ---------------------------------------------- 6. the notification title */
+test("the notification title is family- and phase-derived, never hand-written per provider", () => {
+  expect(notificationSubject("Example Barber Shop", "appointment", "demo")).toBe("Appointment request from Example Barber Shop (Site Sourced demo)");
+  expect(notificationSubject("Example Barber Shop", "appointment", "business")).toBe("Appointment request from Example Barber Shop");
+  expect(notificationSubject("Example Landscaping", "inquiry", "demo")).toBe("Quote request from Example Landscaping (Site Sourced demo)");
+  expect(notificationSubject("Example Landscaping", "inquiry", "business")).toBe("Quote request from Example Landscaping");
 });
