@@ -847,7 +847,9 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
          hard-coded to an OpenStreetMap/ODbL credit, which was false on every record
          that never touched OSM. */
       provenance: provenance.attribution,
-      takedown: "This demo comes down on request — reply to the email that sent it and it will be removed within a day.",
+      takedown: businessPhase
+        ? `Have something to correct? Contact ${record.name}.`
+        : "This page is an unsolicited proposal, not the business's own site. Ask and we will take it down.",
     },
     ui: UI,
   };
