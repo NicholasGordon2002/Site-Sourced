@@ -80,9 +80,9 @@ export interface Provenance {
   /**
    * The same sentence as HTML for the footer, where the one credit that carries a
    * licence — "ODbL 1.0" for OpenStreetMap — is a link rather than plain text. For the
-   * other sources this equals `attribution` (no markup), and the footer renders it
-   * without `esc()` because only this field, never the record's own words, supplies the
-   * markup.
+   * other sources this equals `attribution` (no markup). The footer renders it without
+   * `esc()`, so the one record field that reaches it — the business's own name, via the
+   * provenance tail — is escaped here (`tailHtml`). Nothing else in it is record-derived.
    */
   attributionHtml: string;
   /** What qualifies the printed contact details. `""` only on a delivered site. */
@@ -101,6 +101,22 @@ export interface Provenance {
   basis: string;
 }
 
+/**
+ * The HTML-entity escape used inside `attributionHtml`. It must match `render.ts`'s
+ * `esc()` byte-for-byte so that `pageText` (below) decodes exactly what this writes.
+ * Used only for the one record field that reaches the unescaped HTML footer — the
+ * business's own name. It is a function declaration so `resolveProvenance` can use it
+ * before its textual position.
+ */
+function escHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 /** One page's worth of copy, derived from the record's declared source. */
 export function resolveProvenance(record: BusinessRecord): Provenance {
   const kind = isRecordSourceKind(record.source_kind) ? record.source_kind : null;
@@ -108,6 +124,13 @@ export function resolveProvenance(record: BusinessRecord): Provenance {
 
   const tail = (who: string) =>
     `Copy, layout and imagery: Site Sourced. No logo, photograph or text was taken from any website belonging to ${who}. This page is marked noindex so it never competes with the business's own site.`;
+
+  // The same tail for the unescaped HTML variant. The one record field that reaches it —
+  // the business's own name — is escaped, because `attributionHtml` is injected without
+  // `esc()` (it carries the ODbL licence link). The rest of the sentence is our own
+  // constant, and nothing else from the record (address, source string) appears here.
+  const tailHtml = (who: string) =>
+    `Copy, layout and imagery: Site Sourced. No logo, photograph or text was taken from any website belonging to ${escHtml(who)}. This page is marked noindex so it never competes with the business's own site.`;
 
   // The licence text travels as a link to the licence, not as bare words (ruling R12).
   const ODBL_LINK = `<a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener noreferrer">ODbL 1.0</a>`;
@@ -117,7 +140,7 @@ export function resolveProvenance(record: BusinessRecord): Provenance {
       return {
         kind,
         attribution: `Business details come from public mapping data (© OpenStreetMap contributors, ODbL 1.0). ${tail(name)}`,
-        attributionHtml: `Business details come from public mapping data (© OpenStreetMap contributors, ${ODBL_LINK}). ${tail(name)}`,
+        attributionHtml: `Business details come from public mapping data (© OpenStreetMap contributors, ${ODBL_LINK}). ${tailHtml(name)}`,
         caveat: listingsCaveat(name),
         aboutLine: `Details are as published. Please confirm them with the business before relying on them.`,
         published: true,
@@ -127,7 +150,7 @@ export function resolveProvenance(record: BusinessRecord): Provenance {
       return {
         kind,
         attribution: `Business details come from public listings about this business. ${tail(name)}`,
-        attributionHtml: `Business details come from public listings about this business. ${tail(name)}`,
+        attributionHtml: `Business details come from public listings about this business. ${tailHtml(name)}`,
         caveat: listingsCaveat(name),
         aboutLine: `Details are as published. Please confirm them with the business before relying on them.`,
         published: true,
@@ -157,12 +180,16 @@ export function resolveProvenance(record: BusinessRecord): Provenance {
 }
 
 /**
- * The page with the five entities render.ts writes decoded again, so a sentence can be
- * looked for as a visitor reads it. Without this, every apostrophe in a caveat or in an
- * attribution would look "missing" because the page contains `&#39;`.
+ * A rendered page reduced to the text a visitor reads: markup tags stripped, then the
+ * entities `render.ts` and `escHtml` write decoded again. The provenance gate compares
+ * this text against `Provenance.attribution` (plain text) — never against
+ * `attributionHtml`'s link markup, because a pin on `<a href>` would break the next time
+ * the link is touched, and never against an escaped form, because an escaped name would
+ * never equal its own page text.
  */
-function readable(html: string): string {
+export function pageText(html: string): string {
   return html
+    .replace(/<[^>]*>/g, "")
     .replace(/&#39;/g, "'")
     .replace(/&quot;/g, '"')
     .replace(/&lt;/g, "<")
@@ -212,8 +239,8 @@ export function provenanceProblems(vars: {
 
   for (const page of pages) {
     const on = `on ${page.file}`;
-    const text = readable(page.html);
-    if (provenance.attributionHtml && !text.includes(provenance.attributionHtml)) {
+    const text = pageText(page.html);
+    if (provenance.attribution && !text.includes(provenance.attribution)) {
       problems.push(
         `${on}: the footer's provenance line for this record is not present. Every page states where the details came from, and it is derived from source_kind — ` +
           `expected: "${provenance.attribution}"`,
