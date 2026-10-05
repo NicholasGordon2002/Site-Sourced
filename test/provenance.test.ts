@@ -32,7 +32,7 @@ import { complianceChecks } from "../src/demo/build.ts";
 import { composeCopy, composePrivacy, profileFor } from "../src/demo/copy.ts";
 import { resolveDelivery } from "../src/demo/delivery.ts";
 import { resolveForm } from "../src/demo/forms.ts";
-import { OSM_ONLY_FRAGMENTS, fictionalCaveat, listingsCaveat, resolveProvenance } from "../src/demo/provenance.ts";
+import { OSM_ONLY_FRAGMENTS, fictionalCaveat, listingsCaveat, pageText, resolveProvenance } from "../src/demo/provenance.ts";
 import { esc, renderPages, type RenderContext } from "../src/demo/render.ts";
 import type { BusinessRecord } from "../src/demo/types.ts";
 
@@ -102,6 +102,11 @@ test("an OpenStreetMap-sourced record credits OpenStreetMap and the ODbL", () =>
   );
   const html = HOME(rec);
   expect(html).toContain("© OpenStreetMap contributors");
+  // The ODbL credit travels as a link to the licence, not as bare words (ruling R12).
+  expect(html).toContain('href="https://opendatacommons.org/licenses/odbl/1-0/"');
+  expect(html).toContain(">ODbL 1.0</a>");
+  // The page's own text (tags stripped) carries the same sentence as the plain attribution.
+  expect(pageText(html)).toContain(copy.footer.provenance);
   expect(html.split("as published in public listings — please confirm").length - 1).toBe(2);
   expect(checked(rec)).toEqual([]);
 });
@@ -112,7 +117,10 @@ test("a public-listings record credits public listings and no mapping data", () 
   expect(copy.footer.provenance).toContain("public listings about this business");
   for (const fragment of OSM_ONLY_FRAGMENTS) expect(copy.footer.provenance).not.toContain(fragment);
   expect(copy.contactCaveat).toBe(listingsCaveat(rec.name));
-  expect(HOME(rec).split("as published in public listings — please confirm").length - 1).toBe(2);
+  const html = HOME(rec);
+  expect(pageText(html)).toContain(copy.footer.provenance);
+  expect(html).not.toContain("opendatacommons.org/licenses/odbl");
+  expect(html.split("as published in public listings — please confirm").length - 1).toBe(2);
   expect(checked(rec)).toEqual([]);
 });
 
@@ -123,6 +131,7 @@ test("a fictional record credits neither, and says the business is invented", ()
 
   // No OpenStreetMap credit anywhere on the page, and no promise about listings.
   for (const fragment of OSM_ONLY_FRAGMENTS) expect(html).not.toContain(fragment);
+  expect(html).not.toContain("opendatacommons.org/licenses/odbl");
   expect(html).not.toContain("as published in public listings");
   expect(html).toContain("Fictional example business");
   // Compared through esc(), because that is how render.ts writes text into the page.
@@ -192,7 +201,11 @@ test("the public-listings caveat on a fictional record fails the build", () => {
 test("a page that loses its provenance line fails the build", () => {
   const rec = record({ source_kind: "public-listings" });
   const { ctx, rendered } = pages(rec);
-  const tampered = rendered.map((p) => ({ ...p, html: p.html.replaceAll(esc(ctx.copy.footer.provenance), "") }));
+  // Remove the line the way the footer actually writes it — the raw, unescaped
+  // `provenanceHtml` — not its `esc()`ed plain form, which no longer matches the page
+  // once the attribution carries markup/escaping. The gate compares stripped text, so a
+  // markup change to the link must not re-break this pin either way.
+  const tampered = rendered.map((p) => ({ ...p, html: p.html.replaceAll(ctx.copy.footer.provenanceHtml, "") }));
   expect(tampered[0]!.html).not.toContain("Business details come from public listings");
   const problems = complianceChecks({
     pages: tampered,
@@ -234,10 +247,14 @@ for (const [file, kind] of FIXTURES) {
     expect(provenance.attribution.length).toBeGreaterThan(0);
 
     const html = HOME(rec);
-    expect(html).toContain(esc(provenance.attribution));
+    // The page's text (tags stripped) must carry the plain attribution — comparing the
+    // link markup would break the next time the licence link is touched.
+    expect(pageText(html)).toContain(provenance.attribution);
     for (const fragment of OSM_ONLY_FRAGMENTS) {
       if (kind !== "openstreetmap") expect(html).not.toContain(fragment);
     }
+    // The ODbL licence link only belongs to an OpenStreetMap-sourced record.
+    expect(html.includes("opendatacommons.org/licenses/odbl")).toBe(kind === "openstreetmap");
     expect(html.includes(esc(listingsCaveat(rec.name)))).toBe(kind !== "fictional");
     expect(html.includes(esc(fictionalCaveat(rec.name)))).toBe(kind === "fictional");
 

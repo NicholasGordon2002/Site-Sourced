@@ -77,6 +77,14 @@ export interface Provenance {
   kind: RecordSourceKind | null;
   /** The footer's provenance sentence: what a visitor reads about where the details came from. */
   attribution: string;
+  /**
+   * The same sentence as HTML for the footer, where the one credit that carries a
+   * licence — "ODbL 1.0" for OpenStreetMap — is a link rather than plain text. For the
+   * other sources this equals `attribution` (no markup). The footer renders it without
+   * `esc()`, so it may only carry our own constant text and the ODbL link — no record
+   * field reaches it (the provenance tail no longer names the business).
+   */
+  attributionHtml: string;
   /** What qualifies the printed contact details. `""` only on a delivered site. */
   caveat: string;
   /** The About paragraph's sentence about where the details came from. */
@@ -98,14 +106,23 @@ export function resolveProvenance(record: BusinessRecord): Provenance {
   const kind = isRecordSourceKind(record.source_kind) ? record.source_kind : null;
   const name = record.name;
 
-  const tail = (who: string) =>
-    `Copy, layout and imagery: Site Sourced. No logo, photograph or text was taken from any website belonging to ${who}. This page is marked noindex so it never competes with the business's own site.`;
+  // The tail, shared by the two published variants. It states what the page does about
+  // search engines (noindex) without asserting that the business has a site of its own
+  // (finding 10): a lead with no website must not be told the page competes with a site
+  // it lacks. The business name no longer appears in this sentence, so the plain and
+  // HTML forms are the same string — nothing in the tail needs escaping any more.
+  const TAIL =
+    "Copy, layout and imagery: Site Sourced. No logo, photograph or text was taken from any other website. This page is marked noindex, so it does not appear in search results.";
+
+  // The licence text travels as a link to the licence, not as bare words (ruling R12).
+  const ODBL_LINK = `<a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener noreferrer">ODbL 1.0</a>`;
 
   switch (kind) {
     case "openstreetmap":
       return {
         kind,
-        attribution: `Business details come from public mapping data (© OpenStreetMap contributors, ODbL 1.0). ${tail(name)}`,
+        attribution: `Business details come from public mapping data (© OpenStreetMap contributors, ODbL 1.0). ${TAIL}`,
+        attributionHtml: `Business details come from public mapping data (© OpenStreetMap contributors, ${ODBL_LINK}). ${TAIL}`,
         caveat: listingsCaveat(name),
         aboutLine: `Every detail here — hours, address, contact details — came from public listings. Nothing on this page was copied from another website, and anything wrong or missing can be corrected in minutes.`,
         published: true,
@@ -114,7 +131,8 @@ export function resolveProvenance(record: BusinessRecord): Provenance {
     case "public-listings":
       return {
         kind,
-        attribution: `Business details come from public listings about this business. ${tail(name)}`,
+        attribution: `Business details come from public listings about this business. ${TAIL}`,
+        attributionHtml: `Business details come from public listings about this business. ${TAIL}`,
         caveat: listingsCaveat(name),
         aboutLine: `Every detail here — hours, address, contact details — came from public listings. Nothing on this page was copied from another website, and anything wrong or missing can be corrected in minutes.`,
         published: true,
@@ -124,6 +142,7 @@ export function resolveProvenance(record: BusinessRecord): Provenance {
       return {
         kind,
         attribution: `Fictional example business: the name, address, phone number, hours and services on this page were invented by Site Sourced to show the layout, and nothing here was taken from a real business, a public listing or a website. Copy, layout and imagery: Site Sourced. This page is marked noindex.`,
+        attributionHtml: `Fictional example business: the name, address, phone number, hours and services on this page were invented by Site Sourced to show the layout, and nothing here was taken from a real business, a public listing or a website. Copy, layout and imagery: Site Sourced. This page is marked noindex.`,
         caveat: fictionalCaveat(name),
         aboutLine: `Every detail here — hours, address, contact details — is invented for this fictional example business. Nothing on this page was copied from another website, and anything wrong or missing can be corrected in minutes.`,
         published: false,
@@ -133,6 +152,7 @@ export function resolveProvenance(record: BusinessRecord): Provenance {
       return {
         kind: null,
         attribution: "",
+        attributionHtml: "",
         caveat: "",
         aboutLine: "",
         published: false,
@@ -142,12 +162,16 @@ export function resolveProvenance(record: BusinessRecord): Provenance {
 }
 
 /**
- * The page with the five entities render.ts writes decoded again, so a sentence can be
- * looked for as a visitor reads it. Without this, every apostrophe in a caveat or in an
- * attribution would look "missing" because the page contains `&#39;`.
+ * A rendered page reduced to the text a visitor reads: markup tags stripped, then the
+ * entities `render.ts`'s `esc()` writes decoded again. The provenance gate compares
+ * this text against `Provenance.attribution` (plain text) — never against
+ * `attributionHtml`'s link markup, because a pin on `<a href>` would break the next time
+ * the link is touched, and never against an escaped form, because an escaped name would
+ * never equal its own page text.
  */
-function readable(html: string): string {
+export function pageText(html: string): string {
   return html
+    .replace(/<[^>]*>/g, "")
     .replace(/&#39;/g, "'")
     .replace(/&quot;/g, '"')
     .replace(/&lt;/g, "<")
@@ -197,7 +221,7 @@ export function provenanceProblems(vars: {
 
   for (const page of pages) {
     const on = `on ${page.file}`;
-    const text = readable(page.html);
+    const text = pageText(page.html);
     if (provenance.attribution && !text.includes(provenance.attribution)) {
       problems.push(
         `${on}: the footer's provenance line for this record is not present. Every page states where the details came from, and it is derived from source_kind — ` +

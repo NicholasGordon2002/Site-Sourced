@@ -18,7 +18,7 @@
  *   1. the proposal banner is the first content element, in normal flow;
  *   2. the same disclaimer sits next to the business's name in the footer, and the
  *      printed-details caveat sits with the details it belongs to;
- *   3. `noindex, nofollow`, so a proposal never competes with the business's own site.
+ *   3. `noindex, nofollow`, so a proposal never appears in search results.
  *
  * `site.js` is loaded by the contact page and by nothing else: the form is the only
  * thing on the site that needs script, so every other page works with JavaScript off
@@ -142,10 +142,10 @@ export function renderFavicon(record: BusinessRecord, profile: CategoryProfile):
 
 /* ------------------------------------------------------------ record sections */
 
-function hoursBlock(record: BusinessRecord): string {
+function hoursBlock(record: BusinessRecord, copy: DemoCopy): string {
   const { rows, note } = normaliseHours(record);
   if (rows.length === 0) {
-    return `        <p class="muted">No opening hours are recorded publicly for this business. Call to ask.</p>`;
+    return `        <p class="muted">${esc(copy.hoursEmpty)}</p>`;
   }
   const items = rows
     .map((r) => `          <div class="hours-row"><dt>${esc(r.days)}</dt><dd>${esc(r.hours)}</dd></div>`)
@@ -180,7 +180,7 @@ function servicesBlock(record: BusinessRecord, level: 2 | 3, copy: DemoCopy): st
   const services = normaliseServices(record);
   const heading = `h${level}`;
   if (services.length === 0) {
-    return `        <p class="muted">Nothing is recorded yet — this is where the business's ${esc(copyOffering(record))} would be listed.</p>`;
+    return `        <p class="muted">${esc(copy.servicesEmpty)}</p>`;
   }
   // The action asks for the thing; it never promises a price, which is why Family B
   // says "Ask about this" and never "Get a quote" (design spec §6).
@@ -192,10 +192,6 @@ function servicesBlock(record: BusinessRecord, level: 2 | 3, copy: DemoCopy): st
         `<p class="service-action"><a class="link-quiet link-quiet--inline" href="${esc(serviceActionHref(s.name))}">${esc(action)}</a></p></li>`,
     )
     .join("\n")}\n        </ul>`;
-}
-
-function copyOffering(record: BusinessRecord): string {
-  return record.category ? record.category.toLowerCase() : "services";
 }
 
 /** The hero photograph, if this bundle carries one. */
@@ -322,7 +318,7 @@ function fallbackBlock(ctx: RenderContext): string {
   return `        <div class="contact-fallback">
           <h3>${esc(copy.fallback.heading)}</h3>
 ${record.email ? `          <p>${esc(copy.fallback.emailIntro)} <a href="mailto:${esc(record.email)}">${esc(record.email)}</a></p>` : `          <p>${esc(copy.fallback.noEmail)}</p>`}
-${record.phone ? `          <p>${esc(copy.fallback.phoneIntro)} <a href="${tel}">${esc(record.phone)}</a>.</p>` : `          <p>${esc(copy.fallback.noPhone)}</p>`}
+${record.phone ? `          <p>${esc(copy.fallback.phoneIntro)} <a href="${tel}">${esc(record.phone)}</a></p>` : `          <p>${esc(copy.fallback.noPhone)}</p>`}
 ${copy.contactCaveat ? `          <!-- Compliance: the caveat that belongs with these printed details, derived from the
                record's source. Do not remove. -->
           <p class="muted">${esc(copy.contactCaveat)}</p>\n` : ""}        </div>`;
@@ -357,7 +353,7 @@ ${copy.contactCaveat && spec.printsDetails ? `        <!-- Compliance: the cavea
         <!-- Compliance: the provenance line, derived from the record's source. It may not
              credit a source the record does not name. Do not remove. -->
         <p class="footer-small">
-          ${esc(copy.footer.provenance)}
+          ${copy.footer.provenanceHtml}
         </p>
         <p class="footer-small">
           ${esc(copy.footer.takedown)}
@@ -371,12 +367,12 @@ function pageHead(ctx: RenderContext, id: PageId): string {
   const { record, copy } = ctx;
   const city = record.address?.city;
   const eyebrow = [record.category, city ? `${city}, ${record.address?.province ?? "ON"}` : ""].filter(Boolean).join(" · ");
+  const lead = copy.pages[id].lead;
   return `    <header class="page-head">
       <div class="wrap">
         <p class="eyebrow">${esc(eyebrow)}</p>
         <h1>${esc(copy.pages[id].title)}</h1>
-        <p class="lead">${esc(copy.pages[id].lead)}</p>
-      </div>
+${lead ? `        <p class="lead">${esc(lead)}</p>\n` : ""}      </div>
     </header>`;
 }
 
@@ -430,22 +426,20 @@ ${caption ? `          <!-- Compliance: an AI-generated placeholder is labelled 
 function hoursAddressSection(ctx: RenderContext): string {
   const { record, copy } = ctx;
   const addr = addressLine(record);
+  const hasStreet = Boolean(record.address?.street?.trim());
   return `    <section class="section" id="hours">
       <div class="wrap two-col">
         <div>
           <h2>Opening hours</h2>
           <p class="muted">${esc(copy.hoursIntro)}</p>
-${hoursBlock(record)}
+${hoursBlock(record, copy)}
         </div>
         <div>
-          <h2>Address</h2>
-          <p class="muted">${esc(copy.locationIntro)}</p>
-          ${addr ? `<address class="address">${esc(addr)}</address>` : `<p class="address muted">No street address recorded.</p>`}
-          <p class="address-links">
+          <h2>${esc(copy.locationHeading)}</h2>
+${copy.locationIntro ? `          <p class="muted">${esc(copy.locationIntro)}</p>\n` : ""}          ${addr ? `<address class="address">${esc(addr)}</address>` : `<p class="address muted">${esc(copy.locationEmpty)}</p>`}
+${hasStreet ? `          <p class="address-links">
             <a class="button button--small" href="${directionsLink(record)}" target="_blank" rel="noopener noreferrer">${esc(copy.ui.directions)}</a>
-            <a class="link-quiet" href="${osmLink(record)}" target="_blank" rel="noopener noreferrer">${esc(copy.ui.osm)}</a>
-          </p>
-        </div>
+          </p>\n` : ""}        </div>
       </div>
     </section>`;
 }
@@ -573,7 +567,7 @@ function contactFormSection(ctx: RenderContext): string {
 
         <form class="contact-form" id="contact-form" method="POST" action="${esc(form.endpoint)}"
               data-encode="${esc(form.provider.encode)}" data-success="${esc(copy.formSuccess)}"
-              data-failure="Sorry, that didn't send. Please use the email address or phone number below.">
+              data-failure="${esc(copy.formFailure)}">
 ${fields.groups.map((group, index) => fieldGroupHtml(copy, group, index)).join("\n")}
           <div class="hp" aria-hidden="true">
             <label for="cf-${honeypot}">${esc(copy.ui.honeypot)}</label>
@@ -660,8 +654,7 @@ function servicesHomeSection(ctx: RenderContext): string {
   return `    <section class="section section--alt" id="services">
       <div class="wrap">
         <h2>${esc(title)}</h2>
-        <p class="muted">${esc(copy.servicesIntro)}</p>
-${servicesBlock(record, 3, copy)}
+${copy.servicesIntro ? `        <p class="muted">${esc(copy.servicesIntro)}</p>\n` : ""}${servicesBlock(record, 3, copy)}
       </div>
     </section>`;
 }
@@ -743,8 +736,7 @@ export function renderPage(ctx: RenderContext, id: PageId): string {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <!-- Compliance: this page must never appear in search results, and must never
-       compete with the business's own site. Do not remove this line. -->
+  <!-- Compliance: this page must never appear in search results. Do not remove this line. -->
   <meta name="robots" content="noindex, nofollow">
   <title>${esc(pageTitle(ctx, id))}</title>
   <meta name="description" content="${esc(pageDescription(ctx, id))}">
@@ -1419,7 +1411,7 @@ export function renderJs(): string {
     event.preventDefault();
 
     if (hpField && hpField.value.trim() !== "") {
-      say("Thanks — your message is on its way.", "ok");
+      say("Thanks.", "ok");
       form.reset();
       return;
     }
@@ -1457,7 +1449,7 @@ export function renderJs(): string {
       })
       .then(function (ok) {
         if (ok) {
-          say(form.getAttribute("data-success") || "Thanks — your message is on its way.", "ok");
+          say(form.getAttribute("data-success") || "Thanks.", "ok");
           form.reset();
         } else {
           say(form.getAttribute("data-failure") || "Sorry, that didn't send.", "error");
@@ -1608,7 +1600,7 @@ year, set to auto-renew.`}
 Built by Site Sourced
 ---------------------
 This page is an unsolicited design proposal, not the business's official site, and
-it is marked noindex so it never competes with one. Ask and it comes down.
+it is marked noindex, so it does not appear in search results. Ask and it comes down.
 ${businessPhase ? "" : `
 Where the details came from
 ---------------------------
@@ -1618,6 +1610,6 @@ written by hand — it is the same sentence a visitor reads in the footer:
   ${provenance.attribution || "(no source is declared for this record)"}
 
 The words on the pages are written by Site Sourced and are not the business's own, and
-nothing on them was copied from a website belonging to ${record.name}.
+nothing on them was copied from any other website.
 `}`;
 }

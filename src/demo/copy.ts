@@ -444,11 +444,17 @@ export interface DemoCopy {
    */
   aboutExcerptLength: number;
   servicesIntro: string;
+  /** Shown in place of the services list when the record carries no services at all. */
+  servicesEmpty: string;
   hoursIntro: string;
+  /** Shown in place of the hours table when the record carries no hours at all. */
+  hoursEmpty: string;
   locationIntro: string;
+  /** The heading over the address block. */
+  locationHeading: string;
+  /** Shown in place of the address when the record carries no street address. */
+  locationEmpty: string;
   contactIntro: string;
-  /** The heading over the contact section: the business's name, or the demo's. */
-  contactHeading: string;
   formNotice: string;
   /** Which case the notice above was written for (carried into the manifest). */
   formNoticeDelivery: FormDeliveryMode;
@@ -469,6 +475,12 @@ export interface DemoCopy {
   provenance: Provenance;
   /** What the form's own success message may claim. */
   formSuccess: string;
+  /**
+   * What the form shows when the submission fails, as a `data-failure` attribute.
+   * Derived: it names a printed contact detail only where the page prints one, so a
+   * record with neither a phone number nor an email address still tells the truth.
+   */
+  formFailure: string;
   /**
    * The sentence under the submit button, derived by **delivery mode and family**
    * (design spec §2, lead ruling 1). It is the qualifier the button needs: on an
@@ -527,6 +539,7 @@ export interface DemoCopy {
   footer: {
     provenance: string;
     takedown: string;
+  provenanceHtml: string;
   };
   /** Labels and buttons: shell furniture a visitor reads but that is not a claim. */
   ui: UiCopy;
@@ -693,15 +706,24 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
     provenance.aboutLine,
   ];
 
+  // The intro names the list the page actually shows, and stops short of claiming it is
+  // complete. With no services recorded there is no intro at all (P4): the list's own
+  // position carries the empty line instead, so the sentence never repeats as a lead and
+  // a block line on the same page.
   const servicesIntro = serviceSentence
-    ? `What ${record.name} offers, as far as our records go. If what you need is not listed, call and ask.`
-    : `No ${profile.offeringPlural} were recorded for this business yet — a page of its own is where they would go.`;
+    ? `These are the ${profile.offeringPlural} recorded for ${record.name}. The list may be incomplete.`
+    : "";
+  const servicesEmpty = `Nothing is recorded for this business yet. This is where ${record.name}'s own list would go.`;
 
-  const hoursIntro = "Hours as recorded publicly. These can change without notice, so a quick call before you set out is worth it.";
+  const hoursIntro =
+    "Hours as recorded for this business. They can change without notice, so it is worth checking with the business before relying on them.";
+  const hoursEmpty = "No opening hours are recorded for this business.";
+  const locationHeading = `Where ${record.name} is`;
+  const locationEmpty = "No street address is recorded for this business.";
 
-  const locationIntro = record.address?.street
-    ? "Find the address below, or open directions in your maps app."
-    : "No street address is recorded publicly for this business — the phone number above is the reliable way to find it.";
+  // No sentence here: the heading says where the business is, and the address block
+  // (or its one honest line) says the rest. Render omits the empty <p>.
+  const locationIntro = "";
 
   // Everything about the form is chosen from the delivery the record actually
   // describes (delivery.ts) — never from a flag someone set by hand. In the
@@ -709,15 +731,31 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
   // it comes to us, and the business named on the page has not seen it.
   const businessPhase = delivery.mode === "business";
 
+  // The contact page's lead is only the clause that points at the printed details, and
+  // only when the page prints one (P6): the frozen form notice F5 already says the
+  // demonstration message comes to us, so the lead's first sentence repeated it, and a
+  // record that prints neither a phone number nor an email address must not promise a
+  // detail the page does not show (lead ruling R4).
+  const printedDetails = [record.phone?.trim() ? "phone number" : "", record.email?.trim() ? "email address" : ""].filter(Boolean);
   const contactIntro = businessPhase
     ? `Send a message to ${record.name} using the form below, or use the phone number or email address printed with it.`
-    : `This is a demonstration site, so the form below comes to ${DEMO_OPERATOR} rather than to ${record.name}. To reach ${record.name} itself, use the phone number or email address printed with it.`;
-
-  const contactHeading = businessPhase ? `Contact ${record.name}` : "About this demo";
+    : printedDetails.length === 2
+      ? `To reach ${record.name} itself, use the phone number or email address printed with it.`
+      : printedDetails.length === 1
+        ? `To reach ${record.name} itself, use the ${printedDetails[0]} printed with it.`
+        : "";
 
   const formSuccess = businessPhase
     ? `Thanks — your message is on its way to ${record.name}.`
     : `Thanks — your message has gone to ${DEMO_OPERATOR}, who built this demonstration. ${record.name} is not involved and will not see it.`;
+
+  // The failure line names a printed contact detail only where one prints with the
+  // form; a record with neither a phone number nor an email address must not be told
+  // to use a detail it does not show (four-page audit finding 9(b)).
+  const formFailure =
+    record.phone?.trim() || record.email?.trim()
+      ? "Sorry, that didn't send. Please use the contact details printed with this form."
+      : "Sorry, that didn't send. Please try again.";
 
   // The storage half of the notice is a privacy claim about a third party, so it is
   // built from the provider preset rather than written once here. Formspark's own
@@ -786,10 +824,13 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
     about,
     aboutExcerptLength: narrative.length > 0 ? 2 : 1,
     servicesIntro,
+    servicesEmpty,
     hoursIntro,
+    hoursEmpty,
     locationIntro,
+    locationHeading,
+    locationEmpty,
     contactIntro,
-    contactHeading,
     formNotice,
     formNote,
     stepsHeading: "How an inquiry works",
@@ -798,6 +839,7 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
     contactCaveat,
     provenance,
     formSuccess,
+    formFailure,
     banner,
     footerDisclaimer,
     offeringPlural: profile.offeringPlural,
@@ -832,18 +874,25 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
     contactLabel,
     conversion,
     fallback: {
-      heading: "Prefer email?",
-      emailIntro: "Write to us directly:",
-      phoneIntro: "Or call",
-      noEmail: "No email address is recorded publicly for this business — please use the phone number.",
-      noPhone: "No phone number is recorded publicly for this business.",
+      heading: "Email and phone",
+      emailIntro: "Email:",
+      // The phone label is the wording WORKFLOW.md rule 9 needs: a fictional fixture's
+      // invented number is an example and is never described as published, while a real
+      // business's own number (on a personalised demo or a client's own site) carries the
+      // plain label. The three-way split is decided by the record's source, not typed here.
+      phoneIntro: provenance.kind === "fictional" ? "Phone (example):" : "Phone:",
+      noEmail: "No email address is recorded for this business.",
+      noPhone: "No phone number is recorded for this business.",
     },
     footer: {
       /* Derived from the record's declared source — see provenance.ts. It used to be
          hard-coded to an OpenStreetMap/ODbL credit, which was false on every record
          that never touched OSM. */
       provenance: provenance.attribution,
-      takedown: "This demo comes down on request — reply to the email that sent it and it will be removed within a day.",
+      provenanceHtml: provenance.attributionHtml,
+      takedown: businessPhase
+        ? `Have something to correct? Contact ${record.name}.`
+        : "This page is an unsolicited proposal, not the business's own site. Ask and we will take it down.",
     },
     ui: UI,
   };

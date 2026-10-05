@@ -25,6 +25,13 @@ export interface FormProvider {
   endpoint: string;
   /** What the endpoint needs in the body, beyond the visitor's own fields. */
   hiddenFields: (vars: { recipient: string; business: string; key: string }) => Record<string, string>;
+  /**
+   * The hidden-field name this provider reads as the notification email's title. It is
+   * provider-specific, so the family- and phase-derived subject is set against this key
+   * by the build (see `notificationSubject`), never baked into `hiddenFields` where the
+   * phase is not yet known.
+   */
+  subjectField: string;
   /** How the browser should encode the POST. */
   encode: "json" | "form";
   /** Whether a submission is stored by the provider. */
@@ -82,9 +89,9 @@ export const PROVIDERS: Record<string, FormProvider> = {
     endpoint: "https://api.web3forms.com/submit",
     hiddenFields: ({ business, key }) => ({
       access_key: key,
-      subject: `Website enquiry from ${business} (Site Sourced demo)`,
       from_name: `${business} website`,
     }),
+    subjectField: "subject",
     encode: "json",
     // Read from web3forms.com's own documentation. Their stated model: the access
     // key is tied to the recipient address, and submissions are forwarded, not kept.
@@ -107,11 +114,11 @@ export const PROVIDERS: Record<string, FormProvider> = {
     key: "formspark",
     label: "Formspark",
     endpoint: "https://submit-form.com/{key}",
-    hiddenFields: ({ business }) => ({
-      // The only documented way to set the notification email's title. Formspark
-      // reads any field name starting with `_` as an instruction, not content.
-      "_email.template.title": `Website enquiry from ${business} (Site Sourced demo)`,
-    }),
+    hiddenFields: () => ({}),
+    // The only documented way to set the notification email's title: Formspark reads
+    // any field name starting with `_` as an instruction, not content. The title
+    // itself is set by the build against this key (see `notificationSubject`).
+    subjectField: "_email.template.title",
     encode: "form",
     // Sources, all read on 2026-09-28 (see docs/formspark.md for the quotes):
     //   formspark.io/legal/privacy-policy      — retention of submission content
@@ -144,12 +151,12 @@ export const PROVIDERS: Record<string, FormProvider> = {
     key: "staticforms",
     label: "StaticForms",
     endpoint: "https://api.staticforms.xyz/submit",
-    hiddenFields: ({ business, key, recipient }) => ({
+    hiddenFields: ({ key, recipient }) => ({
       accessKey: key,
-      subject: `Website enquiry from ${business} (Site Sourced demo)`,
       replyTo: "@",
       to: recipient,
     }),
+    subjectField: "subject",
     encode: "json",
     stores_submissions: "no — the provider states submissions are emailed on and not stored",
     needs_account: "no account — one access key, tied to the recipient's email address",
@@ -167,7 +174,8 @@ export const PROVIDERS: Record<string, FormProvider> = {
     key: "formsubmit",
     label: "FormSubmit",
     endpoint: "https://formsubmit.co/ajax/{recipient}",
-    hiddenFields: ({ business }) => ({ _subject: `Website enquiry from ${business} (Site Sourced demo)` }),
+    hiddenFields: () => ({}),
+    subjectField: "_subject",
     encode: "json",
     stores_submissions: "no dashboard, but the recipient address sits in the page source where scrapers can read it",
     needs_account: "no account — but the first submission needs a one-click activation email from the recipient",
@@ -185,7 +193,8 @@ export const PROVIDERS: Record<string, FormProvider> = {
     key: "relay",
     label: "self-hosted / test relay",
     endpoint: "{endpoint}",
-    hiddenFields: ({ business }) => ({ subject: `Website enquiry from ${business} (Site Sourced demo)` }),
+    hiddenFields: () => ({}),
+    subjectField: "subject",
     encode: "json",
     stores_submissions: "depends entirely on the endpoint — a relay we run ourselves must not keep the message body",
     needs_account: "no",
@@ -205,6 +214,22 @@ export const PROVIDERS: Record<string, FormProvider> = {
     url: "",
   },
 };
+
+/**
+ * The notification email's title, derived from the conversion family and the delivery
+ * phase — never hand-written per provider. Family A asks for a time, Family B for a
+ * described need; the demo phase names Site Sourced so a received notification cannot
+ * be mistaken for a message the business has seen, and the business phase drops that
+ * suffix because the message really does reach the business.
+ *
+ * The per-provider *key* the title is stored under stays provider-specific (see
+ * `FormProvider.subjectField`); the build sets it against that key after the delivery
+ * is resolved, because `resolveForm` runs before the phase is known.
+ */
+export function notificationSubject(business: string, family: "appointment" | "inquiry", phase: "demo" | "business"): string {
+  const kind = family === "appointment" ? "Appointment request" : "Quote request";
+  return phase === "demo" ? `${kind} from ${business} (Site Sourced demo)` : `${kind} from ${business}`;
+}
 
 export interface ResolvedForm {
   provider: FormProvider;
