@@ -180,7 +180,7 @@ function servicesBlock(record: BusinessRecord, level: 2 | 3, copy: DemoCopy): st
   const services = normaliseServices(record);
   const heading = `h${level}`;
   if (services.length === 0) {
-    return `        <p class="muted">Nothing is recorded yet — this is where the business's ${esc(copyOffering(record))} would be listed.</p>`;
+    return `        <p class="muted">${esc(copy.servicesEmpty)}</p>`;
   }
   // The action asks for the thing; it never promises a price, which is why Family B
   // says "Ask about this" and never "Get a quote" (design spec §6).
@@ -192,10 +192,6 @@ function servicesBlock(record: BusinessRecord, level: 2 | 3, copy: DemoCopy): st
         `<p class="service-action"><a class="link-quiet link-quiet--inline" href="${esc(serviceActionHref(s.name))}">${esc(action)}</a></p></li>`,
     )
     .join("\n")}\n        </ul>`;
-}
-
-function copyOffering(record: BusinessRecord): string {
-  return record.category ? record.category.toLowerCase() : "services";
 }
 
 /** The hero photograph, if this bundle carries one. */
@@ -371,12 +367,12 @@ function pageHead(ctx: RenderContext, id: PageId): string {
   const { record, copy } = ctx;
   const city = record.address?.city;
   const eyebrow = [record.category, city ? `${city}, ${record.address?.province ?? "ON"}` : ""].filter(Boolean).join(" · ");
+  const lead = copy.pages[id].lead;
   return `    <header class="page-head">
       <div class="wrap">
         <p class="eyebrow">${esc(eyebrow)}</p>
         <h1>${esc(copy.pages[id].title)}</h1>
-        <p class="lead">${esc(copy.pages[id].lead)}</p>
-      </div>
+${lead ? `        <p class="lead">${esc(lead)}</p>\n` : ""}      </div>
     </header>`;
 }
 
@@ -658,8 +654,7 @@ function servicesHomeSection(ctx: RenderContext): string {
   return `    <section class="section section--alt" id="services">
       <div class="wrap">
         <h2>${esc(title)}</h2>
-        <p class="muted">${esc(copy.servicesIntro)}</p>
-${servicesBlock(record, 3, copy)}
+${copy.servicesIntro ? `        <p class="muted">${esc(copy.servicesIntro)}</p>\n` : ""}${servicesBlock(record, 3, copy)}
       </div>
     </section>`;
 }
