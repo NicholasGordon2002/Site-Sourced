@@ -1419,7 +1419,7 @@ export function renderJs(): string {
     event.preventDefault();
 
     if (hpField && hpField.value.trim() !== "") {
-      say("Thanks — your message is on its way.", "ok");
+      say("Thanks.", "ok");
       form.reset();
       return;
     }
@@ -1457,7 +1457,7 @@ export function renderJs(): string {
       })
       .then(function (ok) {
         if (ok) {
-          say(form.getAttribute("data-success") || "Thanks — your message is on its way.", "ok");
+          say(form.getAttribute("data-success") || "Thanks.", "ok");
           form.reset();
         } else {
           say(form.getAttribute("data-failure") || "Sorry, that didn't send.", "error");
