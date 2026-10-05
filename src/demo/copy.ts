@@ -445,7 +445,13 @@ export interface DemoCopy {
   aboutExcerptLength: number;
   servicesIntro: string;
   hoursIntro: string;
+  /** Shown in place of the hours table when the record carries no hours at all. */
+  hoursEmpty: string;
   locationIntro: string;
+  /** The heading over the address block. */
+  locationHeading: string;
+  /** Shown in place of the address when the record carries no street address. */
+  locationEmpty: string;
   contactIntro: string;
   /** The heading over the contact section: the business's name, or the demo's. */
   contactHeading: string;
@@ -703,7 +709,11 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
     ? `What ${record.name} offers, as far as our records go. If what you need is not listed, call and ask.`
     : `No ${profile.offeringPlural} were recorded for this business yet — a page of its own is where they would go.`;
 
-  const hoursIntro = "Hours as recorded publicly. These can change without notice, so a quick call before you set out is worth it.";
+  const hoursIntro =
+    "Hours as recorded for this business. They can change without notice, so it is worth checking with the business before relying on them.";
+  const hoursEmpty = "No opening hours are recorded for this business.";
+  const locationHeading = "Address";
+  const locationEmpty = "No street address recorded.";
 
   const locationIntro = record.address?.street
     ? "Find the address below, or open directions in your maps app."
@@ -801,7 +811,10 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
     aboutExcerptLength: narrative.length > 0 ? 2 : 1,
     servicesIntro,
     hoursIntro,
+    hoursEmpty,
     locationIntro,
+    locationHeading,
+    locationEmpty,
     contactIntro,
     contactHeading,
     formNotice,

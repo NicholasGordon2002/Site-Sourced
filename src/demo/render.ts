@@ -142,10 +142,10 @@ export function renderFavicon(record: BusinessRecord, profile: CategoryProfile):
 
 /* ------------------------------------------------------------ record sections */
 
-function hoursBlock(record: BusinessRecord): string {
+function hoursBlock(record: BusinessRecord, copy: DemoCopy): string {
   const { rows, note } = normaliseHours(record);
   if (rows.length === 0) {
-    return `        <p class="muted">No opening hours are recorded publicly for this business. Call to ask.</p>`;
+    return `        <p class="muted">${esc(copy.hoursEmpty)}</p>`;
   }
   const items = rows
     .map((r) => `          <div class="hours-row"><dt>${esc(r.days)}</dt><dd>${esc(r.hours)}</dd></div>`)
@@ -435,12 +435,12 @@ function hoursAddressSection(ctx: RenderContext): string {
         <div>
           <h2>Opening hours</h2>
           <p class="muted">${esc(copy.hoursIntro)}</p>
-${hoursBlock(record)}
+${hoursBlock(record, copy)}
         </div>
         <div>
-          <h2>Address</h2>
+          <h2>${esc(copy.locationHeading)}</h2>
           <p class="muted">${esc(copy.locationIntro)}</p>
-          ${addr ? `<address class="address">${esc(addr)}</address>` : `<p class="address muted">No street address recorded.</p>`}
+          ${addr ? `<address class="address">${esc(addr)}</address>` : `<p class="address muted">${esc(copy.locationEmpty)}</p>`}
           <p class="address-links">
             <a class="button button--small" href="${directionsLink(record)}" target="_blank" rel="noopener noreferrer">${esc(copy.ui.directions)}</a>
             <a class="link-quiet" href="${osmLink(record)}" target="_blank" rel="noopener noreferrer">${esc(copy.ui.osm)}</a>
