@@ -164,7 +164,7 @@ test("a record without a narrative keeps the three composed paragraphs and a one
   expect(copy.about.length).toBe(3);
   expect(copy.about[0]).toBe("Example Barbers is a barber shop.");
   expect(copy.about[1]).toContain("The services recorded for Example Barbers are on the Services page:");
-  expect(copy.about[2]).toContain("invented for this fictional example business");
+  expect(copy.about[2]).toContain("fictional example business invented to show the layout");
   expect(copy.aboutExcerptLength).toBe(1);
 
   const aboutHtml = page(rendered, "about.html");

@@ -107,7 +107,7 @@ export function resolveProvenance(record: BusinessRecord): Provenance {
         kind,
         attribution: `Business details come from public mapping data (© OpenStreetMap contributors, ODbL 1.0). ${tail(name)}`,
         caveat: listingsCaveat(name),
-        aboutLine: `Every detail here — hours, address, contact details — came from public listings. Nothing on this page was copied from another website, and anything wrong or missing can be corrected in minutes.`,
+        aboutLine: `Details are as published. Please confirm them with the business before relying on them.`,
         published: true,
         basis: `the record's details came from OpenStreetMap (source_kind "openstreetmap"), so the page credits OpenStreetMap and the ODbL and pins the printed details to public listings`,
       };
@@ -116,7 +116,7 @@ export function resolveProvenance(record: BusinessRecord): Provenance {
         kind,
         attribution: `Business details come from public listings about this business. ${tail(name)}`,
         caveat: listingsCaveat(name),
-        aboutLine: `Every detail here — hours, address, contact details — came from public listings. Nothing on this page was copied from another website, and anything wrong or missing can be corrected in minutes.`,
+        aboutLine: `Details are as published. Please confirm them with the business before relying on them.`,
         published: true,
         basis: `the record's details came from public listings (source_kind "public-listings"), so the page credits public listings and credits no mapping data`,
       };
@@ -125,7 +125,7 @@ export function resolveProvenance(record: BusinessRecord): Provenance {
         kind,
         attribution: `Fictional example business: the name, address, phone number, hours and services on this page were invented by Site Sourced to show the layout, and nothing here was taken from a real business, a public listing or a website. Copy, layout and imagery: Site Sourced. This page is marked noindex.`,
         caveat: fictionalCaveat(name),
-        aboutLine: `Every detail here — hours, address, contact details — is invented for this fictional example business. Nothing on this page was copied from another website, and anything wrong or missing can be corrected in minutes.`,
+        aboutLine: `This is a fictional example business invented to show the layout. Nothing on this page is a real fact about a real business.`,
         published: false,
         basis: `the record's source_kind is "fictional", so the page says the business is a made-up example invented by Site Sourced and credits no listing and no mapping data`,
       };
