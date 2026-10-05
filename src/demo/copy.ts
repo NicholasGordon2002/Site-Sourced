@@ -444,6 +444,8 @@ export interface DemoCopy {
    */
   aboutExcerptLength: number;
   servicesIntro: string;
+  /** Shown in place of the services list when the record carries no services at all. */
+  servicesEmpty: string;
   hoursIntro: string;
   /** Shown in place of the hours table when the record carries no hours at all. */
   hoursEmpty: string;
@@ -706,9 +708,14 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
     provenance.aboutLine,
   ];
 
+  // The intro names the list the page actually shows, and stops short of claiming it is
+  // complete. With no services recorded there is no intro at all (P4): the list's own
+  // position carries the empty line instead, so the sentence never repeats as a lead and
+  // a block line on the same page.
   const servicesIntro = serviceSentence
-    ? `What ${record.name} offers, as far as our records go. If what you need is not listed, call and ask.`
-    : `No ${profile.offeringPlural} were recorded for this business yet — a page of its own is where they would go.`;
+    ? `These are the ${profile.offeringPlural} recorded for ${record.name}. The list may be incomplete.`
+    : "";
+  const servicesEmpty = `Nothing is recorded for this business yet. This is where ${record.name}'s own list would go.`;
 
   const hoursIntro =
     "Hours as recorded for this business. They can change without notice, so it is worth checking with the business before relying on them.";
@@ -811,6 +818,7 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
     about,
     aboutExcerptLength: narrative.length > 0 ? 2 : 1,
     servicesIntro,
+    servicesEmpty,
     hoursIntro,
     hoursEmpty,
     locationIntro,
