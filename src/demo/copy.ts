@@ -832,11 +832,15 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
     contactLabel,
     conversion,
     fallback: {
-      heading: "Prefer email?",
-      emailIntro: "Write to us directly:",
-      phoneIntro: "Or call",
-      noEmail: "No email address is recorded publicly for this business — please use the phone number.",
-      noPhone: "No phone number is recorded publicly for this business.",
+      heading: "Email and phone",
+      emailIntro: "Email:",
+      // The phone label is the wording WORKFLOW.md rule 9 needs: a fictional fixture's
+      // invented number is an example and is never described as published, while a real
+      // business's own number (on a personalised demo or a client's own site) carries the
+      // plain label. The three-way split is decided by the record's source, not typed here.
+      phoneIntro: provenance.kind === "fictional" ? "Phone (example):" : "Phone:",
+      noEmail: "No email address is recorded for this business.",
+      noPhone: "No phone number is recorded for this business.",
     },
     footer: {
       /* Derived from the record's declared source — see provenance.ts. It used to be

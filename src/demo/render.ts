@@ -322,7 +322,7 @@ function fallbackBlock(ctx: RenderContext): string {
   return `        <div class="contact-fallback">
           <h3>${esc(copy.fallback.heading)}</h3>
 ${record.email ? `          <p>${esc(copy.fallback.emailIntro)} <a href="mailto:${esc(record.email)}">${esc(record.email)}</a></p>` : `          <p>${esc(copy.fallback.noEmail)}</p>`}
-${record.phone ? `          <p>${esc(copy.fallback.phoneIntro)} <a href="${tel}">${esc(record.phone)}</a>.</p>` : `          <p>${esc(copy.fallback.noPhone)}</p>`}
+${record.phone ? `          <p>${esc(copy.fallback.phoneIntro)} <a href="${tel}">${esc(record.phone)}</a></p>` : `          <p>${esc(copy.fallback.noPhone)}</p>`}
 ${copy.contactCaveat ? `          <!-- Compliance: the caveat that belongs with these printed details, derived from the
                record's source. Do not remove. -->
           <p class="muted">${esc(copy.contactCaveat)}</p>\n` : ""}        </div>`;
