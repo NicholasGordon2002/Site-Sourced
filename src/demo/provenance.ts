@@ -77,6 +77,14 @@ export interface Provenance {
   kind: RecordSourceKind | null;
   /** The footer's provenance sentence: what a visitor reads about where the details came from. */
   attribution: string;
+  /**
+   * The same sentence as HTML for the footer, where the one credit that carries a
+   * licence — "ODbL 1.0" for OpenStreetMap — is a link rather than plain text. For the
+   * other sources this equals `attribution` (no markup), and the footer renders it
+   * without `esc()` because only this field, never the record's own words, supplies the
+   * markup.
+   */
+  attributionHtml: string;
   /** What qualifies the printed contact details. `""` only on a delivered site. */
   caveat: string;
   /** The About paragraph's sentence about where the details came from. */
@@ -101,11 +109,15 @@ export function resolveProvenance(record: BusinessRecord): Provenance {
   const tail = (who: string) =>
     `Copy, layout and imagery: Site Sourced. No logo, photograph or text was taken from any website belonging to ${who}. This page is marked noindex so it never competes with the business's own site.`;
 
+  // The licence text travels as a link to the licence, not as bare words (ruling R12).
+  const ODBL_LINK = `<a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener noreferrer">ODbL 1.0</a>`;
+
   switch (kind) {
     case "openstreetmap":
       return {
         kind,
         attribution: `Business details come from public mapping data (© OpenStreetMap contributors, ODbL 1.0). ${tail(name)}`,
+        attributionHtml: `Business details come from public mapping data (© OpenStreetMap contributors, ${ODBL_LINK}). ${tail(name)}`,
         caveat: listingsCaveat(name),
         aboutLine: `Details are as published. Please confirm them with the business before relying on them.`,
         published: true,
@@ -115,6 +127,7 @@ export function resolveProvenance(record: BusinessRecord): Provenance {
       return {
         kind,
         attribution: `Business details come from public listings about this business. ${tail(name)}`,
+        attributionHtml: `Business details come from public listings about this business. ${tail(name)}`,
         caveat: listingsCaveat(name),
         aboutLine: `Details are as published. Please confirm them with the business before relying on them.`,
         published: true,
@@ -124,6 +137,7 @@ export function resolveProvenance(record: BusinessRecord): Provenance {
       return {
         kind,
         attribution: `Fictional example business: the name, address, phone number, hours and services on this page were invented by Site Sourced to show the layout, and nothing here was taken from a real business, a public listing or a website. Copy, layout and imagery: Site Sourced. This page is marked noindex.`,
+        attributionHtml: `Fictional example business: the name, address, phone number, hours and services on this page were invented by Site Sourced to show the layout, and nothing here was taken from a real business, a public listing or a website. Copy, layout and imagery: Site Sourced. This page is marked noindex.`,
         caveat: fictionalCaveat(name),
         aboutLine: `This is a fictional example business invented to show the layout. Nothing on this page is a real fact about a real business.`,
         published: false,
@@ -133,6 +147,7 @@ export function resolveProvenance(record: BusinessRecord): Provenance {
       return {
         kind: null,
         attribution: "",
+        attributionHtml: "",
         caveat: "",
         aboutLine: "",
         published: false,
@@ -198,7 +213,7 @@ export function provenanceProblems(vars: {
   for (const page of pages) {
     const on = `on ${page.file}`;
     const text = readable(page.html);
-    if (provenance.attribution && !text.includes(provenance.attribution)) {
+    if (provenance.attributionHtml && !text.includes(provenance.attributionHtml)) {
       problems.push(
         `${on}: the footer's provenance line for this record is not present. Every page states where the details came from, and it is derived from source_kind — ` +
           `expected: "${provenance.attribution}"`,

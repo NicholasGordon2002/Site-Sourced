@@ -357,7 +357,7 @@ ${copy.contactCaveat && spec.printsDetails ? `        <!-- Compliance: the cavea
         <!-- Compliance: the provenance line, derived from the record's source. It may not
              credit a source the record does not name. Do not remove. -->
         <p class="footer-small">
-          ${esc(copy.footer.provenance)}
+          ${copy.footer.provenanceHtml}
         </p>
         <p class="footer-small">
           ${esc(copy.footer.takedown)}
@@ -430,6 +430,7 @@ ${caption ? `          <!-- Compliance: an AI-generated placeholder is labelled 
 function hoursAddressSection(ctx: RenderContext): string {
   const { record, copy } = ctx;
   const addr = addressLine(record);
+  const hasStreet = Boolean(record.address?.street?.trim());
   return `    <section class="section" id="hours">
       <div class="wrap two-col">
         <div>
@@ -439,13 +440,10 @@ ${hoursBlock(record, copy)}
         </div>
         <div>
           <h2>${esc(copy.locationHeading)}</h2>
-          <p class="muted">${esc(copy.locationIntro)}</p>
-          ${addr ? `<address class="address">${esc(addr)}</address>` : `<p class="address muted">${esc(copy.locationEmpty)}</p>`}
-          <p class="address-links">
+${copy.locationIntro ? `          <p class="muted">${esc(copy.locationIntro)}</p>\n` : ""}          ${addr ? `<address class="address">${esc(addr)}</address>` : `<p class="address muted">${esc(copy.locationEmpty)}</p>`}
+${hasStreet ? `          <p class="address-links">
             <a class="button button--small" href="${directionsLink(record)}" target="_blank" rel="noopener noreferrer">${esc(copy.ui.directions)}</a>
-            <a class="link-quiet" href="${osmLink(record)}" target="_blank" rel="noopener noreferrer">${esc(copy.ui.osm)}</a>
-          </p>
-        </div>
+          </p>\n` : ""}        </div>
       </div>
     </section>`;
 }

@@ -539,6 +539,7 @@ export interface DemoCopy {
   footer: {
     provenance: string;
     takedown: string;
+  provenanceHtml: string;
   };
   /** Labels and buttons: shell furniture a visitor reads but that is not a claim. */
   ui: UiCopy;
@@ -712,12 +713,12 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
   const hoursIntro =
     "Hours as recorded for this business. They can change without notice, so it is worth checking with the business before relying on them.";
   const hoursEmpty = "No opening hours are recorded for this business.";
-  const locationHeading = "Address";
-  const locationEmpty = "No street address recorded.";
+  const locationHeading = `Where ${record.name} is`;
+  const locationEmpty = "No street address is recorded for this business.";
 
-  const locationIntro = record.address?.street
-    ? "Find the address below, or open directions in your maps app."
-    : "No street address is recorded publicly for this business — the phone number above is the reliable way to find it.";
+  // No sentence here: the heading says where the business is, and the address block
+  // (or its one honest line) says the rest. Render omits the empty <p>.
+  const locationIntro = "";
 
   // Everything about the form is chosen from the delivery the record actually
   // describes (delivery.ts) — never from a flag someone set by hand. In the
@@ -875,6 +876,7 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
          hard-coded to an OpenStreetMap/ODbL credit, which was false on every record
          that never touched OSM. */
       provenance: provenance.attribution,
+      provenanceHtml: provenance.attributionHtml,
       takedown: businessPhase
         ? `Have something to correct? Contact ${record.name}.`
         : "This page is an unsolicited proposal, not the business's own site. Ask and we will take it down.",
