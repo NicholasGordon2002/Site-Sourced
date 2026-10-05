@@ -573,7 +573,7 @@ function contactFormSection(ctx: RenderContext): string {
 
         <form class="contact-form" id="contact-form" method="POST" action="${esc(form.endpoint)}"
               data-encode="${esc(form.provider.encode)}" data-success="${esc(copy.formSuccess)}"
-              data-failure="Sorry, that didn't send. Please use the email address or phone number below.">
+              data-failure="${esc(copy.formFailure)}">
 ${fields.groups.map((group, index) => fieldGroupHtml(copy, group, index)).join("\n")}
           <div class="hp" aria-hidden="true">
             <label for="cf-${honeypot}">${esc(copy.ui.honeypot)}</label>

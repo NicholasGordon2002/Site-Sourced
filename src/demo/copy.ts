@@ -470,6 +470,12 @@ export interface DemoCopy {
   /** What the form's own success message may claim. */
   formSuccess: string;
   /**
+   * What the form shows when the submission fails, as a `data-failure` attribute.
+   * Derived: it names a printed contact detail only where the page prints one, so a
+   * record with neither a phone number nor an email address still tells the truth.
+   */
+  formFailure: string;
+  /**
    * The sentence under the submit button, derived by **delivery mode and family**
    * (design spec §2, lead ruling 1). It is the qualifier the button needs: on an
    * appointment page "this is a request, not a confirmed booking"; on a demonstration
@@ -719,6 +725,14 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
     ? `Thanks — your message is on its way to ${record.name}.`
     : `Thanks — your message has gone to ${DEMO_OPERATOR}, who built this demonstration. ${record.name} is not involved and will not see it.`;
 
+  // The failure line names a printed contact detail only where one prints with the
+  // form; a record with neither a phone number nor an email address must not be told
+  // to use a detail it does not show (four-page audit finding 9(b)).
+  const formFailure =
+    record.phone?.trim() || record.email?.trim()
+      ? "Sorry, that didn't send. Please use the contact details printed with this form."
+      : "Sorry, that didn't send. Please try again.";
+
   // The storage half of the notice is a privacy claim about a third party, so it is
   // built from the provider preset rather than written once here. Formspark's own
   // privacy policy says submissions are stored in the account that owns the form
@@ -798,6 +812,7 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
     contactCaveat,
     provenance,
     formSuccess,
+    formFailure,
     banner,
     footerDisclaimer,
     offeringPlural: profile.offeringPlural,
