@@ -455,8 +455,6 @@ export interface DemoCopy {
   /** Shown in place of the address when the record carries no street address. */
   locationEmpty: string;
   contactIntro: string;
-  /** The heading over the contact section: the business's name, or the demo's. */
-  contactHeading: string;
   formNotice: string;
   /** Which case the notice above was written for (carried into the manifest). */
   formNoticeDelivery: FormDeliveryMode;
@@ -733,11 +731,19 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
   // it comes to us, and the business named on the page has not seen it.
   const businessPhase = delivery.mode === "business";
 
+  // The contact page's lead is only the clause that points at the printed details, and
+  // only when the page prints one (P6): the frozen form notice F5 already says the
+  // demonstration message comes to us, so the lead's first sentence repeated it, and a
+  // record that prints neither a phone number nor an email address must not promise a
+  // detail the page does not show (lead ruling R4).
+  const printedDetails = [record.phone?.trim() ? "phone number" : "", record.email?.trim() ? "email address" : ""].filter(Boolean);
   const contactIntro = businessPhase
     ? `Send a message to ${record.name} using the form below, or use the phone number or email address printed with it.`
-    : `This is a demonstration site, so the form below comes to ${DEMO_OPERATOR} rather than to ${record.name}. To reach ${record.name} itself, use the phone number or email address printed with it.`;
-
-  const contactHeading = businessPhase ? `Contact ${record.name}` : "About this demo";
+    : printedDetails.length === 2
+      ? `To reach ${record.name} itself, use the phone number or email address printed with it.`
+      : printedDetails.length === 1
+        ? `To reach ${record.name} itself, use the ${printedDetails[0]} printed with it.`
+        : "";
 
   const formSuccess = businessPhase
     ? `Thanks — your message is on its way to ${record.name}.`
@@ -825,7 +831,6 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
     locationHeading,
     locationEmpty,
     contactIntro,
-    contactHeading,
     formNotice,
     formNote,
     stepsHeading: "How an inquiry works",

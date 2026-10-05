@@ -198,8 +198,10 @@ test("the details a demonstration points a visitor at carry the published-listin
   // Printed twice: with the details in the contact section, and in the footer next to
   // the phone number and email address.
   expect(html.split("as published in public listings — please confirm").length - 1).toBe(2);
-  // The demonstration notice points at exactly those details.
-  expect(ctx.copy.contactIntro).toContain("use the phone number or email address printed with it");
+  // The demonstration notice points at exactly those details. This record prints an
+  // email address and no phone number, so the lead names only the email (P6, R4).
+  expect(ctx.copy.contactIntro).toContain("use the email address printed with it");
+  expect(ctx.copy.contactIntro).not.toContain("This is a demonstration site");
   expect(
     complianceChecks({ pages: swap(pages, html), record: RECORD, copy: ctx.copy, form: ctx.form, delivery: ctx.delivery, images, privacy: ctx.privacy }),
   ).toEqual([]);
@@ -232,4 +234,15 @@ test("a delivered page leaves the caveat out", async () => {
   expect(
     complianceChecks({ pages: swap(pages, html), record: delivered, copy: ctx.copy, form: ctx.form, delivery: ctx.delivery, images, privacy: ctx.privacy }),
   ).toEqual([]);
+});
+
+test("a demonstration page that prints no phone number and no email address drops the reach clause", async () => {
+  // No printed phone number or email address anywhere on the contact page, so the lead
+  // must not promise either (P6, ruling R4): the sentence is dropped entirely.
+  const bare: BusinessRecord = { ...RECORD, email: undefined, phone: undefined };
+  const images = await manifestImages({ ...bare, images: [CC0] });
+  const { ctx } = await page(bare, images);
+
+  expect(ctx.copy.contactIntro).toBe("");
+  expect(ctx.copy.contactIntro).not.toContain("use the");
 });
