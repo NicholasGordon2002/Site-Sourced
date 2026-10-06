@@ -368,3 +368,45 @@ test("every fixture renders a button that is its own family's call to action", (
     "family-aware",
   );
 });
+
+/* ------------------------------- 10. the hidden half: request_type on every form page */
+
+test("every form page carries its own family's hidden request_type", () => {
+  // The one value a visitor never sees and cannot check: it tells the provider which
+  // family's page a submission came from. `render.ts` writes it; nothing asserted it.
+  const barber = render(BARBER); // appointment
+  const gardener = render(GARDENER); // inquiry
+  for (const [rendered, family] of [
+    [barber, "appointment"],
+    [gardener, "inquiry"],
+  ] as const) {
+    // Both families, and every page that carries a form — the contact page **and** the
+    // per-service contact pages, which render the same form.
+    const forms = rendered.pages.filter((p) => p.html.includes('id="contact-form"'));
+    expect(forms.length).toBeGreaterThan(1);
+    for (const p of forms) {
+      expect(page(rendered, p.file)).toContain(`<input type="hidden" name="request_type" value="${family}">`);
+    }
+    expect(checks(rendered)).toEqual([]);
+  }
+  // ...and on all four shipped fixtures, each against the family the build resolved.
+  for (const name of ["maple-avenue-barber-shop", "king-west-dental", "northshore-garden-works", "red-hill-property-care"]) {
+    const rendered = render(fixture(name));
+    const family = rendered.ctx.copy.conversion.family;
+    for (const p of rendered.pages.filter((p) => p.html.includes('id="contact-form"'))) {
+      expect(page(rendered, p.file)).toContain(`name="request_type" value="${family}"`);
+    }
+  }
+});
+
+test("a request_type naming the other family fails the build", () => {
+  const rendered = render(BARBER);
+  const wrong = doctored(rendered, "contact.html", 'name="request_type" value="appointment"', 'name="request_type" value="inquiry"');
+  expect(checks(rendered, wrong).join("\n")).toContain('the hidden request_type says "inquiry" while this bundle is the appointment family');
+});
+
+test("a form with no hidden request_type fails the build", () => {
+  const rendered = render(GARDENER);
+  const stripped = doctored(rendered, "contact.html", '<input type="hidden" name="request_type" value="inquiry">\n', "");
+  expect(checks(rendered, stripped).join("\n")).toContain("carries no hidden request_type field");
+});

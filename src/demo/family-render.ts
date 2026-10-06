@@ -193,11 +193,17 @@ function esc(s: string): string {
  *   5. every "Request this / Ask about this" link preselects a service the record
  *      actually lists;
  *   6. the pages are the sections this family's order table names, in that order —
- *      a section that quietly drops off a page is a page that changed shape.
+ *      a section that quietly drops off a page is a page that changed shape;
+ *   7. every form page's **hidden** `request_type` carries this bundle's family. Nothing
+ *      checked it: both halves of rule 1 deliberately skip hidden inputs (they are not
+ *      questions a visitor answers), so the one value that tells the provider which family
+ *      a submission came from could have been anything, or absent.
  */
 export function familyRenderingProblems(vars: {
   pages: { file: string; html: string; id?: string }[];
   record: BusinessRecord;
+  /** The family this build resolved — the value every form page's `request_type` must carry. */
+  family: ConversionFamily;
   fields: { name: string; id: string }[];
   openDays: string[];
   steps: string[];
@@ -205,7 +211,7 @@ export function familyRenderingProblems(vars: {
   order: Record<string, string[]>;
   pageKeys: Record<string, PageKey>;
 }): string[] {
-  const { pages, record, fields, openDays, steps, extras, order, pageKeys } = vars;
+  const { pages, record, family, fields, openDays, steps, extras, order, pageKeys } = vars;
   const problems: string[] = [];
   // Every page that carries the form, not only the first: a per-service contact page
   // (the page a service card links to) is one of them, and it is rendered from the same
@@ -240,6 +246,29 @@ export function familyRenderingProblems(vars: {
             `${contact.file}: the form is missing the "${field.name}" field this family's set carries, so the page and the privacy notice's collection sentence disagree.`,
           );
         }
+      }
+      // 7. The hidden half, on the same pages and for the same reason: `render.ts` writes
+      // `<input type="hidden" name="request_type" value="{family}">` into the form, and it
+      // was the one thing on the page nothing asserted — the field loop above skips hidden
+      // inputs on purpose, and the collection list is about questions a visitor answers.
+      // A submission that does not say which family's page it came from is a message the
+      // provider's notification title describes wrongly.
+      const hidden = new Map<string, string>();
+      for (const m of contact.html.matchAll(/<input\b[^>]*>/g)) {
+        const tag = m[0]!;
+        if (!/\btype="hidden"/.test(tag)) continue;
+        const name = /\bname="([^"]*)"/.exec(tag)?.[1];
+        if (name) hidden.set(name, /\bvalue="([^"]*)"/.exec(tag)?.[1] ?? "");
+      }
+      const requestType = hidden.get("request_type");
+      if (requestType === undefined) {
+        problems.push(
+          `${contact.file}: the form carries no hidden request_type field, so a submission does not say which family's page it came from. One form serves both families; this hidden value is what tells them apart at the provider.`,
+        );
+      } else if (requestType !== family) {
+        problems.push(
+          `${contact.file}: the hidden request_type says "${requestType}" while this bundle is the ${family} family. The value is derived (copy.conversion.family), never typed in — a form whose own claim about itself contradicts the page it sits on is the one field a visitor cannot check.`,
+        );
       }
     }
   }

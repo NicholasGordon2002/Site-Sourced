@@ -634,6 +634,7 @@ export function complianceChecks(vars: {
       ...familyRenderingProblems({
         pages,
         record,
+        family: copy.conversion.family,
         fields: fields.fields.map((f) => ({ name: f.name, id: f.id })),
         openDays: fields.preferredDays.days,
         steps: copy.steps,
