@@ -25,12 +25,14 @@
  * and asks the browser for one file less.
  *
  * Navigation is plain links to real files, in the header and nowhere else: on a phone
- * they sit behind a CSS-only `<details>` disclosure labelled `Pages`, and from `48rem`
- * they are the inline row. There is no JavaScript-driven nav: on the published host a
- * bundle is served as flat files, so `services.html` is a path that serves and
- * `/services/` is not — the links point at files for exactly that reason. The footer
- * carries no page list; the privacy notice is linked from its small print on every
- * page, and from beside the form.
+ * they live behind a CSS-only `<details>` disclosure whose summary is a hamburger and
+ * whose panel is a third of the viewport wide; from `48rem` they are the inline row.
+ * The privacy notice left the phone's menu on the owner's instruction (6 Oct) and is
+ * reachable from the footer's small print instead. There is no JavaScript-driven nav:
+ * on the published host a bundle is served as flat files, so `services.html` is a path
+ * that serves and `/services/` is not — the links point at files for exactly that
+ * reason. The footer carries no page list; the privacy notice is linked from its small
+ * print on every page, and from beside the form.
  *
  * The HTML is deliberately readable. A client who opens index.html in a text editor
  * can find their own sentences and change them.
@@ -274,15 +276,28 @@ function pageDescription(ctx: RenderContext, id: PageId): string {
 
 /** The navigation: same links on every page, as real files. */
 function navBlock(copy: DemoCopy, current: PageId, className: string, label: string): string {
-  const items = PAGE_IDS.map((id) => {
-    const current_ = id === current ? ' aria-current="page"' : "";
-    return `          <li><a href="${PAGE_SPECS[id].file}"${current_}>${esc(copy.nav[id])}</a></li>`;
-  }).join("\n");
+  const items = PAGE_IDS.map((id) => navItem(copy, id, current)).join("\n");
   return `      <nav class="${className}" aria-label="${esc(label)}">
         <ul>
 ${items}
         </ul>
       </nav>`;
+}
+
+/**
+ * One page link.
+ *
+ * The privacy notice is marked `nav-item--desktop` because it has left the **phone's**
+ * menu (owner, 6 Oct 2026, by text): the phone panel carries the four page links the
+ * owner named, and the privacy notice stays reachable from the footer's small print on
+ * every page — which `privacyLinkProblems` enforces, so the phone menu cannot lose the
+ * page's only other route to the notice. It keeps its place in the desktop row, so the
+ * wide layout is unchanged.
+ */
+function navItem(copy: DemoCopy, id: PageId, current: PageId): string {
+  const current_ = id === current ? ' aria-current="page"' : "";
+  const desktopOnly = id === "privacy" ? ' class="nav-item--desktop"' : "";
+  return `          <li${desktopOnly}><a href="${PAGE_SPECS[id].file}"${current_}>${esc(copy.nav[id])}</a></li>`;
 }
 
 function headerBlock(ctx: RenderContext, id: PageId): string {
@@ -299,12 +314,15 @@ function headerBlock(ctx: RenderContext, id: PageId): string {
       : `          <span class="call-button call-button--muted">${esc(copy.ui.noPhoneNote)}</span>`;
   return `  <header class="site-header">
     <div class="wrap header-inner">
-      <!-- The phone's navigation: a CSS-only disclosure, labelled in words. The <nav>
-           is this element's next sibling, never its child — a nav inside a closed
-           <details> cannot be revealed by CSS. At 48rem the summary is hidden and the
-           same list sits inline on the wordmark's line. No JavaScript, no icon. -->
+      <!-- The phone's navigation: a CSS-only disclosure whose summary is a hamburger.
+           The control carries its name twice over — the summary's aria-label and a
+           visually-hidden "Pages" inside it — because three lines are not a label a
+           screen reader can read. The <nav> is this element's next sibling, never its
+           child: a nav inside a closed <details> cannot be revealed by CSS. No script.
+           From 48rem the summary is hidden and the same list sits inline on the
+           wordmark's line. -->
       <details class="site-menu">
-        <summary class="site-menu-summary">Pages</summary>
+        <summary class="site-menu-summary" aria-label="Pages"><span class="visually-hidden">Pages</span><span class="site-menu-icon" aria-hidden="true"></span></summary>
       </details>
       <p class="wordmark">${esc(record.name)}</p>
 ${navBlock(copy, id, "site-nav", "Pages")}
@@ -960,6 +978,9 @@ a:hover { text-decoration-thickness: 2px; }
 /* ----------------------------------------------------------------- header */
 
 .site-header {
+  /* The phone menu panel is positioned against this box, and --gutter is the page's
+     own left edge, so the panel opens on the same line the hamburger sits on. */
+  position: relative;
   background: var(--paper);
   border-bottom: var(--rule);
 }
@@ -979,13 +1000,14 @@ a:hover { text-decoration-thickness: 2px; }
 .page--index .site-header { background: transparent; border-bottom: 0; }
 .page--index .header-inner { padding: var(--s-3) 0; }
 .wordmark {
-  /* A phone needs the wordmark and the call button on one row, and a flex line is
-     broken on the item's hypothetical main size before anything shrinks: with an
-     auto basis the wordmark's own width (about 225px at 1.15rem) pushed the call
-     button onto a line of its own. A zero basis lets it share the row and shrink to
-     the space left, wrapping to two lines the height of the button. The desktop
-     block below puts the auto basis back, so the wide layout is untouched. */
-  flex: 1 1 0;
+  /* A phone needs the wordmark on one line with the hamburger and the call button on
+     the next, and a flex line is broken on the item's hypothetical main size before
+     anything shrinks. A basis of half the row puts the wordmark and the hamburger on
+     the first line — the wordmark's own width, about 225px at 1.15rem, would otherwise
+     claim that line and leave the call button nowhere but a third line — and the call
+     button, which cannot share a line with both, takes the second row to itself. The
+     desktop block below puts the auto basis back, so the wide layout is untouched. */
+  flex: 1 1 50%;
   min-width: 0;
   margin: 0;
   font-family: var(--font-display);
@@ -994,42 +1016,80 @@ a:hover { text-decoration-thickness: 2px; }
   letter-spacing: -0.01em;
 }
 .site-header .call-button { margin-left: auto; }
+/* Off-screen, still read aloud. The phone menu's summary draws three lines, so its name
+   cannot be its visible text; this carries the name a screen reader reads. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  min-width: 0;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
 
 /* The navigation, in two shapes and with no JavaScript in either.
-
-   On a phone the five links are a disclosure: a summary labelled in words — Pages,
-   because there is no icon set and an unlabelled glyph is not a control a visitor can
-   read — opens a list of full-width 44px rows. The <nav> is the summary's next
-   sibling, never its child: a nav inside a closed <details> cannot be revealed by CSS.
-
-   From 48rem the summary goes and the same list sits inline on the wordmark's line. */
-/* The wrap fallback named in the punch-list plan, applied because the measurement
-   said so: with the summary in the wordmark's slot the phone broke to three rows
-   (summary 44px, wordmark, call button — 158px of header). A flex basis of 100% puts the
-   summary on its own row, which is the slot the old nav row held, and order 4/5
-   makes it follow the wordmark and the call button rather than lead them, so the
-   header is back to the two rows item 44 describes (wordmark + call button, then the
-   full-width navigation row). Desktop hides the summary and is unaffected. */
-.site-menu { flex: 1 1 100%; order: 4; margin: 0; }
+   On a phone the page links sit in a left-side panel opened by a hamburger: a
+   <details> summary (native semantics, keyboard-operable, no script) whose next
+   sibling is the panel — never its child, because a nav inside a closed <details>
+   cannot be revealed by CSS.
+   The summary is a 44×44px target, the printable minimum, and it is named twice over:
+   by aria-label and by the visually-hidden text inside it. Three lines are not a
+   label, and an icon-only control is one a screen reader cannot read.
+   The panel is a third of the viewport wide with a min-content floor, so a link row
+   can never wrap or clip: 33% of a 360px viewport is 119px, which holds "Services" with
+   room to spare, and on a narrower screen the floor widens the panel rather than
+   squeezing the text (white-space: nowrap on the links is what gives the floor its
+   job). The panel is taken **out of the flow**, so opening it cannot add a row to the
+   header: item 44's two-row phone header holds whatever the menu does.
+   From 48rem the summary goes, the panel's geometry is undone, and the same list sits
+   inline on the wordmark's line. */
+.site-menu { flex: 0 0 auto; margin: 0; }
 .site-menu-summary {
+  /* The visually-hidden name is positioned against this box, not the page. */
+  position: relative;
   display: inline-flex;
   align-items: center;
-  min-height: 2.75rem;
-  padding: 0 var(--s-4);
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
   border: var(--rule);
   border-radius: var(--r-md);
   background: var(--paper-2);
   color: var(--ink);
-  font-size: 0.9375rem;
-  font-weight: 600;
   list-style: none;
   cursor: pointer;
 }
 .site-menu-summary::-webkit-details-marker { display: none; }
 .site-menu-summary::marker { content: ""; }
 .site-menu[open] .site-menu-summary { background: var(--accent-soft); border-color: var(--accent); }
-
-.site-nav { display: none; flex: 1 1 100%; order: 5; }
+/* Three 18×2px lines, 6px apart, drawn from one element: the two shadows repeat the bar
+   rather than a second and third span. No icon file, no third-party asset. */
+.site-menu-icon {
+  display: block;
+  width: 1.125rem;
+  height: 2px;
+  background: currentColor;
+  box-shadow: 0 -0.375rem 0 currentColor, 0 0.375rem 0 currentColor;
+}
+.site-nav {
+  position: absolute;
+  top: 100%;
+  left: var(--gutter);
+  z-index: 5;
+  display: none;
+  width: 33vw;
+  min-width: min-content;
+  margin-top: var(--s-2);
+  padding: var(--s-2);
+  background: var(--paper);
+  border: var(--rule);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow);
+}
 .site-menu[open] ~ .site-nav { display: block; }
 .site-nav ul {
   display: flex;
@@ -1039,17 +1099,22 @@ a:hover { text-decoration-thickness: 2px; }
   padding: 0;
   list-style: none;
 }
+/* The privacy notice is not in the phone's menu (owner, 6 Oct): the four page links the
+   owner named are, and the notice stays reachable from the footer's small print on every
+   page — which privacyLinkProblems keeps there. It keeps its place in the desktop row. */
+.site-nav li.nav-item--desktop { display: none; }
 .site-nav a {
   display: flex;
   align-items: center;
   min-height: 2.75rem;
-  padding: 0 var(--s-4);
+  padding: 0 var(--s-3);
   border-radius: var(--r-md);
   background: var(--paper-2);
   font-size: 0.9375rem;
   font-weight: 600;
   color: var(--body-text);
   text-decoration: none;
+  white-space: nowrap;
 }
 .site-nav a:hover { color: var(--ink); background: #F1EEE8; }
 .site-nav a[aria-current="page"] { background: var(--accent-soft); color: var(--accent-ink); }
@@ -1201,6 +1266,14 @@ a:hover { text-decoration-thickness: 2px; }
 
 .address { font-style: normal; font-weight: 600; color: var(--ink); line-height: 1.5; }
 .address-links { margin: var(--s-4) 0 0; }
+/* The hours/address split is two blocks inside one section. On a phone they stack, and
+   they used to touch — the hours card's bottom margin is 0 and the second block began
+   the moment the first ended, so "Where {name} is" read as part of the card above it.
+   The gap is the token every section boundary in the template is built from rather than
+   a number of its own: --section-y, the section's own top spacing, so the pair reads
+   like the section boundary it is. Above 48rem the pair is the two-column grid below,
+   whose own gap does this job, so the margin goes there. */
+.two-col > div + div { margin-top: var(--section-y); }
 .page-head + .section { padding-top: var(--s-7); }
 
 /* The card: one white surface with a hairline edge, used for the service list and
@@ -1429,12 +1502,36 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
      unexplainable — and no note is ever written to fill one. */
   .services { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 1fr; align-items: stretch; }
   .two-col { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: var(--s-7); align-items: start; }
+  /* The stacked pair's gap (see the phone rule) is the grid's own gap up here. */
+  .two-col > div + div { margin-top: 0; }
   .footer-grid { grid-template-columns: 1.1fr 0.9fr; gap: var(--s-8); }
   /* Desktop keeps the plain inline row it has always had: the summary goes, the nav
-     comes back into the flow, and the links lose the phone panel's row shape. */
+     comes back into the flow — the phone panel's geometry undone property by property,
+     since it is out of the flow and inset on the gutter down there — and the links lose
+     the phone panel's row shape. The wordmark takes its auto basis back, so the wide
+     header is exactly the one it has always been, and the privacy link returns to the
+     row it has always been in. */
   .site-menu { display: none; }
   .wordmark { flex: 1 1 auto; }
-  .site-nav { display: block; flex: 1 1 auto; order: 2; margin-left: var(--s-6); }
+  .site-nav {
+    position: static;
+    top: auto;
+    left: auto;
+    z-index: auto;
+    display: block;
+    width: auto;
+    min-width: 0;
+    margin-top: 0;
+    padding: 0;
+    background: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    flex: 1 1 auto;
+    order: 2;
+    margin-left: var(--s-6);
+  }
+  .site-nav li.nav-item--desktop { display: block; }
   .site-nav ul { flex-direction: row; flex-wrap: wrap; gap: 0 var(--s-4); }
   .site-nav a {
     display: inline-flex;

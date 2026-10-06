@@ -204,8 +204,8 @@ padding blocks without content between them.
 | `--rule` | `1px solid var(--line)` | The only border in the template |
 
 One soft shadow exists (`0 1px 2px rgba(16,18,20,.05), 0 8px 24px -16px rgba(16,18,20,.25)`) and
-is used only on the sticky-free elements that sit on a photo — the hero CTA row and the mobile
-form card. Depth is not used for decoration.
+is used only where an element floats over something — the hero CTA row, the mobile form card, and
+the phone menu panel. Depth is not used for decoration.
 
 ### Layout
 
@@ -238,7 +238,7 @@ tokens only.
 | --- | --- | --- |
 | Skip link | `.skip-link` | First focusable thing; appears on focus only |
 | Proposal banner | `.proposal-banner` | **Compliance. Frozen wording.** Ink strip above everything, accent hairline beneath, in normal flow, never sticky, never dismissible |
-| Header | `.site-header` | Wordmark left, call button right, five-link nav. On a phone the nav is a `Pages` disclosure; the home page's header is surface-less (`.page--index`) so the photograph starts directly under it |
+| Header | `.site-header` | Wordmark left, call button right, five-link nav. On a phone a 44×44px hamburger summary opens the nav as a left-side panel (owner revision, 6 Oct — it was a labelled `Pages` pill); the home page's header is surface-less (`.page--index`) so the photograph starts directly under it |
 | Wordmark | `.wordmark` | Business name in Fraunces 600. The header prints the name once, here |
 | Call button | `.call-button` | Ink pill with the published phone number, `tel:` link. If no phone is recorded, a muted, non-interactive note instead — never a dead `tel:` link |
 | Eyebrow | `.eyebrow` | Uppercase label line: category and city, with an accent tick (see §6) |
@@ -390,11 +390,15 @@ rest by reusing these sections rather than inventing new ones.
 | Contact | `contact.html` | The form, the delivery notice, printed phone/email with the caveat, directions, hours |
 
 - Navigation lives in the header and nowhere else: **five** plain text links (the privacy notice
-  included) on the wordmark's line from `48rem`, and behind a CSS-only `<details>` disclosure
-  labelled in words — `Pages` — below it. No JavaScript-driven nav, no icon-only control, and
-  the `<nav>` is the summary's **next sibling**, never its child: a nav inside a closed
-  `<details>` cannot be revealed by CSS. The footer carries no page list; the privacy notice is
-  linked from its small print on every page, which `privacyLinkProblems` enforces.
+  included) on the wordmark's line from `48rem`, and on a phone behind a CSS-only `<details>`
+  disclosure whose summary is a **hamburger** — three 18×2px lines, a 44×44px target, named by
+  `aria-label` **and** a visually-hidden `Pages` so it is never icon-only to a screen reader —
+  which opens the nav as a **left-side panel about a third of the viewport wide**, on the page's
+  gutter, with a `min-content` floor and `nowrap` rows so no link wraps or clips. No
+  JavaScript-driven nav, and the `<nav>` is the summary's **next sibling**, never its child: a nav
+  inside a closed `<details>` cannot be revealed by CSS. The four page links the owner named are
+  the phone menu; the privacy notice is reached from the footer's small print on every page (and
+  from beside the form), which `privacyLinkProblems` enforces.
 - The current page is marked with `aria-current="page"`: an accent underline in the desktop row,
   an accent wash on the phone's panel row.
 - Each page repeats the banner, the footer disclaimer and the contact caveat in full. Compliance
