@@ -296,6 +296,13 @@ function headerBlock(ctx: RenderContext, id: PageId): string {
       : `          <span class="call-button call-button--muted">${esc(copy.ui.noPhoneNote)}</span>`;
   return `  <header class="site-header">
     <div class="wrap header-inner">
+      <!-- The phone's navigation: a CSS-only disclosure, labelled in words. The <nav>
+           is this element's next sibling, never its child — a nav inside a closed
+           <details> cannot be revealed by CSS. At 48rem the summary is hidden and the
+           same list sits inline on the wordmark's line. No JavaScript, no icon. -->
+      <details class="site-menu">
+        <summary class="site-menu-summary">Pages</summary>
+      </details>
       <p class="wordmark">${esc(record.name)}</p>
 ${navBlock(copy, id, "site-nav", "Pages")}
 ${call ? `${call}\n` : ""}    </div>
@@ -958,30 +965,57 @@ a:hover { text-decoration-thickness: 2px; }
 }
 .site-header .call-button { margin-left: auto; }
 
-/* The navigation. On a phone it takes its own full-width row under the wordmark —
-   four short labels, all visible, no menu to open and nothing to script. From 48rem
-   it sits on the wordmark's line. */
-.site-nav { flex: 1 1 100%; order: 4; }
+/* The navigation, in two shapes and with no JavaScript in either.
+
+   On a phone the five links are a disclosure: a summary labelled in words — Pages,
+   because there is no icon set and an unlabelled glyph is not a control a visitor can
+   read — opens a list of full-width 44px rows. The <nav> is the summary's next
+   sibling, never its child: a nav inside a closed <details> cannot be revealed by CSS.
+
+   From 48rem the summary goes and the same list sits inline on the wordmark's line. */
+.site-menu { margin: 0; }
+.site-menu-summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0 var(--s-4);
+  border: var(--rule);
+  border-radius: var(--r-md);
+  background: var(--paper-2);
+  color: var(--ink);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  list-style: none;
+  cursor: pointer;
+}
+.site-menu-summary::-webkit-details-marker { display: none; }
+.site-menu-summary::marker { content: ""; }
+.site-menu[open] .site-menu-summary { background: var(--accent-soft); border-color: var(--accent); }
+
+.site-nav { display: none; flex: 1 1 100%; order: 4; }
+.site-menu[open] ~ .site-nav { display: block; }
 .site-nav ul {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0 var(--s-4);
+  flex-direction: column;
+  gap: var(--s-2);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 .site-nav a {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   min-height: 2.75rem;
+  padding: 0 var(--s-4);
+  border-radius: var(--r-md);
+  background: var(--paper-2);
   font-size: 0.9375rem;
   font-weight: 600;
   color: var(--body-text);
   text-decoration: none;
-  border-bottom: 2px solid transparent;
 }
-.site-nav a:hover { color: var(--ink); border-bottom-color: var(--line); }
-.site-nav a[aria-current="page"] { color: var(--accent-ink); border-bottom-color: var(--accent); }
+.site-nav a:hover { color: var(--ink); background: #F1EEE8; }
+.site-nav a[aria-current="page"] { background: var(--accent-soft); color: var(--accent-ink); }
 
 /* ---------------------------------------------------------------- buttons */
 
@@ -1358,8 +1392,21 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
   .services { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .two-col { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: var(--s-7); align-items: start; }
   .footer-grid { grid-template-columns: 1.1fr 0.9fr; gap: var(--s-8); }
-  .site-nav { flex: 1 1 auto; order: 2; margin-left: var(--s-6); }
-  .site-nav a { min-height: 2rem; }
+  /* Desktop keeps the plain inline row it has always had: the summary goes, the nav
+     comes back into the flow, and the links lose the phone panel's row shape. */
+  .site-menu { display: none; }
+  .site-nav { display: block; flex: 1 1 auto; order: 2; margin-left: var(--s-6); }
+  .site-nav ul { flex-direction: row; flex-wrap: wrap; gap: 0 var(--s-4); }
+  .site-nav a {
+    display: inline-flex;
+    min-height: 2rem;
+    padding: 0;
+    border-radius: 0;
+    background: none;
+    border-bottom: 2px solid transparent;
+  }
+  .site-nav a:hover { background: none; color: var(--ink); border-bottom-color: var(--line); }
+  .site-nav a[aria-current="page"] { background: none; color: var(--accent-ink); border-bottom-color: var(--accent); }
   .site-header .call-button { order: 3; }
   .page-head { padding: var(--s-8) 0 var(--s-6); }
   .form-actions .button { width: auto; }
