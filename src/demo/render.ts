@@ -925,12 +925,23 @@ a:hover { text-decoration-thickness: 2px; }
   color: #fff;
   border-bottom: 3px solid var(--accent);
 }
+/* The three standalone compliance lines — this banner, the footer disclaimer and the
+   illustration caption — are centred at both widths. They stand on their own with
+   nothing beside them, so a centred block does not break a reading line. The two lines
+   that sit beside a control (the printed-details caveat and the form-delivery notice)
+   stay left-aligned: they are read as prose attached to the details and the button.
+
+   The inline-auto margin also fixes the alignment this line had: a bare
+   margin: 0 used to beat the wrap rule's margin-inline: auto, so the banner's text sat
+   flush to the viewport's left edge while the rest of the page was inset by the
+   gutter. */
 .proposal-banner p {
-  margin: 0;
+  margin: 0 auto;
   padding: 0.7rem 0;
   font-size: var(--fs-small);
   line-height: 1.5;
   max-width: 60em;
+  text-align: center;
 }
 
 /* ----------------------------------------------------------------- header */
@@ -1127,7 +1138,10 @@ a:hover { text-decoration-thickness: 2px; }
    under the picture, in normal flow. Its wording is fixed by build-gated copy; only
    its spacing is design. */
 .hero-figure, .about-figure { margin: 0; }
-.hero-caption { margin: var(--s-3) 0 0; padding-bottom: var(--s-1); font-size: var(--fs-small); }
+/* A standalone notice, centred like the banner and the footer disclaimer. The auto
+   inline margin keeps the wrap measure this element also carries — a bare
+   margin: var(--s-3) 0 0 used to cancel it and leave the caption flush to the left. */
+.hero-caption { margin: var(--s-3) auto 0; padding-bottom: var(--s-1); font-size: var(--fs-small); text-align: center; }
 
 /* ----------------------------------------------------------------- page head */
 
@@ -1353,12 +1367,14 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 .site-footer a { color: #fff; text-decoration-color: rgba(255, 255, 255, .45); }
 .site-footer a:hover { text-decoration-color: #fff; }
 .site-footer p { max-width: 46em; }
+/* A standalone notice, centred like the banner and the hero caption. The accent bar
+   that used to sit on its left was a left-alignment device, so it goes with the
+   alignment and nothing decorative replaces it. */
 .disclaimer {
-  margin: var(--s-4) 0 0;
-  padding-left: var(--s-4);
-  border-left: 4px solid var(--accent);
+  margin: var(--s-4) auto 0;
   color: #fff;
   font-size: 0.9375rem;
+  text-align: center;
 }
 .footer-small { margin: 0 0 var(--s-4); }
 .footer-small:last-child { margin-bottom: 0; }

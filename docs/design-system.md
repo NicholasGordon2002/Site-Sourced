@@ -255,6 +255,7 @@ tokens only.
 | Contact fallback | `.contact-fallback` | Printed phone and email next to the form, with the caveat |
 | Footer | `.site-footer` | Ink surface, two columns from `48rem`: identity + contact + disclaimer left; small print right |
 | Micro print | `.footer-small` | `--fs-small` (0.875rem) at `--footer-ink`. Never below 14px — this is the legal text and it must be readable, not merely present |
+| Centred notice | `.proposal-banner p`, `.disclaimer`, `.hero-caption` | The three **standalone** compliance lines: `text-align: center` and `margin-inline: auto`, at both widths. Nothing decorative replaces the disclaimer's old left accent bar. The caveat and the form-delivery notice sit beside a control and stay left-aligned — the basis is placement, not length |
 
 ### The family layer's own components (built 4 Oct; `src/demo/family-render.ts` + `src/demo/render.ts`)
 
