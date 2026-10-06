@@ -767,6 +767,12 @@ export function headerOverlayProblems(pages: RenderedPage[], css = ""): string[]
       );
       continue;
     }
+    if (rule.style !== "solid") {
+      problems.push(
+        `the home header's ${side} separator is not a solid rule (border-${side}: ${rule.value || `${rule.width} with no style`}): a dashed or dotted hairline reads as a broken edge over a photograph, and a border with no style at all does not paint \u2014 the owner asked for one light rule ${where}.`,
+      );
+      continue;
+    }
     if (!lightRule(rule.colour)) {
       problems.push(
         `the home header's ${side} separator is not a light rule this build can read as one (border-${side}-color: ${rule.colour || "nothing"}): a separator over an unknown photograph has to be a light, partly transparent white — a dark or opaque rule reads as a box edge, and a value this build cannot read proves nothing.`,
