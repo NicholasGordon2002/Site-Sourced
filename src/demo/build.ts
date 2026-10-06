@@ -1,12 +1,13 @@
 /**
  * Site Sourced — bundle assembly and self-check.
  *
- * `buildBundle` writes one self-contained folder: five pages (index.html,
- * services.html, about.html, contact.html, privacy.html), styles.css, site.js,
- * favicon.svg, the images, the two self-hosted fonts with their OFL licence text
- * (fonts/), manifest.json and a plain-language README.txt. Every reference on every
- * page is a relative path to a file in the same folder, so the bundle opens straight
- * from disk (`file://`) and would also drop onto any host unchanged.
+ * `buildBundle` writes one self-contained folder: the five contract pages (index.html,
+ * services.html, about.html, contact.html, privacy.html), one contact-<service>.html per
+ * recorded service (the destination a service card is its own link to, owner revision #4,
+ * 6 Oct 2026), styles.css, site.js, favicon.svg, the images, the two self-hosted fonts
+ * with their OFL licence text (fonts/), manifest.json and a plain-language README.txt.
+ * Every reference on every page is a relative path to a file in the same folder, so the
+ * bundle opens straight from disk (`file://`) and would also drop onto any host unchanged.
  *
  * The self-check is not decoration: if a compliance string is missing, if a local
  * file a page refers to does not exist, or if the copy guard finds a claim we are
@@ -54,6 +55,7 @@ import {
   renderJs,
   renderPages,
   servicePageFile,
+  type PageId,
   type RenderContext,
   type RenderedPage,
 } from "./render.ts";
@@ -240,6 +242,110 @@ export function wordmarkLinkProblems(pages: RenderedPage[]): string[] {
       );
     }
   }
+  return problems;
+}
+
+/**
+ * The page of the five-page contract a bundle file belongs to.
+ *
+ * A per-service contact page (`contact-hot-shave.html`, owner revision #4, 6 Oct 2026)
+ * is a **variant of the Contact page**, not a sixth page: same shell, same furniture,
+ * same form, one option already chosen. It is the Contact section, so its nav mark, its
+ * obligations and its section order are the Contact page's.
+ */
+function sectionOf(file: string): PageId | null {
+  const named = PAGE_IDS.find((id) => PAGE_SPECS[id].file === file);
+  if (named) return named;
+  return /^contact-.+\.html$/.test(file) ? "contact" : null;
+}
+
+/**
+ * The page contract and what the navigation says about it (template-system.md checklist
+ * #15; WORKFLOW.md rule 6). Three things were true by construction and by nothing else.
+ *
+ *   - **The five named pages are in the bundle — and nothing else is.** Removing a page
+ *     used to fail only for a side reason: something still linked to the file. The bundle
+ *     is the five-page contract (`render.ts` `PAGE_SPECS`) plus one `contact-<service>.html`
+ *     per recorded service, which is the shape owner revision #4 gave it; a page outside
+ *     that shape is a bundle that has quietly outgrown the contract it is checked against.
+ *   - **`aria-current="page"` says where the visitor is.** `render.ts` writes it on the nav
+ *     entry for the page it is rendering, and deleting it failed nothing at all. Each page
+ *     carries exactly one, it sits **inside** the navigation, and it points at the nav
+ *     entry for that page's own section — a visitor on `contact-haircut.html` is on the
+ *     Contact page, so the mark belongs on `contact.html`.
+ *   - **Every nav target is a file this bundle contains.** The host serves flat files, so a
+ *     nav link to a page the bundle does not hold is a 404 from the page's most-trusted
+ *     control. (`referencedFilesExist` asks the disk the same question after writing; this
+ *     one asks the rendered bundle, and refuses links that point at nothing at all.)
+ */
+export function navProblems(pages: RenderedPage[]): string[] {
+  const problems: string[] = [];
+  const named = PAGE_IDS.map((id) => PAGE_SPECS[id].file);
+  const files = new Set(pages.map((page) => page.file));
+
+  for (const file of named) {
+    if (!files.has(file)) {
+      problems.push(
+        `the bundle contains no ${file}. The page contract is the five named pages (${named.join(", ")}) plus one contact-<service>.html per recorded service — a page that quietly stops being built is a page whose links 404 on a host that serves flat files.`,
+      );
+    }
+  }
+  for (const file of files) {
+    if (!named.includes(file) && sectionOf(file) === null) {
+      problems.push(
+        `${file}: a page that is neither one of the five named pages nor a per-service contact page (contact-<service>.html, owner revision #4, 6 Oct 2026). The contract is those pages and nothing else — a new kind of page has to be named in PAGE_SPECS and given its obligations, not slipped into the bundle.`,
+      );
+    }
+  }
+
+  for (const page of pages) {
+    const section = sectionOf(page.file);
+    if (!section) continue; // already refused above: an unknown page has no section to check
+    const navAt = page.html.indexOf('<nav class="site-nav"');
+    const navEnd = navAt >= 0 ? page.html.indexOf("</nav>", navAt) : -1;
+    const nav = navAt >= 0 && navEnd > navAt ? page.html.slice(navAt, navEnd) : "";
+    if (!nav) {
+      problems.push(`${page.file}: the header carries no <nav class="site-nav">, so the page has no navigation to check.`);
+      continue;
+    }
+
+    const marked = [...nav.matchAll(/<a\b[^>]*>/g)].filter((m) => /aria-current="page"/.test(m[0]!));
+    const everywhere = [...page.html.matchAll(/aria-current="page"/g)].length;
+    if (everywhere === 0) {
+      problems.push(
+        `${page.file}: no element carries aria-current="page". The navigation has to say which page a visitor is on — on a phone the other pages are behind a menu, and a screen reader otherwise hears five equal links.`,
+      );
+    } else {
+      if (everywhere > 1) {
+        problems.push(
+          `${page.file}: ${everywhere} elements carry aria-current="page", not one. A page with two "current" entries cannot tell a visitor (or a screen reader) where they are.`,
+        );
+      }
+      if (marked.length === 0) {
+        problems.push(
+          `${page.file}: the aria-current="page" marker is outside the navigation (<nav class="site-nav">). "Current" describes a page link, not a list item, a heading or a footer line.`,
+        );
+      }
+      for (const m of marked) {
+        const href = /\bhref="([^"]*)"/.exec(m[0]!)?.[1] ?? "";
+        if (href.split(/[?#]/)[0] !== PAGE_SPECS[section].file) {
+          problems.push(
+            `${page.file}: the nav entry marked aria-current="page" points at ${href || "nothing"}, not ${PAGE_SPECS[section].file} — this page's own section. A per-service contact page is the Contact page, so its mark belongs on ${PAGE_SPECS.contact.file}.`,
+          );
+        }
+      }
+    }
+
+    for (const m of nav.matchAll(/<a\b[^>]*href="([^"]*)"/g)) {
+      const target = m[1]!.split(/[?#]/)[0]!;
+      if (!files.has(target)) {
+        problems.push(
+          `${page.file}: the navigation links to ${target}, which this bundle does not contain. Every nav link is a page the bundle holds — on a host that serves flat files, anything else is a 404 from the page's most-trusted control.`,
+        );
+      }
+    }
+  }
+
   return problems;
 }
 
@@ -526,6 +632,11 @@ export function complianceChecks(vars: {
   problems.push(...privacyLinkProblems(pages));
   problems.push(...headingStackProblems(pages));
   problems.push(...wordmarkLinkProblems(pages));
+  // The page contract itself: the five named pages are all built (plus the per-service
+  // contact pages and nothing else), each carries exactly one `aria-current="page"` on
+  // the nav entry for its own section, and every nav link points at a page the bundle
+  // holds (template-system.md checklist #15).
+  problems.push(...navProblems(pages));
   // The phone menu: four named links, a named control, and the privacy link phone-hidden
   // (WORKFLOW.md rule 11).
   problems.push(...phoneMenuProblems(pages, vars.css ?? ""));
