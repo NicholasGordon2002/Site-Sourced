@@ -330,18 +330,71 @@ function navItem(copy: DemoCopy, id: PageId, current: PageId): string {
   return `          <li${desktopOnly}><a href="${PAGE_SPECS[id].file}"${current_}>${esc(copy.nav[id])}</a></li>`;
 }
 
+/**
+ * The slot's own marker class, on top of the button treatment it wears. A check needs to
+ * be able to say *which* element in the header the action is (the header also holds the
+ * wordmark link, four navigation links and the menu chip), and a class is how the
+ * stylesheet and the gate name the same element.
+ */
+export const HEADER_ACTION_CLASS = "header-action";
+
+/**
+ * Which pages carry the header's action at all.
+ *
+ * Two kinds of page do not. The privacy notice prints none of the business's details —
+ * an unconfirmed number or a contact route has no business on a notice about how we
+ * handle a message — so it carries the wordmark and the navigation only. The **contact
+ * section** (`contact.html` and every `contact-<service>.html`) is where the action
+ * already leads: there the header action would link to the page the visitor is already
+ * on, and on a per-service page it would throw away the service that page exists to
+ * preselect in the HTML. Omitting it is the team's default, sent to the owner with the
+ * three 6 Oct decisions.
+ */
+export function headerActionBelongs(id: PageId): boolean {
+  return PAGE_SPECS[id].printsDetails && id !== "contact";
+}
+
+/**
+ * Where a record's **primary action** leads: the business's own booking page when the
+ * record carries one (the owner's 4 Oct ruling — a booking link is primary where one
+ * exists), otherwise the demo's contact page. Derived here, once, so the header slot, the
+ * build check and the manifest cannot disagree about the destination.
+ */
+export function primaryActionHref(record: BusinessRecord): string {
+  const booking = (record.booking_url ?? "").trim();
+  return booking === "" ? PAGE_SPECS.contact.file : booking;
+}
+
+/**
+ * The header's action: **the page's primary action**, in the header's second row.
+ *
+ * It is a slot, never a hardcoded Call link (owner-approved 6 Oct 2026). Both halves come
+ * from the record rather than from this template:
+ *
+ *   - the label is `copy.contactLabel.label` — the neutral `Contact Us` on a fictional
+ *     fixture and the family's own words on a build from a real record (rule 8) — so the
+ *     header cannot say something the page's own action does not;
+ *   - the destination is `primaryActionHref` — the record's booking page when it has one,
+ *     the contact page otherwise.
+ *
+ * The home page's **Call** button is a different thing and stays: it is the hero's own
+ * action, not the header's. What this replaced was a Call link on every page — and, on a
+ * record with no phone, a dead "no phone" chip where the action should be: a record with
+ * no phone still has a contact page and an email, so the honest slot is the action.
+ *
+ * `headerActionProblems` refuses a page that disagrees with any of this — a missing
+ * action, a second one, another label, another destination, or an element whose own
+ * stylesheet cannot show it is 44px.
+ */
+function headerActionBlock(ctx: RenderContext, id: PageId): string {
+  const { record, copy } = ctx;
+  if (!headerActionBelongs(id)) return "";
+  return `          <a class="call-button ${HEADER_ACTION_CLASS}" href="${esc(primaryActionHref(record))}">${esc(copy.contactLabel.label)}</a>`;
+}
+
 function headerBlock(ctx: RenderContext, id: PageId): string {
   const { record, copy } = ctx;
-  const tel = record.phone ? telHref(record.phone) : "";
-  // The call button prints the business's published phone number. The privacy page
-  // prints none of the business's details — an unconfirmed number has no business on
-  // a notice about how we handle a message — so its header carries the wordmark and
-  // the navigation only.
-  const call = !PAGE_SPECS[id].printsDetails
-    ? ""
-    : record.phone
-      ? `          <a class="call-button" href="${tel}">${esc(copy.ui.callLabel)} ${esc(record.phone)}</a>`
-      : `          <span class="call-button call-button--muted">${esc(copy.ui.noPhoneNote)}</span>`;
+  const action = headerActionBlock(ctx, id);
   return `  <header class="site-header">
     <div class="wrap header-inner">
       <!-- The phone's navigation: a CSS-only disclosure whose summary is a hamburger.
@@ -363,7 +416,7 @@ function headerBlock(ctx: RenderContext, id: PageId): string {
            One link: nothing is nested inside it. -->
       <a class="wordmark" href="${PAGE_SPECS.index.file}">${esc(record.name)}</a>
 ${navBlock(copy, id, "site-nav", "Pages")}
-${call ? `${call}\n` : ""}    </div>
+${action ? `${action}\n` : ""}    </div>
   </header>`;
 }
 
@@ -1085,21 +1138,23 @@ a:hover { text-decoration-thickness: 2px; }
 }
 /* The action on the wash is a white pill with the ink label (17.8:1 inside it) and
    5.77:1 against the wash — where the ink pill on the wash is 3.2:1, a control edge
-   that only just clears the 3:1 a non-text boundary needs. The muted "no phone on
-   file" chip is not an action at all, so it keeps its own opaque surface. */
-.page--index .site-header .call-button:not(.call-button--muted) { background: #fff; color: var(--ink); }
-.page--index .site-header .call-button:not(.call-button--muted):hover { background: #F1EEE8; color: var(--ink); }
+   that only just clears the 3:1 a non-text boundary needs. Every .call-button in the
+   header is the action: the slot is the page's primary action (render.ts
+   headerActionBlock) and nothing else in the header wears the treatment, so this rule
+   needs no exemption for a chip that is not a link. */
+.page--index .site-header .call-button { background: #fff; color: var(--ink); }
+.page--index .site-header .call-button:hover { background: #F1EEE8; color: var(--ink); }
 /* The accent focus ring is 1.3:1 on the wash — invisible, and an outright failure of
    the 3:1 an indicator needs. Inside this header the ring is white (5.77:1 there). */
 .page--index .site-header :focus-visible { outline-color: #fff; }
 .page--index .header-inner { padding: var(--s-3) 0; }
 .wordmark {
-  /* A phone needs the wordmark on one line with the hamburger and the call button on
-     the next, and a flex line is broken on the item's hypothetical main size before
+  /* A phone needs the wordmark on one line with the hamburger and the header's action
+     on the next, and a flex line is broken on the item's hypothetical main size before
      anything shrinks. A basis of half the row puts the wordmark and the hamburger on
      the first line — the wordmark's own width, about 225px at 1.15rem, would otherwise
-     claim that line and leave the call button nowhere but a third line — and the call
-     button, which cannot share a line with both, takes the second row to itself. The
+     claim that line and leave the action nowhere but a third line — and the action,
+     which cannot share a line with both, takes the second row to itself. The
      desktop block below puts the auto basis back, so the wide layout is untouched. */
   flex: 1 1 50%;
   min-width: 0;
@@ -1254,18 +1309,27 @@ a:hover { text-decoration-thickness: 2px; }
 }
 .button--ghost:hover { background: rgba(255, 255, 255, .22); color: #fff; }
 
-.button--small { min-height: 2.25rem; padding: 0.45rem 0.9rem; font-size: var(--fs-small); }
+/* Backlog 273f40d1: the design system promises 44×44 (docs/design-system.md §…), and
+   this control was 36px. It is the "Get directions" action, alone in its own paragraph,
+   so the height is the whole fix — nothing sits on the line beside it. */
+.button--small { min-height: 2.75rem; padding: 0.45rem 0.9rem; font-size: var(--fs-small); }
 
-.call-button--muted {
-  background: var(--paper-2);
+/* The quiet link — "More about <the business's name>", under the home page's About
+   excerpt. It is a control, not part of a sentence: it is the only thing in its
+   paragraph (the --inline modifier resets the left offset and nothing else), so padding
+   can give it the 44px the design system promises without bursting a line of running
+   text. The box grows downward and the words stay where they were; the fill is
+   transparent, so what a visitor sees is unchanged. A quiet link set *inside* running
+   text would need a pseudo-element hit area instead — that is why this rule says where
+   it is used. */
+.link-quiet {
+  display: inline-block;
+  min-height: 2.75rem;
+  padding: 0.5rem 0;
+  margin: var(--s-3) 0 0 var(--s-4);
+  font-size: var(--fs-small);
   color: var(--muted);
-  border-color: var(--line);
-  cursor: default;
-  font-weight: 400;
 }
-.call-button--muted:hover { background: var(--paper-2); color: var(--muted); }
-
-.link-quiet { display: inline-block; margin: var(--s-3) 0 0 var(--s-4); font-size: var(--fs-small); color: var(--muted); }
 .link-quiet--inline { margin-left: 0; }
 .cta-actions { margin: var(--s-5) 0 0; max-width: none; }
 

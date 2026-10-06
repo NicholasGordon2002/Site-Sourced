@@ -211,6 +211,30 @@ export interface ManifestHeaderOverlay {
   inner_pages: string;
 }
 
+/**
+ * The header's action — the page's **primary-action slot** (owner-approved 6 Oct 2026),
+ * read from the pages and the stylesheet the bundle ships: what it says, where it points
+ * and on which of the record's facts, which pages omit it and why, and how tall the
+ * controls beside it are. `touch_targets` carries the two controls the 44px audit found
+ * short (backlog `273f40d1`).
+ */
+export interface ManifestHeaderAction {
+  /** The visible text: `copy.contactLabel.label` for this record's family (rule 8). */
+  label: string;
+  href: string;
+  /** Where that destination came from, in plain English. */
+  href_source: string;
+  /** The classes the element wears — the slot marker over the button treatment. */
+  class: string;
+  /** The height those classes declare in the shipped stylesheet, in px. */
+  min_height_px: number | null;
+  /** The pages that carry it. */
+  carries: string[];
+  /** The pages that deliberately do not, each with its reason. */
+  omitted: { file: string; why: string }[];
+  touch_targets: { class: string; min_height_px: number | null; pages: string[] }[];
+  basis: string;
+}
 export interface DemoManifest {
   generator: string;
   generated_at: string;
@@ -235,6 +259,8 @@ export interface DemoManifest {
   images: ManifestImage[];
   /** The home header's treatment over the hero photograph, read from the stylesheet. */
   header: ManifestHeaderOverlay | null;
+  /** The header's action slot and the touch controls beside it (owner, 6 Oct 2026). */
+  header_action: ManifestHeaderAction;
   /**
    * Which conversion family this bundle is for, how that was worked out, and the primary
    * contact label it carries with its own basis. Both are derived from the record — the

@@ -17,7 +17,7 @@
 import { copyFile, mkdir, readdir, rm, rmdir, stat } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 
-import type { BundleResult, BusinessRecord, DemoManifest, ManifestImage } from "./types.ts";
+import type { BundleResult, BusinessRecord, DemoManifest, ManifestHeaderAction, ManifestImage } from "./types.ts";
 import type { DemoCopy, PrivacyNotice } from "./copy.ts";
 import {
   collectionProblems,
@@ -48,8 +48,10 @@ import { filesForSupplied, inspectSuppliedImage, manifestForSupplied } from "./s
 import { BUDGET, imageBudgetProblems, kb, pageLoadout, weightProblems } from "./weight.ts";
 import {
   esc,
+  headerActionBelongs,
   PAGE_IDS,
   PAGE_SPECS,
+  primaryActionHref,
   renderCss,
   renderEditingReadme,
   renderFavicon,
@@ -590,8 +592,8 @@ function overlayColour(value: string, tokens: Map<string, string>): Rgb | null {
  *   5. **an action or a focus ring that disappears into the wash**, and a label that
  *      disappears into its own fill: 3:1 for a control's edge and the ring, 4.5:1 for
  *      text inside the fill. The header's action is deliberately off the ink pill — it is
- *      the white one on the wash — and the muted "no phone on file" chip is not an action
- *      and must not be painted as one;
+ *      the white one on the wash — and it is the only element in the header wearing the
+ *      button treatment (`headerActionProblems` refuses a second one);
  *   6. **header text with no colour to inherit**: the wordmark's rule is color: inherit,
  *      and that is the only reason the header's colour reaches the business name;
  *   7. **a header that stretches down the photograph or sinks under it**: it must be
@@ -752,7 +754,7 @@ export function headerOverlayProblems(pages: RenderedPage[], css = ""): string[]
     );
   }
 
-  /* 6. The action: the white pill on the wash, and never the muted chip. */
+  /* 6. The action: the white pill on the wash, painted by a rule that names it. */
   const actionRules = base.filter(
     (rule) => scoped(rule.selector) && /\.site-header\b/.test(rule.selector) && selectorList(rule.selector).some((one) => one.includes(".call-button")),
   );
@@ -761,18 +763,16 @@ export function headerOverlayProblems(pages: RenderedPage[], css = ""): string[]
     return declared.has("background") || declared.has("background-color");
   };
   const resting = actionRules.filter((rule) => !/:hover/.test(rule.selector));
-  for (const rule of actionRules) {
-    if (!paint(rule) || /--muted/.test(rule.selector)) continue;
-    problems.push(
-      `the home header's action is painted by "${rule.selector}", which also catches the muted "no phone on file" chip (.call-button--muted on a record with no phone). The chip is not an action: exclude it with :not(.call-button--muted).`,
-    );
-  }
+  // The chip exemption that used to live here (`:not(.call-button--muted)`) has moved to
+  // where the thing it protected lives: there is no second .call-button in the header to
+  // exempt any more, and `headerActionProblems` now refuses one in the markup — the place
+  // a dead chip would reappear.
   const painted = resting.filter(paint);
   const ink = overlayColour(tokens.get("--ink") ?? "", tokens) ?? ([22, 24, 27] as Rgb);
   const inkOnWash = washOverWhite ? contrastRatio(ink, washOverWhite) : null;
   if (painted.length === 0) {
     problems.push(
-      `the home header's action is not switched off the ink pill: on the wash the ink pill's own edge is ${inkOnWash ? inkOnWash.toFixed(2) : "3.09"}:1, a control boundary that only just clears the 3:1 it needs, and it is judged on every photograph. Give it a white fill with an ink label (${overlay} .site-header .call-button:not(.call-button--muted)).`,
+      `the home header's action is not switched off the ink pill: on the wash the ink pill's own edge is ${inkOnWash ? inkOnWash.toFixed(2) : "3.09"}:1, a control boundary that only just clears the 3:1 it needs, and it is judged on every photograph. Give it a white fill with an ink label (${overlay} .site-header .call-button).`,
     );
   } else {
     const actionDecls = overlayRuleDeclarations(resting, () => true);
@@ -892,6 +892,249 @@ export function headerOverlayMeasure(css: string): {
     white_on_wash: Number(contrastRatio([255, 255, 255], overOpaque(lightest, [255, 255, 255])).toFixed(2)),
     inner_pages:
       "No overlay on an inner page: every overlay rule is scoped to .page--index, which only the home page carries, and inner pages have no photograph — their header keeps the paper surface and its hairline (headerOverlayProblems).",
+  };
+}
+
+/* ------------------------------------- the header's action slot (owner, 6 Oct 2026) */
+
+/**
+ * The class the action wears on top of the button treatment, and the two classes the
+ * 44px audit found under the design system's promise (backlog `273f40d1`).
+ * `headerActionProblems` and `tapTargetProblems` read the stylesheet the bundle ships for
+ * exactly these names, so the sizes stay assertable from the CSS rather than only from a
+ * browser.
+ */
+const HEADER_ACTION_CLASS = "header-action";
+const TAP_TARGET_CLASSES = ["button--small", "link-quiet"];
+
+/**
+ * The declared height of a class in the stylesheet the bundle ships, in px: the larger of
+ * `min-height` and `height` on the rules naming it (a used height is
+ * `max(height, min-height)`, and `box-sizing: border-box` is on every element, so a
+ * min-height of 44px is a border box of at least 44px). `null` when no rule names it.
+ */
+function declaredHeightPx(css: string, className: string): number | null {
+  const rules = overlayStyleRules(css).filter(
+    (rule) => rule.at === "" && selectorList(rule.selector).includes(`.${className}`),
+  );
+  const declared = overlayRuleDeclarations(rules, () => true);
+  const lengths = ["min-height", "height"]
+    .map((property) => /^([\d.]+)(rem|px)$/.exec((declared.get(property) ?? "").trim()))
+    .filter((match): match is RegExpExecArray => match !== null)
+    .map((match) => Number(match[1]) * (match[2] === "rem" ? 16 : 1));
+  return lengths.length === 0 ? null : Math.max(...lengths);
+}
+
+/**
+ * The height a set of classes gives one element: the tallest any of them declares, or
+ * `null` when no rule names any of them — so "no class here has a height" and "the
+ * classes add up to 0px" are not the same answer.
+ */
+function tallestDeclaredPx(css: string, classes: string[]): number | null {
+  const heights = classes.map((name) => declaredHeightPx(css, name));
+  return heights.every((px) => px === null) ? null : Math.max(...heights.map((px) => px ?? 0));
+}
+
+/** The `<header>` of one page's HTML, or "" when there is none. */
+function headerSlice(html: string): string {
+  const start = html.indexOf("<header");
+  const end = html.indexOf("</header>");
+  return start >= 0 && end > start ? html.slice(start, end) : "";
+}
+
+/** The class list of a tag's attributes, as an array. */
+function classListOf(attrs: string): string[] {
+  return (/class="([^"]*)"/.exec(attrs)?.[1] ?? "").split(/\s+/).filter(Boolean);
+}
+
+/** One `<a>` inside the header: its own attributes, and its visible markup. */
+function headerLinks(header: string): { attrs: string; inner: string }[] {
+  return [...header.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/g)].map((match) => ({
+    attrs: match[1] ?? "",
+    inner: match[2] ?? "",
+  }));
+}
+
+/**
+ * The header's action, as a rule the build enforces (owner-approved 6 Oct 2026).
+ *
+ * The header's second row is a **slot**, not a hardcoded Call link: its label is the
+ * page's primary label and its destination is the page's primary action, so a record with
+ * a booking page is one edit in the record and not a template change. Nothing pinned the
+ * old Call link — `grep -rn call-button test/` matched nothing — so it could have been
+ * mislabelled, pointed anywhere or deleted with no failure. What this refuses:
+ *
+ *   1. **a missing action, or a second one**, on every page that should carry it —
+ *      exactly one, so a duplicate target or a dead chip beside it fails;
+ *   2. **an action on a page that must not carry one**: the privacy notice (which prints
+ *      none of the business's details) and the contact section, where the action would
+ *      lead to the page the visitor is already on and, on a `contact-<service>.html`,
+ *      would throw away the service that page exists to preselect;
+ *   3. **the wrong visible text** — it must be the resolved `copy.contactLabel.label`,
+ *      and no `aria-label` or `title` may say something else beside it;
+ *   4. **the wrong destination** — it must be `primaryActionHref(record)`, and a
+ *      destination inside the bundle must name a page the bundle holds;
+ *   5. **a target the stylesheet cannot show is 44px tall** — the element must wear a
+ *      class whose own rule declares at least 2.75rem;
+ *   6. **an inline handler** (`onclick=` and friends) — the demos work without JavaScript,
+ *      and an inline handler is script the self-containment check cannot see, because
+ *      `externalReferenceProblems` reads `<script>` tags.
+ *
+ * The stylesheet is passed in and read explicitly, never assumed: a caller with no CSS
+ * gets the markup clauses and makes no height claim — the convention `phoneMenuProblems`
+ * sets, and the mistake that broke 31 tests when a check assumed a stylesheet.
+ */
+export function headerActionProblems(vars: {
+  pages: RenderedPage[];
+  /** `copy.contactLabel.label` for this record's family. */
+  label: string;
+  /** `primaryActionHref(record)` — the record's booking page, or the contact page. */
+  href: string;
+  css?: string;
+}): string[] {
+  const problems: string[] = [];
+  const css = vars.css ?? "";
+  for (const page of vars.pages) {
+    const wanted = headerActionBelongs(page.id);
+    const found = headerLinks(headerSlice(page.html)).filter((link) =>
+      classListOf(link.attrs).includes(HEADER_ACTION_CLASS),
+    );
+    if (!wanted) {
+      if (found.length > 0) {
+        problems.push(
+          `${page.file}: the header carries an action, but this page must not have one. The privacy notice prints none of the business's details, and the contact section is where the action leads — here it would point at the page the visitor is already on and, on a per-service page, throw away the service that page exists to preselect (headerActionBelongs).`,
+        );
+      }
+      continue;
+    }
+    if (found.length === 0) {
+      problems.push(
+        `${page.file}: the header carries no action. Every page except the privacy notice and the contact section carries exactly one — this page's own primary action (${vars.label} → ${vars.href}) — so a missing slot is a page that asks a visitor for nothing.`,
+      );
+      continue;
+    }
+    if (found.length > 1) {
+      problems.push(
+        `${page.file}: the header carries ${found.length} actions, not one. The second is read as a second way to act, and the first is the page's primary action: one page, one (headerActionBlock).`,
+      );
+      continue;
+    }
+    const link = found[0]!;
+    if (link.inner.trim() !== esc(vars.label)) {
+      problems.push(
+        `${page.file}: the header action reads "${link.inner.trim()}", not "${vars.label}" — the label this build resolved for this record (family.ts resolvePrimaryLabel, rule 8). A label typed into the template is how the header and the page's own action come to disagree.`,
+      );
+    }
+    const named = /(aria-label|title)="([^"]*)"/.exec(link.attrs);
+    if (named && named[2] !== esc(vars.label)) {
+      problems.push(
+        `${page.file}: the header action's ${named[1]} reads "${named[2]}" while its visible text is "${link.inner.trim()}". A name that diverges from the visible label makes the control a different thing to a screen reader than to the eye.`,
+      );
+    }
+    const href = /href="([^"]*)"/.exec(link.attrs)?.[1] ?? "";
+    if (href !== esc(vars.href)) {
+      problems.push(
+        `${page.file}: the header action points at "${href || "nothing"}", not at ${vars.href} — this record's primary action (primaryActionHref: the record's own booking page when it carries one, the contact page otherwise).`,
+      );
+    } else if (!/^([a-z][a-z0-9+.-]*:|\/\/|#)/i.test(href)) {
+      const target = href.split(/[?#]/)[0] ?? "";
+      if (!vars.pages.some((one) => one.file === target)) {
+        problems.push(
+          `${page.file}: the header action points at "${href}", which is not a page in this bundle (${vars.pages.map((one) => one.file).join(", ")}). A link to a file we never built is a 404 on the demo's most prominent control.`,
+        );
+      }
+    }
+    const handler = /\son[a-z]+\s*=/i.exec(link.attrs);
+    if (handler) {
+      problems.push(
+        `${page.file}: the header action carries an inline handler (${handler[0].trim()}). The demos work without JavaScript, and an inline handler is script the self-containment check cannot see — it reads <script> tags.`,
+      );
+    }
+    if (css !== "") {
+      const tallest = tallestDeclaredPx(css, classListOf(link.attrs));
+      if (tallest === null || tallest < 44) {
+        problems.push(
+          `${page.file}: the header action is ${tallest === null ? "given no min-height by any rule naming its own classes" : `at most ${tallest}px tall`} in the stylesheet this bundle ships. It is the second of a phone header's two rows, and 44px (2.75rem) is the smallest target this build accepts — the class it wears has to declare it.`,
+        );
+      }
+    }
+  }
+  return problems;
+}
+
+/**
+ * The phone controls the 44px audit found short of the design system's promise (backlog
+ * `273f40d1`): `.button--small` ("Get directions", 36px) and `.link-quiet` (a 22px line
+ * box). Each is checked only where a page actually renders it, so a class that leaves the
+ * markup does not leave a rule insisting on a control nobody ships.
+ *
+ * The stylesheet is read, never assumed — a caller with no CSS gets no size claim.
+ */
+export function tapTargetProblems(pages: RenderedPage[], css = ""): string[] {
+  const problems: string[] = [];
+  if (css === "") return problems;
+  for (const className of TAP_TARGET_CLASSES) {
+    const rendered = new RegExp(`class="[^"]*\\b${className}\\b`);
+    const on = pages.filter((page) => rendered.test(page.html));
+    if (on.length === 0) continue;
+    const px = declaredHeightPx(css, className);
+    if (px === null || px < 44) {
+      problems.push(
+        `${on.map((page) => page.file).join(", ")}: the control wearing "${className}" is ${px === null ? "given no min-height by any rule naming its own class" : `at most ${px}px tall`} in the stylesheet this bundle ships; the design system promises 44×44 (docs/design-system.md) and 44px is the smallest touch target this build accepts. A control a thumb cannot hit is the one defect a visitor blames on the business.`,
+      );
+    }
+  }
+  return problems;
+}
+
+/**
+ * What the manifest records about the header's action and the touch controls beside it,
+ * read from the pages and the stylesheet the bundle ships — so a reviewer reads where the
+ * action points, why the pages that omit it do, and how big the targets are, rather than
+ * inferring any of it from a picture.
+ */
+export function headerActionMeasure(vars: {
+  pages: RenderedPage[];
+  label: string;
+  href: string;
+  css: string;
+  /** True when the record carries its own booking page — the slot's other source. */
+  fromBooking: boolean;
+}): ManifestHeaderAction {
+  const carries: string[] = [];
+  const omitted: { file: string; why: string }[] = [];
+  for (const page of vars.pages) {
+    if (headerActionBelongs(page.id)) carries.push(page.file);
+    else
+      omitted.push({
+        file: page.file,
+        why:
+          page.id === "privacy"
+            ? "the privacy notice prints none of the business's details"
+            : "the contact section is where the action leads — here a header action would point at the page the visitor is already on, and on a per-service page would discard the service that page preselects in the HTML",
+      });
+  }
+  const action = headerLinks(headerSlice(vars.pages.find((page) => page.file === "index.html")?.html ?? "")).find(
+    (link) => classListOf(link.attrs).includes(HEADER_ACTION_CLASS),
+  );
+  const classes = action ? classListOf(action.attrs) : ["call-button"];
+  return {
+    label: vars.label,
+    href: vars.href,
+    href_source: vars.fromBooking
+      ? "the record's own booking_url — a booking link is primary where one exists (owner ruling, 4 Oct 2026)"
+      : "the demo's contact page (contact.html) — the record carries no booking_url",
+    class: classes.join(" "),
+    min_height_px: action ? tallestDeclaredPx(vars.css, classes) : null,
+    carries,
+    omitted,
+    touch_targets: TAP_TARGET_CLASSES.map((name) => ({
+      class: name,
+      min_height_px: declaredHeightPx(vars.css, name),
+      pages: vars.pages.filter((page) => new RegExp(`class="[^"]*\\b${name}\\b`).test(page.html)).map((page) => page.file),
+    })),
+    basis:
+      "The header's second row is the page's primary-action slot (owner-approved 6 Oct 2026): the label is copy.contactLabel.label and the destination is primaryActionHref(record), so a real record shows its family's own words and a record with a booking page links there without a template edit. headerActionProblems enforces exactly one action, that label, that destination, a 44px class and no inline handler; tapTargetProblems enforces the two controls the 44px audit (backlog 273f40d1) found short. The header's height and every control's box at 320/360/390/420px are measured in a browser and reported with the change — no stylesheet assertion measures a box.",
   };
 }
 
@@ -1126,6 +1369,20 @@ export function complianceChecks(vars: {
   // the home page alone, every overlay rule scoped to it, and the wash's contrast over
   // the lightest pixel a photograph can hold — measured, not asserted.
   problems.push(...headerOverlayProblems(pages, vars.css ?? ""));
+  // The header's action slot (owner-approved 6 Oct): exactly one page's primary action
+  // where it belongs, that label, that destination, a class the stylesheet shows is 44px,
+  // and none at all on the privacy notice or the contact section.
+  problems.push(
+    ...headerActionProblems({
+      pages,
+      label: copy.contactLabel.label,
+      href: primaryActionHref(record),
+      css: vars.css ?? "",
+    }),
+  );
+  // The two controls the 44px audit found short (backlog 273f40d1), read from the
+  // stylesheet that ships rather than from the box a browser happens to draw.
+  problems.push(...tapTargetProblems(pages, vars.css ?? ""));
   problems.push(...externalReferenceProblems({ pages, css: vars.css ?? "", js: vars.js ?? "" }));
   problems.push(...placeholderProblems(pages));
   return problems;
@@ -1593,6 +1850,15 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
        it — read from the stylesheet the bundle ships, so a reviewer reads the numbers
        rather than inferring them. */
     header: headerOverlayMeasure(css),
+    /* The header's action slot and the touch controls beside it: what the action says,
+       where it points and why, which pages omit it, and how big every thumb target is. */
+    header_action: headerActionMeasure({
+      pages,
+      label: copy.contactLabel.label,
+      href: primaryActionHref(record),
+      css,
+      fromBooking: (record.booking_url ?? "").trim() !== "",
+    }),
     /* Which family the page converts for, the rule that decided it, and the primary
        contact label with its own basis — derived in family.ts, recorded here so a
        reviewer reads the result and the reason together. */

@@ -331,10 +331,14 @@ test("the page prints the label the build resolved, and a different one fails th
   expect(checks(rendered)).toEqual([]);
 
   const [index, ...rest] = rendered.pages;
+  // The hero's own button, named exactly: the header's action carries the same label
+  // (owner revision, 6 Oct), so a bare `>label</a>` replace would doctor the header
+  // instead and prove the other check.
   const substituted = index!.html.replace(
-    `>${rendered.ctx.copy.contactLabel.label}</a>`,
-    ">Book Now</a>",
+    `class="button button--ghost" href="contact.html">${rendered.ctx.copy.contactLabel.label}</a>`,
+    `class="button button--ghost" href="contact.html">Book Now</a>`,
   );
+  expect(substituted).not.toBe(index!.html);
   const problems = checks(rendered, [{ ...index!, html: substituted }, ...rest]);
   const joined = problems.join(" ");
   expect(joined).toContain("Book Now");

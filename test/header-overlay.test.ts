@@ -73,7 +73,7 @@ test("the home header on the photograph passes every clause of the check", () =>
   expect(headerOverlayProblems(pages, css)).toEqual([]);
   // Positive controls for the two halves the brief names: the marking and the stylesheet.
   expect(pages.find((page) => page.file === "index.html")!.html).toContain('class="page page--index"');
-  expect(css).toContain(".page--index .site-header .call-button:not(.call-button--muted)");
+  expect(css).toContain(".page--index .site-header .call-button {");
 });
 
 test("with no stylesheet the check still refuses the marking half, and says no more", () => {
@@ -164,15 +164,16 @@ test("a header with no wash, or one whose alphas cannot be read, fails the build
   expect(problems(pages, opaque)).toContain("no rgba() stop this build can read");
 });
 
-test("the action left as the ink pill, or painted over the muted chip, fails the build", () => {
+test("the action left as the ink pill fails the build", () => {
   const { pages, css } = render();
   const inkPill = css
-    .replace(".page--index .site-header .call-button:not(.call-button--muted) { background: #fff; color: var(--ink); }", "")
-    .replace(".page--index .site-header .call-button:not(.call-button--muted):hover { background: #F1EEE8; color: var(--ink); }", "");
+    .replace(".page--index .site-header .call-button { background: #fff; color: var(--ink); }", "")
+    .replace(".page--index .site-header .call-button:hover { background: #F1EEE8; color: var(--ink); }", "");
   expect(problems(pages, inkPill)).toContain("not switched off the ink pill");
-  // The white fill without the guard paints the "no phone on file" chip as a button.
-  const unguarded = css.replaceAll(":not(.call-button--muted)", "");
-  expect(problems(pages, unguarded)).toContain("also catches the muted");
+  // The "painted over a chip that is not an action" half of this clause left with the
+  // chip: the header's action is the only element in the header wearing the button
+  // treatment now, and `headerActionProblems` refuses a second one in the markup — the
+  // place a dead chip would reappear — rather than exempting it in CSS.
 });
 
 test("the accent focus ring on the wash fails the build", () => {

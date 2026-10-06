@@ -559,7 +559,6 @@ export interface DemoCopy {
 export interface UiCopy extends FormLabels, ExtraLabels {
   skip: string;
   callLabel: string;
-  noPhoneNote: string;
   directions: string;
   osm: string;
   honeypot: string;
@@ -576,7 +575,6 @@ export interface UiCopy extends FormLabels, ExtraLabels {
 export const UI: UiCopy = {
   skip: "Skip to content",
   callLabel: "Call",
-  noPhoneNote: "Phone number not recorded",
   directions: "Get directions",
   osm: "See it on OpenStreetMap",
   honeypot: "Leave this field empty",
