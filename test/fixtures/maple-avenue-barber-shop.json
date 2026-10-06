@@ -4,7 +4,7 @@
   "category": "Barber shop",
   "category_group": "Salons & barbers",
   "address": {
-    "street": "482 Maple Avenue",
+    "street": "482 Ladybug Lane",
     "city": "Hamilton",
     "province": "ON",
     "postcode": "L8P 2P9"
@@ -48,7 +48,7 @@
   ],
   "about_paragraphs": [
     "Two chairs, a wall of mirrors and a stack of magazines that is always a few months old.",
-    "The shop has been on Maple Avenue since 2016, in a narrow storefront between a laundromat and a corner store. Most of the people in the chairs are regulars from Durand and Kirkendall, and a few of them have been coming since the first month.",
+    "The shop has been on Ladybug Lane since 2016, in a narrow storefront between a laundromat and a corner store. Most of the people in the chairs are regulars from Durand and Kirkendall, and a few of them have been coming since the first month.",
     "The week runs one way: quiet mornings Tuesday to Thursday, a full house on Friday afternoons and Saturday morning. Kids are welcome, and there is a booster seat by the second chair."
   ],
   "accepts_walk_ins": true,

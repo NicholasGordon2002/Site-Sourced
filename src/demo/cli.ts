@@ -62,7 +62,7 @@ Record format (one JSON object, or an array, or {"records": [...]}):
     "name": "Maple Avenue Barber Shop",     // required
     "category": "Barber shop",              // required
     "slug": "maple-avenue-barber-shop",     // optional; derived from the name
-    "address": { "street": "123 Maple Ave", "city": "Hamilton",
+    "address": { "street": "123 Ladybug Lane", "city": "Hamilton",
                  "province": "ON", "postcode": "L8P 2A1" },
     "phone": "+1 905-555-0142",
     "email": "shop@example.com",
