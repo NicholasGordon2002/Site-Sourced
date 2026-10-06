@@ -213,6 +213,29 @@ export const NEUTRAL_CONTACT_LABEL = "Contact Us";
  * and never anything that sounds like a booking.
  */
 export const NEUTRAL_SUBMIT_LABEL = "Send message";
+/** Where a recorded service's own name goes in a service-card action's label. */
+export const SERVICE_NAME_SLOT = "{service}";
+/**
+ * The service card's one action, per family (owner text, 6 October 2026: an action
+ * "named for that service"). It is a **template**: the card is a plain panel, and its
+ * single action carries the family's own words with the recorded service's name in
+ * them — "Request Hot shave" for an appointment, "Ask about Hot shave" for an inquiry.
+ *
+ * Two reasons the words live here rather than in the renderer. First, they are the
+ * family's own: Family A may ask for a time and never book one, Family B may ask about
+ * a job and never promise a price, so "Get a quote" is not available to it. Second, the
+ * build check (`serviceCardProblems`) composes the label a card must carry from this
+ * same function, so the action a visitor reads and the action the gate expects cannot
+ * become two different strings.
+ */
+export const SERVICE_ACTION_LABELS: Record<ConversionFamily, string> = {
+  appointment: `Request ${SERVICE_NAME_SLOT}`,
+  inquiry: `Ask about ${SERVICE_NAME_SLOT}`,
+};
+/** The one service card's action label: `Request Hot shave` / `Ask about Hot shave`. */
+export function serviceActionLabel(family: ConversionFamily, service: string): string {
+  return SERVICE_ACTION_LABELS[family].replace(SERVICE_NAME_SLOT, service);
+}
 
 /** Family B's quote-shaped profiles: the ones whose job starts with a described scope. */
 const QUOTE_PROFILES = ["trades", "landscaping"];

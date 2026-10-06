@@ -18,10 +18,11 @@
  *                                     at the business reads the message, so "they
  *                                     contact you" would promise something nobody
  *                                     performs (lead ruling 2).
- *   the service-card action            "Request this" (A) / "Ask about this" (B) — a
- *                                     quiet link that preselects the recorded service
- *                                     on the contact form. Never "Get a quote": an
- *                                     inquiry page may not promise a price.
+ *   the service-card action            `Request <service>` (A) / `Ask about <service>`
+ *                                     (B) — the one 44px action on a plain card,
+ *                                     opening the page built for that service. Never
+ *                                     "Get a quote": an inquiry page may not promise a
+ *                                     price.
  *   the extras card (`extrasLines`)   the record's own words, one per line, and
  *                                     nothing at all when the record carries none.
  *                                     `accepts_walk_ins: true` is the one line a
@@ -34,7 +35,7 @@
  */
 
 import type { BusinessRecord, FormDeliveryMode } from "./types.ts";
-import { familyHonestyProblems, type ConversionFamily } from "./family.ts";
+import { familyHonestyProblems, serviceActionLabel, type ConversionFamily } from "./family.ts";
 
 /** One block of a page. `render.ts` owns how each one is drawn. */
 export type SectionId =
@@ -329,8 +330,9 @@ export function familyRenderingProblems(vars: {
     problems.push("no page carries the inquiry-steps block whose three lines this build derived — the home page of an inquiry build carries it (design spec §3).");
   }
 
-  /* 5. every service card is one link, carrying its own recorded service to a page
-        whose form already has that service chosen — `serviceCardProblems` below. */
+  /* 5. every service card is a plain panel with one named action, carrying its own
+        recorded service to a page whose form already has that service chosen —
+        `serviceCardProblems` below. */
 
   /* 6. the pages are the sections this family's order table names, in that order */
   for (const page of pages) {
@@ -368,7 +370,6 @@ export function familyRenderingProblems(vars: {
 const OPTIONAL_SECTIONS = new Set<SectionId>(["extras"]);
 
 /* ------------------------------------------------- the service card, as one action */
-
 /** One card as it is rendered: the `<li class="card">` block, and the page it is on. */
 interface RenderedCard {
   page: string;
@@ -376,8 +377,43 @@ interface RenderedCard {
 }
 
 /**
- * **A service card is one link, one action, and the action carries that service**
- * (owner revision #4, 6 Oct 2026). Run from `complianceChecks` on every page.
+ * The heading level each page's service cards carry, so a card cannot skip a level:
+ * `h3` under the home page's section heading, `h2` on the services page, whose `h1` is
+ * the offering itself (the two `servicesBlock` calls in `render.ts`). A page that
+ * renders the list without an entry here fails clause 3 rather than skipping it.
+ */
+const CARD_HEADING: Record<string, string> = { "index.html": "h3", "services.html": "h2" };
+
+/**
+ * The `min-height`, in px, that the stylesheet really gives an element carrying these
+ * classes: the **last** declaration naming one of its own classes wins, which is how a
+ * browser resolves `.button` followed by a modifier such as `.button--small`.
+ *
+ * Read from the stylesheet rather than asserted about the markup, because the build has
+ * no browser to measure: clause 6's job is to prove a rule exists, and the browser audit
+ * measures the box at 360px.
+ */
+function actionMinHeightPx(css: string, classes: string[]): number {
+  let px = 0;
+  for (const declaration of css.matchAll(/min-height:\s*([\d.]+)(rem|px)/g)) {
+    const at = declaration.index ?? 0;
+    const open = css.lastIndexOf("{", at);
+    if (open < 0) continue;
+    const boundary = Math.max(css.lastIndexOf("}", open), css.lastIndexOf("{", open - 1));
+    const selector = css.slice(boundary + 1, open);
+    const named = [...selector.matchAll(/\.([A-Za-z0-9_-]+)/g)].map((m) => m[1]!);
+    if (!named.some((className) => classes.includes(className))) continue;
+    px = declaration[2] === "rem" ? Number(declaration[1]) * 16 : Number(declaration[1]);
+  }
+  return px;
+}
+
+/**
+ * **A service card is a plain panel with one action named after its service** (owner
+ * text, 6 October 2026: "make each service card a plain panel with one accessible,
+ * keyboard/touch-safe action button of at least 44px named for that service, opening
+ * its per-service Contact page with the service selected; keep the truthful no-JS
+ * fallback"). Run from `complianceChecks` on every page.
  *
  * The owner's words: a visitor who taps "Hot shave" must land on the contact page with
  * "Hot shave" already chosen, not a blank form. The build's answer is a real page per
@@ -385,30 +421,45 @@ interface RenderedCard {
  * option with `selected` in the HTML — so the choice survives JavaScript being off, a
  * static host that ignores query strings, and a browser that never runs our script.
  *
- * Six refusals, each one a way this could stop being true:
+ * Seven clauses, each one a way this could stop being true:
  *
- *   1. **exactly one link per card** — the whole card is the target, and a card with a
- *      second link (or an action that is still a link inside a link) is two actions;
- *   2. **the card's heading is a recorded service** — the card carries the record's own
- *      name for the thing, never a category word or a rewritten one;
- *   3. **the destination is a page this bundle contains** — a card pointing at a page
- *      nobody built is a 404 on the published host;
- *   4. **the destination really has that service chosen** — exactly one `selected`
- *      option in its service select, and it is the card's own service. This is the rule
- *      the owner asked for: the page a tap lands on is already the answer;
- *   5. **every service page is reachable** — a per-service page nothing links to is a
- *      page a visitor can only reach by guessing a URL;
- *   6. **no card carries a booking word or a second action** — the card's own markup is
- *      run through the family honesty guard, the same one that binds the rest of the
- *      page, so "Book now" on a card fails here as it would anywhere else.
+ *   1. **one link per card, and no second control** — the heading and the note are
+ *      ordinary text; the one `<a>` is the action. A `<button>` beside it is refused:
+ *      a button cannot navigate with JavaScript off, and it breaks open-in-new-tab and
+ *      copy-link, so the action stays a link wearing the button treatment;
+ *   2. **no link wraps the card's heading** — that is the shape the owner replaced, and
+ *      `class="service-card"` is its fingerprint;
+ *   3. **the heading is a recorded service, escaped exactly, at the level its page
+ *      uses** — the card carries the record's own name for the thing;
+ *   4. **the action's text is the family's own label for that same recorded name**
+ *      ("Request Hot shave" / "Ask about Hot shave"), composed by `serviceActionLabel`
+ *      from `copy.ts`/`family.ts`, so the action and the heading cannot disagree — and
+ *      four identical "Request this" labels could not pass as a list of links;
+ *   5. **the destination is the page built for that service** — `contact-<slug>.html`,
+ *      derived from the recorded name and present in this bundle, carrying `#form`, and
+ *      its service select already showing exactly one `selected` option equal to the
+ *      card's heading. This is the rule the owner asked for, and it is enforceable only
+ *      while the pages are pre-rendered;
+ *   6. **the action is at least 44px**, read from the stylesheet the bundle ships: some
+ *      rule naming one of the action's own classes must set a `min-height` of 44px or
+ *      more. The stylesheet is the honest half — the build cannot measure a browser box;
+ *   7. **no card carries a booking word, a second action or an inline event handler** —
+ *      the card's own markup goes through the family honesty guard, and an `onclick` in
+ *      a card is a card that does nothing with JavaScript off, in a bundle whose only
+ *      script is `site.js`.
  */
 export function serviceCardProblems(vars: {
   pages: { file: string; html: string }[];
   record: BusinessRecord;
   family: ConversionFamily;
+  /** `servicePageFile` from `render.ts`: the file a recorded service's page is. */
+  pageForService: (service: string) => string;
+  /** The stylesheet this bundle ships, for clause 6. Absent means clause 6 is skipped. */
+  css?: string;
 }): string[] {
-  const { pages, record, family } = vars;
+  const { pages, record, family, pageForService, css } = vars;
   const problems: string[] = [];
+  const visible = (html: string) => html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
   // The recorded service names, escaped exactly as the page writes them, so the
   // comparison is between what the record says and what a visitor reads.
   const recorded = new Map<string, string>();
@@ -416,54 +467,95 @@ export function serviceCardProblems(vars: {
     const name = typeof service === "string" ? service.trim() : String((service as { name?: string })?.name ?? "").trim();
     if (name) recorded.set(esc(name), name);
   }
-
   const cards: RenderedCard[] = [];
   for (const page of pages) {
-    // Only the service list's items: `.hours` is a card too (`dl.hours.card`), and it
-    // is not an action.
-    for (const chunk of page.html.split('<li class="card">').slice(1)) {
+    // The service list itself: `.hours` is a `dl.card` too, and it is not an action.
+    const list = /<ul class="services">([\s\S]*?)<\/ul>/.exec(page.html);
+    if (!list) continue;
+    if (!CARD_HEADING[page.file]) {
+      problems.push(
+        `${page.file}: renders the service list at a heading level this check does not know. The level a card's heading takes is derived from the page's own structure (${Object.entries(CARD_HEADING).map(([file, tag]) => `${file} → ${tag}`).join(", ")}), so a page that starts rendering the list must declare its level here — otherwise its cards are checked for everything except their heading level.`,
+      );
+    }
+    for (const chunk of list[1]!.split('<li class="card">').slice(1)) {
       const end = chunk.indexOf("</li>");
-      const html = end >= 0 ? chunk.slice(0, end) : chunk;
-      if (!html.includes("service-card")) continue;
-      cards.push({ page: page.file, html });
+      cards.push({ page: page.file, html: end >= 0 ? chunk.slice(0, end) : chunk });
     }
   }
-
   const destinations = new Set<string>();
   for (const card of cards) {
-    const anchor = /<a\b[^>]*class="service-card"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/.exec(card.html);
-    if (!anchor) {
+    /* 1. one link, no second control, no inline handler */
+    const links = card.html.match(/<a\b/gi) ?? [];
+    const anchor = /<a\b([^>]*)>([\s\S]*?)<\/a>/i.exec(card.html);
+    if (links.length !== 1 || !anchor) {
       problems.push(
-        `${card.page}: a service card carries no single link with class="service-card". The whole card is one link home to its own service — one element a visitor taps, wrapping the card's heading, note and action label.`,
+        `${card.page}: a service card carries ${links.length} links, not one. A card is a plain panel with a single action — the button that asks about that service — so there is one thing to tap and one stop for a keyboard, and a second link is a second promise about what happens next.`,
       );
       continue;
     }
-    const [, href = "", inner = ""] = anchor;
-
-    if (/<a\b/i.test(inner) || (card.html.match(/<a\b/gi) ?? []).length !== 1) {
-      problems.push(
-        `${card.page}: a service card carries more than one link. A card is one action — the action label is text inside the card's own link, not a link of its own.`,
-      );
-    }
+    const [, attrs = "", inner = ""] = anchor;
     if (/<button\b|<input\b[^>]*type="(?:submit|button)"/i.test(card.html)) {
       problems.push(
-        `${card.page}: a service card carries a second control beside its link. One card, one action: a button here is a second thing to press and a second promise about what happens next.`,
+        `${card.page}: a service card carries a button or an input beside its action. The action is a link wearing the button treatment: a real <button> cannot navigate with JavaScript off, and it breaks open-in-new-tab, copy-link and middle-click. One card, one action.`,
       );
     }
-
-    const text = inner.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-    const heading = /<h[1-6][^>]*>([\s\S]*?)<\/h[1-6]>/.exec(inner)?.[1]?.trim() ?? "";
+    const handlers = [
+      ...new Set(
+        [...card.html.matchAll(/<[a-z][^>]*>/gi)].flatMap((tag) =>
+          [...tag[0]!.matchAll(/\son([a-z]+)\s*=/gi)].map((m) => `on${m[1]!.toLowerCase()}`),
+        ),
+      ),
+    ];
+    if (handlers.length > 0) {
+      problems.push(
+        `${card.page}: a service card carries an inline event handler (${handlers.join(", ")}). The bundle's only script is site.js and every page works unchanged with JavaScript off — a card that needs an ${handlers[0]} does nothing for a visitor whose browser does not run it, and nothing in the page says so.`,
+      );
+    }
+    /* 2. the heading is the panel's own text, not a link */
+    const headingMatch = /<(h[1-6])\b[^>]*>([\s\S]*?)<\/\1>/i.exec(card.html);
+    const headingTag = headingMatch?.[1]?.toLowerCase() ?? "";
+    const heading = headingMatch?.[2]?.trim() ?? "";
+    if (/class="service-card"/.test(card.html) || (headingTag && /<h[1-6]\b/i.test(inner))) {
+      problems.push(
+        `${card.page}: the card wraps its heading in a link (class="service-card"). That is the shape the owner replaced on 6 October: the heading and the note are ordinary text on the panel, and the one link is the action underneath, named after its own service.`,
+      );
+    }
+    /* 3. the heading is the record's own name for the service */
     if (!heading) {
-      problems.push(`${card.page}: a service card's link has no heading naming the service it carries, so a visitor cannot tell which service they are asking for.`);
+      problems.push(
+        `${card.page}: a service card carries no heading naming the service it is for, so a visitor cannot tell which service the action underneath asks about.`,
+      );
     } else if (!recorded.has(heading)) {
       problems.push(
         `${card.page}: a service card names "${heading}", which the record does not list as a service. The card's name for the thing is the record's own — a service card never invents a name, and its destination selects the recorded one.`,
       );
     }
-
-    // The destination: the page this tap lands on, and the service its own form shows.
+    const wantTag = CARD_HEADING[card.page];
+    if (wantTag && headingTag && headingTag !== wantTag) {
+      problems.push(
+        `${card.page}: a service card's heading is a <${headingTag}>; this page's service names are <${wantTag}>. A card heading at the wrong level is a page whose headings skip or repeat a level for a screen reader.`,
+      );
+    }
+    /* 4. the action is named after that same service, in the family's own words */
+    const name = recorded.get(heading);
+    const label = name ? serviceActionLabel(family, name) : "";
+    if (name && inner.trim() !== esc(label)) {
+      problems.push(
+        `${card.page}: the card's action reads "${visible(inner)}" while the ${family} family's label for "${name}" is "${label}". The action is named after the service it opens ("${
+          family === "appointment" ? "Request <service>" : "Ask about <service>"
+        }"), and the words come from copy.ts/family.ts — so four identical labels cannot stand in for a list of services.`,
+      );
+    }
+    if (/\baria-label(?:ledby)?\s*=/.test(attrs)) {
+      problems.push(
+        `${card.page}: the card's action carries an aria-label, so the name a screen reader announces and the words a visitor reads can drift apart. The visible label is the accessible name.`,
+      );
+    }
+    /* 5. the destination: the page built for that service, with `#form` */
+    const href = /\bhref="([^"]*)"/.exec(attrs)?.[1]?.trim() ?? "";
     const dest = href.split("#")[0]!.trim();
     const fragment = href.includes("#") ? href.slice(href.indexOf("#")) : "";
+    const wantFile = name ? pageForService(name) : "";
     const target = pages.find((p) => p.file === dest);
     if (!target) {
       problems.push(
@@ -472,12 +564,17 @@ export function serviceCardProblems(vars: {
       continue;
     }
     destinations.add(dest);
+    if (wantFile && dest !== wantFile) {
+      problems.push(
+        `${card.page}: the card for "${name}" links to ${dest}; the page built for that recorded service is ${wantFile}. The destination is derived from the service's own recorded name, never typed — a page that merely happens to have the option selected is not the page the card promises.`,
+      );
+    }
     if (!target.html.includes('id="contact-form"')) {
       problems.push(`${card.page}: a service card links to ${dest}, which carries no form — the action would ask a visitor for nothing.`);
     }
-    if (!fragment) {
+    if (fragment !== "#form") {
       problems.push(
-        `${card.page}: a service card links to ${dest} without the #form fragment, so the tap lands at the top of the page instead of on the form the card is asking the visitor to fill in.`,
+        `${card.page}: a service card links to ${dest} with "${fragment || "no fragment"}", not "#form", so the tap does not land on the form the card is asking the visitor to fill in.`,
       );
     }
     const select = /<select[^>]*\bname="service"[\s\S]*?<\/select>/.exec(target.html)?.[0];
@@ -497,18 +594,26 @@ export function serviceCardProblems(vars: {
         );
       }
     }
-
+    /* 6. the action is a control of at least 44px, per the stylesheet the bundle ships */
+    if (css) {
+      const classes = (/\bclass="([^"]*)"/.exec(attrs)?.[1] ?? "").split(/\s+/).filter(Boolean);
+      const minHeight = actionMinHeightPx(css, classes);
+      if (minHeight < 44) {
+        problems.push(
+          `${card.page}: the card's action (class="${classes.join(" ")}") is ${minHeight === 0 ? "given no min-height by any rule naming its own classes" : `at most ${minHeight}px tall`} in the stylesheet this bundle ships; the owner asked for at least 44px (2.75rem). The action wears the site's button treatment (.button/.call-button, min-height: 2.75rem) — a card whose action is a bare text line is a 24px touch target.`,
+        );
+      }
+    }
     // The family honesty guard, on the card's own markup: a card may not say what its
     // family may not say, wherever on the page it sits.
     problems.push(
       ...familyHonestyProblems({
-        pages: [{ file: `${card.page} (the service card "${text.slice(0, 60)}")`, html: card.html }],
+        pages: [{ file: `${card.page} (the service card "${visible(inner).slice(0, 60)}")`, html: card.html }],
         record,
         family,
       }),
     );
   }
-
   // 5. every per-service page is the destination of some card.
   for (const page of pages) {
     if (!/contact-.+\.html$/.test(page.file)) continue;
@@ -518,7 +623,6 @@ export function serviceCardProblems(vars: {
       );
     }
   }
-
   // A record with services must show them, each with one card, on both pages that
   // render the list: a card that silently drops off a page is a service a visitor
   // cannot ask about.
@@ -537,7 +641,6 @@ export function serviceCardProblems(vars: {
       }
     }
   }
-
   return problems;
 }
 

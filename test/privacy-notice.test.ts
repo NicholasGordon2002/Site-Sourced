@@ -338,6 +338,9 @@ test("a page that loads anything from another origin fails the no-tracking sente
   expect(externalReferenceProblems({ pages: [{ file: "index.html", html: `<script src="analytics.js"></script>` }], css: "", js: "" }).join("\n")).toContain("site.js is the bundle's only script");
   expect(externalReferenceProblems({ pages: [], css: `@import url("https://fonts.example.com/x.css");`, js: "" }).join("\n")).toContain("the stylesheet pulls a file from another origin");
   expect(externalReferenceProblems({ pages: [], css: "", js: `document.cookie = "a=1";` }).join("\n")).toContain('site.js uses a cookie');
+  // An inline event handler is the hole the script-tag loop left open: it is behaviour
+  // with no file behind it, and a page that needs one does nothing without JavaScript.
+  expect(externalReferenceProblems({ pages: [{ file: "index.html", html: `<a href="contact.html" onclick="go()">Contact</a>` }], css: "", js: "" }).join("\n")).toContain('inline event handler (onclick)');
 });
 
 /* ------------------------------------------------------------- the wording is sealed */

@@ -36,6 +36,7 @@ import {
 } from "./copy.ts";
 import { contactLabelProblems, familyHonestyProblems, familyProblems, submitLabelProblems } from "./family.ts";
 import { SECTION_ORDER, extrasLines, familyRenderingProblems, serviceCardProblems, type PageKey } from "./family-render.ts";
+import { SERVICE_ACTION_LABELS, SERVICE_NAME_SLOT, serviceActionLabel } from "./family.ts";
 import { currentRetentionPractice, PRACTICE_FILE, readRetentionPractice, type RetentionPractice } from "./retention.ts";
 import type { FormDelivery } from "./delivery.ts";
 import { formDeliveryProblems, resolveDelivery } from "./delivery.ts";
@@ -646,7 +647,15 @@ export function complianceChecks(vars: {
   }
   // A service card is one link, one action, carrying its own recorded service to a
   // page whose form already has that service chosen (owner revision #4, 6 Oct).
-  problems.push(...serviceCardProblems({ pages, record, family: copy.conversion.family }));
+  problems.push(
+    ...serviceCardProblems({
+      pages,
+      record,
+      family: copy.conversion.family,
+      pageForService: servicePageFile,
+      css: vars.css,
+    }),
+  );
   problems.push(...privacyLinkProblems(pages));
   problems.push(...headingStackProblems(pages));
   problems.push(...wordmarkLinkProblems(pages));
@@ -714,6 +723,23 @@ export function externalReferenceProblems(vars: { pages: RenderedPage[]; css: st
       }
     }
 
+    // An inline event handler is behaviour with no file behind it. The bundle's only
+    // script is site.js, and every page works unchanged with JavaScript off — but the
+    // script-tag loop above cannot see `onclick=`, because that is an attribute on an
+    // element rather than a `<script>` element. So the tags themselves are read, and an
+    // attribute that runs code is refused wherever it sits.
+    const handlers = [
+      ...new Set(
+        [...page.html.matchAll(/<[a-z][^>]*>/gi)].flatMap((tag) =>
+          [...tag[0]!.matchAll(/\son([a-z]+)\s*=/gi)].map((m) => `on${m[1]!.toLowerCase()}`),
+        ),
+      ),
+    ];
+    if (handlers.length > 0) {
+      problems.push(
+        `${on}: carries an inline event handler (${handlers.join(", ")}). The bundle's only script is site.js and the page must work unchanged with JavaScript off — an attribute that runs code is behaviour no visitor can read in the page source, and nothing this bundle ships.`,
+      );
+    }
     for (const tag of page.html.matchAll(/<(?:link|img|iframe|source|embed|object|video|audio)\b[^>]*>/gi)) {
       const element = tag[0]!;
       for (const attr of ["href", "src", "data", "poster"]) {
@@ -1082,6 +1108,7 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   }
 
   const narrativeCount = narrativeParagraphs(record).length;
+  const firstService = normaliseServices(record)[0]?.name;
 
   const manifest: DemoManifest = {
     generator: GENERATOR,
@@ -1137,13 +1164,21 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
          every page it produces are recorded here, so a reviewer reads what a tap does
          rather than inferring it. */
       service_action: {
-        label: copy.conversion.family === "appointment" ? copy.ui.serviceActionRequest : copy.ui.serviceActionAsk,
+        label: SERVICE_ACTION_LABELS[copy.conversion.family],
+        label_slot: SERVICE_NAME_SLOT,
+        label_basis:
+          `the label is the family's own template with the recorded service's name in it (\`family.ts\` ` +
+          `SERVICE_ACTION_LABELS), so a card reads e.g. "${firstService ? serviceActionLabel(copy.conversion.family, firstService) : "(no recorded service)"}" — ` +
+          `never a generic "Request this", which would leave the action and the heading free to disagree.`,
         mechanism:
-          "the whole card is one link to a page built for that recorded service " +
-          "(contact-<service-slug>.html#form), whose own service select carries that " +
-          "service's option with `selected` in the HTML — so the choice is there with " +
-          "JavaScript off, on a static host that ignores query strings. No script and " +
-          "no query string takes part.",
+          "each card is a plain panel — heading and note as ordinary text — with exactly " +
+          "one action: a link wearing the site's 44px button treatment (.button, " +
+          "min-height: 2.75rem) named after that recorded service, pointing at the page " +
+          "built for it (contact-<service-slug>.html#form), whose own service select " +
+          "carries that service's option with `selected` in the HTML — so the choice is " +
+          "there with JavaScript off, on a static host that ignores query strings. No " +
+          "script and no query string takes part, and no <button> is used: a button " +
+          "cannot navigate with JavaScript off.",
         default_option: fields.fields.find((f) => f.name === "service")?.preselected ?? null,
         pages: normaliseServices(record).map((service) => ({ service: service.name, file: servicePageFile(service.name) })),
       },

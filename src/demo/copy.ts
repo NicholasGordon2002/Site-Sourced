@@ -22,6 +22,7 @@ import {
   familyRules,
   resolveFamily,
   resolvePrimaryLabel,
+  SERVICE_ACTION_LABELS,
   wholeWordPattern,
   type FamilyResolution,
   type PrimaryLabel,
@@ -563,7 +564,11 @@ export interface UiCopy extends FormLabels, ExtraLabels {
   osm: string;
   honeypot: string;
   privacyLink: string;
-  /** The service-card action, per family. It asks for the thing; it never promises a price. */
+  /**
+   * The service-card action, per family, as a template with `SERVICE_NAME_SLOT` where
+   * the recorded service's own name goes. It asks for the thing and never promises a
+   * price; the words themselves are `SERVICE_ACTION_LABELS` in `family.ts`.
+   */
   serviceActionRequest: string;
   serviceActionAsk: string;
 }
@@ -622,9 +627,12 @@ export const UI: UiCopy = {
   extraDirectBilling: "Direct billing",
   walkInsWelcome: "Walk-ins welcome.",
 
-  /* The service-card action (§6). Family-aware; never a price. */
-  serviceActionRequest: "Request this",
-  serviceActionAsk: "Ask about this",
+  /* The service-card action (§6). Family-aware; never a price. The label is a template
+     from `family.ts`: `{service}` is where the recorded service's own name goes, so a
+     card reads "Request Hot shave" and not a generic "Request this" (owner text, 6 Oct
+     2026). */
+  serviceActionRequest: SERVICE_ACTION_LABELS.appointment,
+  serviceActionAsk: SERVICE_ACTION_LABELS.inquiry,
 };
 
 /**

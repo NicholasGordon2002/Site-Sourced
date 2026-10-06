@@ -46,6 +46,7 @@ import { illustrationLabel, isIllustrativeImage } from "./copy.ts";
 import type { FormDelivery } from "./delivery.ts";
 import type { FieldGroup, FieldSpec } from "./fields.ts";
 import { SECTION_ORDER, extrasLines, type SectionId } from "./family-render.ts";
+import { serviceActionLabel } from "./family.ts";
 import type { ResolvedForm } from "./forms.ts";
 
 export interface RenderContext {
@@ -181,7 +182,8 @@ function hoursBlock(record: BusinessRecord, copy: DemoCopy): string {
  * The contact page a service card is its own link to, and the fragment that lands the
  * visitor on the form (owner revision #4, 6 Oct 2026).
  *
- * A card is **one link, one action, carrying its own service**: tapping "Hot shave"
+ * A card is **a panel with one action, carrying its own service**: tapping "Request Hot
+ * shave"
  * opens a contact page whose select already says "Hot shave". That page is a real file
  * the build writes (`contact-hot-shave.html`), because the choice has to be in the HTML
  * the browser receives: a query string, a fragment or a script would all leave a
@@ -207,18 +209,17 @@ function servicesBlock(record: BusinessRecord, level: 2 | 3, copy: DemoCopy): st
   if (services.length === 0) {
     return `        <p class="muted">${esc(copy.servicesEmpty)}</p>`;
   }
-  // The action asks for the thing; it never promises a price, which is why Family B
-  // says "Ask about this" and never "Get a quote" (design spec §6).
-  const action = copy.conversion.family === "appointment" ? copy.ui.serviceActionRequest : copy.ui.serviceActionAsk;
-  // The whole card is the link — heading, note and action label inside one <a> — so
-  // there is one target per card and nothing else to tap. The label is the action a
-  // visitor reads; the service it carries is the card's own.
+  // The action asks for the thing and names it, and it never promises a price — which is
+  // why Family B says "Ask about Hot shave" and never "Get a quote" (design spec §6).
+  // The words are the family's own, composed in `family.ts` (`serviceActionLabel`);
+  // nothing here types them. The card itself is a plain panel: heading and note as
+  // ordinary text, and this one link as its only control.
   return `        <ul class="services">\n${services
     .map(
       (s) =>
-        `          <li class="card"><a class="service-card" href="${esc(serviceActionHref(s.name))}">` +
-        `<${heading}>${esc(s.name)}</${heading}>${s.note ? `<p>${esc(s.note)}</p>` : ""}` +
-        `<p class="service-action">${esc(action)}</p></a></li>`,
+        `          <li class="card"><${heading}>${esc(s.name)}</${heading}>${s.note ? `<p>${esc(s.note)}</p>` : ""}` +
+        `<p class="service-action"><a class="button" href="${esc(serviceActionHref(s.name))}">` +
+        `${esc(serviceActionLabel(copy.conversion.family, s.name))}</a></p></li>`,
     )
     .join("\n")}\n        </ul>`;
 }
@@ -1349,32 +1350,26 @@ a:hover { text-decoration-thickness: 2px; }
 }
 
 .services { list-style: none; margin: var(--s-5) 0 0; padding: 0; display: grid; gap: var(--s-3); }
-/* A service card is one link (owner revision, 6 Oct): the whole surface is the target,
-   and the card's own padding moves onto that link so the tap area is the card and not
-   the text in it. The list item keeps the surface, the hairline and the radius, and
-   clips the link's hover fill to that radius; the flex stretch makes the link as tall
-   as the tallest card in the row, so a card's hover state is the card, not a stripe
-   through the middle of it. */
+/* A service card is a plain panel with one action (owner text, 6 Oct 2026). The heading
+   and the note are ordinary text; the card's one control is a link wearing the site's
+   button treatment — 44px tall, named after its own service. Nothing else in the card is
+   clickable, so there is one tap target and one tab stop per card, and the card stops
+   being a single giant target a thumb can hit while it is scrolling. The column layout
+   and the action's auto top margin keep the button at the foot of every card, so a row
+   of cards with notes of different lengths still lines its buttons up. */
 .services li.card {
-  padding: 0;
+  padding: var(--s-4) var(--s-5);
   display: flex;
-  overflow: hidden;
+  flex-direction: column;
   transition: border-color .15s ease;
 }
 .services li.card:hover, .services li.card:focus-within { border-color: var(--accent); }
-.services .service-card {
-  display: block;
-  flex: 1 1 auto;
-  padding: var(--s-4) var(--s-5);
-  color: inherit;
-  text-decoration: none;
-}
 .services p { margin: 0; max-width: none; color: var(--muted); font-size: 0.9375rem; }
-/* The action line is the only part of a card that is underlined at rest: it is the one
-   piece of the card that reads as the thing to do, and a visitor who cannot see the
-   hover state still needs to know the card is the action. */
-.services .service-action { margin: var(--s-3) 0 0; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
-.services li.card:hover .service-action, .services .service-card:focus-visible .service-action { color: var(--accent-ink); text-decoration-thickness: 2px; }
+/* The card's one control. The wrapping paragraph carries the spacing, so the button's
+   own padding and its 44px min-height stay exactly what .button gives every other
+   action on the site; a top margin of auto is what puts it at the foot of a taller
+   card. */
+.services .service-action { margin: auto 0 0; padding-top: var(--s-4); }
 
 .hours { margin: var(--s-5) 0 0; max-width: 30rem; overflow: hidden; }
 .hours-row {

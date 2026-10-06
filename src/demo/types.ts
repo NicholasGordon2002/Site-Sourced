@@ -261,8 +261,20 @@ export interface DemoManifest {
     steps: string[];
     /** The extras card's lines: the record's own words, and the one boolean-derived line. */
     extras: { label: string; value: string; source: "verbatim" | "boolean-derived"; field: string }[];
-    /** The service-card action's label, and the query parameter it carries. */
-    service_action: { label: string; parameter: string };
+    /**
+     * The service-card action: the family's label as a template (`label`, with
+     * `label_slot` where the recorded service's name goes), why the label is worded
+     * that way, the mechanism that carries the service to the form, and every page it
+     * produces.
+     */
+    service_action: {
+      label: string;
+      label_slot: string;
+      label_basis: string;
+      mechanism: string;
+      default_option: string | null;
+      pages: { service: string; file: string }[];
+    };
     /**
      * Whether the record carries its own About narrative, and how the page uses it —
      * recorded so a reviewer reads the decision rather than inferring it. `paragraphs`
