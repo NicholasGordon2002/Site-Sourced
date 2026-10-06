@@ -13,7 +13,7 @@
  *   2. the preferred-days control offers only days a `hours` row states as open, a
  *      `"Closed"` row contributes none, and with no days at all the group does not exist;
  *   3. the service-card action carries the family's own words and the recorded service
- *      verbatim, in the query string the form's own select matches;
+ *      verbatim, as one link whose destination already has that service chosen;
  *   4. Family B's three steps are derived from the delivery mode — on a demo page nobody
  *      at the business reads the message, so "they contact you" is not said — and
  *      Family A carries no such block;
@@ -202,33 +202,36 @@ test("with no day stated as open, the group does not exist — legend included",
 
 /* --------------------------------------------------------- 3. the service-card action */
 
-test("a service card asks for the recorded service, in the family's own words", () => {
+test("a service card is one link to its own service, in the family's own words", () => {
   const barber = page(render(BARBER), "services.html");
   expect(barber).toContain("Request this");
-  expect(barber).toContain("contact.html?service=Haircut#form");
-  expect(barber).toContain("contact.html?service=Kids%27%20cut#form");
+  // The whole card is the link, and the link is a page built for that service.
+  expect(barber).toContain('<li class="card"><a class="service-card" href="contact-haircut.html#form">');
+  expect(barber).toContain('<a class="service-card" href="contact-kids-cut.html#form">');
+  expect([...barber.matchAll(/<a\b[^>]*class="service-card"/g)].length).toBe(2);
   // Family B may ask about the job; it may never promise a price.
   const gardener = page(render(GARDENER), "services.html");
   expect(gardener).toContain("Ask about this");
   expect(gardener).not.toContain("Get a quote");
 
-  // The link must carry a service the record lists: a name nobody recorded would
-  // preselect nothing at all.
-  const wrong = doctored(render(BARBER), "services.html", "?service=Haircut", "?service=Shave");
-  expect(checks(render(BARBER), wrong).join("\n")).toContain('preselects "Shave", which the record does not list');
+  // The destination must be a page whose form already carries that service: a card
+  // pointing at a service nobody recorded lands on a form that asks nothing.
+  const wrong = doctored(render(BARBER), "services.html", 'href="contact-haircut.html#form"', 'href="contact-shave.html#form"');
+  expect(checks(render(BARBER), wrong).join("\n")).toContain("which this bundle does not contain");
 });
 
-test("the form's select matches the parameter the card carries, and nothing runs without JavaScript", () => {
+test("a card's destination has the card's service chosen, and no JavaScript takes part", () => {
   const rendered = render(BARBER);
-  const contact = page(rendered, "contact.html");
-  // The option values are the recorded names verbatim — that is what makes the
-  // preselect possible at all — and the script is JSON-quote free, so it is safe to
-  // load from a static host.
-  expect(contact).toContain('<option value="Haircut"');
-  expect(rendered.pages.filter((p) => p.html.includes("site.js")).length).toBe(1);
-  expect(contact).toContain("contact-form");
-  // Without JavaScript the select keeps its listed default and the form still posts.
-  expect(contact).toContain('<option value="Not sure" selected>');
+  const mine = page(rendered, "contact-kids-cut.html");
+  expect(mine).toContain('<option value="Kids&#39; cut" selected>');
+  expect(mine).toContain("contact-form");
+  expect(mine).toContain("<title>Contact: Kids&#39; cut");
+  // Every page that carries the form loads the bundle's one script, and nothing else does.
+  const formPages = rendered.pages.filter((p) => p.html.includes("contact-form"));
+  expect(formPages.map((p) => p.file).sort()).toEqual(["contact-haircut.html", "contact-kids-cut.html", "contact.html"]);
+  for (const page of rendered.pages) expect(page.html.includes("site.js")).toBe(page.html.includes("contact-form"));
+  // The plain contact page keeps its own honest default — the answer that asks nothing.
+  expect(page(rendered, "contact.html")).toContain('<option value="Not sure" selected>');
 });
 
 /* --------------------------------------------------------------- 4. the inquiry steps */

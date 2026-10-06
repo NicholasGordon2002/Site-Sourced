@@ -52,7 +52,7 @@ export function kb(bytes: number): string {
 export function referencedPaths(html: string, css = ""): string[] {
   const refs = new Set<string>();
   const add = (ref: string) => {
-    const path = ref.trim().split("?")[0]!.trim();
+    const path = ref.trim().split(/[?#]/)[0]!.trim();
     if (!path) return;
     if (/^(https?:|mailto:|tel:|data:|#|\/\/)/.test(path)) return;
     // A link to another page of the same site is navigation, not a file this page

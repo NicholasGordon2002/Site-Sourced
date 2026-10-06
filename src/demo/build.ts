@@ -34,7 +34,7 @@ import {
   slugify,
 } from "./copy.ts";
 import { contactLabelProblems, familyHonestyProblems, familyProblems, submitLabelProblems } from "./family.ts";
-import { SECTION_ORDER, extrasLines, familyRenderingProblems, type PageKey } from "./family-render.ts";
+import { SECTION_ORDER, extrasLines, familyRenderingProblems, serviceCardProblems, type PageKey } from "./family-render.ts";
 import { currentRetentionPractice, PRACTICE_FILE, readRetentionPractice, type RetentionPractice } from "./retention.ts";
 import type { FormDelivery } from "./delivery.ts";
 import { formDeliveryProblems, resolveDelivery } from "./delivery.ts";
@@ -53,6 +53,7 @@ import {
   renderFavicon,
   renderJs,
   renderPages,
+  servicePageFile,
   type RenderContext,
   type RenderedPage,
 } from "./render.ts";
@@ -179,6 +180,156 @@ export function headingStackProblems(pages: RenderedPage[]): string[] {
       );
     }
   }
+  return problems;
+}
+
+/**
+ * The header's wordmark is the way home — one link, on every page (owner revision #5,
+ * 6 Oct 2026).
+ *
+ * Until this revision the wordmark was a `<p>`: a visitor who had opened a deep page
+ * (a demo link arrives at whatever page we sent) had no way back to the home page
+ * except the nav's own Home link, which on a phone sits behind the menu. The owner
+ * asked for the site's name in the header to be the link home. It is the plainest
+ * thing a visitor tries, so it is checked rather than assumed:
+ *
+ *   - the header carries **exactly one** `<a class="wordmark">`, pointing at the
+ *     demo's home file, and it holds the business's name and nothing else — no nested
+ *     link, no second target, no `<p class="wordmark">` left behind beside it;
+ *   - the page's own nav item still carries `aria-current="page"`, because the
+ *     wordmark is not a substitute for the navigation marking where a visitor is.
+ *
+ * The check reads the rendered header only: a wordmark-shaped link in a footer is not
+ * this rule, and the footer deliberately carries no page list.
+ */
+export function wordmarkLinkProblems(pages: RenderedPage[]): string[] {
+  const problems: string[] = [];
+  for (const page of pages) {
+    const start = page.html.indexOf("<header");
+    const end = page.html.indexOf("</header>");
+    const header = start >= 0 && end > start ? page.html.slice(start, end) : "";
+    const links = [...header.matchAll(/<a\b[^>]*class="wordmark"[^>]*>([\s\S]*?)<\/a>/g)];
+    if (/<p\b[^>]*class="wordmark"/.test(header)) {
+      problems.push(
+        `${page.file}: the header still carries the old <p class="wordmark"> as well as the link (or instead of it). The site's name in the header is one link home — one element, not two.`,
+      );
+    }
+    if (links.length !== 1) {
+      problems.push(
+        `${page.file}: the header carries ${links.length} wordmark links, not one. The business's name in the header is a single link to ${PAGE_SPECS.index.file} — duplicate or nested targets make the header's own name ambiguous to a screen reader and to a tap.`,
+      );
+      continue;
+    }
+    const link = links[0]!;
+    if (!link[0].includes(`href="${PAGE_SPECS.index.file}"`)) {
+      problems.push(
+        `${page.file}: the header wordmark does not point at ${PAGE_SPECS.index.file}, the demo's home page. The name in the header is the way home on every page.`,
+      );
+    }
+    if (/<a\b/i.test(link[1]!)) {
+      problems.push(`${page.file}: the header wordmark has a link nested inside it. One target per link.`);
+    }
+    if (/<[a-z]/i.test(link[1]!) || link[1]!.trim() === "") {
+      problems.push(
+        `${page.file}: the header wordmark carries markup or nothing at all rather than the business's name in plain text. The header's link text is the business's own name, exactly as the footer prints it.`,
+      );
+    }
+    if (!/<li[^>]*>\s*<a[^>]*aria-current="page"/.test(page.html)) {
+      problems.push(
+        `${page.file}: no nav item is marked aria-current="page". The wordmark is a link home, not a replacement for the navigation saying which page a visitor is on.`,
+      );
+    }
+  }
+  return problems;
+}
+
+/**
+ * The phone menu is the four page links the owner named, opened by a named control
+ * (WORKFLOW.md rule 11; owner revision, 6 Oct 2026 — owed by the session that wired it).
+ *
+ * The menu is a pure-CSS `<details>` whose summary is a 44×44px hamburger, and the
+ * designer wired it in the previous session without a build check, which is the state
+ * rule 11 forbids: a rule that lives only in prose rots. What this refuses:
+ *
+ *   - **anything but the four links** the owner named (Home, Services, About, Contact,
+ *     in that order). A fifth row is a menu that has quietly become the footer's page
+ *     list again;
+ *   - **a control with no accessible name**. Three lines are not a label: the summary
+ *     carries `aria-label` and a visually-hidden word, and losing both leaves an
+ *     icon-only control a screen reader cannot read;
+ *   - **a privacy link that is not marked phone-hidden.** The notice stays out of the
+ *     phone menu and reachable from the footer's small print on every page — which
+ *     `privacyLinkProblems` checks separately — and it keeps its place in the desktop
+ *     row, so the wide layout is unchanged. Un-hiding it in the phone panel would put a
+ *     fifth row in a menu the owner asked to hold four.
+ *
+ * The stylesheet is checked too when it is passed in: the class only means anything if
+ * the phone rule hides it and the desktop block restores it.
+ */
+export function phoneMenuProblems(pages: RenderedPage[], css = ""): string[] {
+  const problems: string[] = [];
+  const menuFiles = PAGE_IDS.filter((id) => id !== "privacy").map((id) => PAGE_SPECS[id].file);
+  let sawMenu = false;
+
+  for (const page of pages) {
+    const at = page.html.indexOf('<details class="site-menu">');
+    if (at < 0) {
+      problems.push(
+        `${page.file}: the header carries no phone menu (<details class="site-menu">). Phones need the four page links behind a control — the desktop row is hidden from 48rem only.`,
+      );
+      continue;
+    }
+    sawMenu = true;
+    const details = page.html.slice(at, page.html.indexOf("</details>", at));
+    const summary = /<summary([^>]*)>([\s\S]*?)<\/summary>/.exec(details);
+    if (!summary) {
+      problems.push(`${page.file}: the phone menu's control is not a <summary>, so it cannot be opened without JavaScript.`);
+    } else {
+      const aria = /\baria-label="([^"]*)"/.exec(summary[1]!)?.[1]?.trim() ?? "";
+      const spoken = /<span[^>]*class="visually-hidden"[^>]*>([^<]*)<\/span>/.exec(summary[2]!)?.[1]?.trim() ?? "";
+      const text = summary[2]!.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
+      if (!aria && !spoken && !text) {
+        problems.push(
+          `${page.file}: the phone menu's control has no accessible name — neither aria-label nor a visually-hidden word inside it. A hamburger is three lines, which a screen reader reads as nothing.`,
+        );
+      }
+    }
+
+    const navAt = page.html.indexOf('<nav class="site-nav"');
+    const nav = navAt >= 0 ? page.html.slice(navAt, page.html.indexOf("</nav>", navAt)) : "";
+    if (!nav) {
+      problems.push(`${page.file}: the header carries no navigation beside the phone menu's control, so the menu opens onto nothing.`);
+      continue;
+    }
+    const rows = [...nav.matchAll(/<li([^>]*)>\s*<a\s[^>]*href="([^"]*)"/g)].map((m) => ({ attrs: m[1] ?? "", file: m[2]! }));
+    const phoneRows = rows.filter((r) => !/nav-item--desktop/.test(r.attrs));
+    const got = phoneRows.map((r) => r.file);
+    if (got.join(",") !== menuFiles.join(",")) {
+      problems.push(
+        `${page.file}: the phone menu carries [${got.join(", ") || "nothing"}], not the four links the owner named [${menuFiles.join(", ")}] (WORKFLOW.md rule 11). A fifth row, a missing page or a reordered menu is a menu nobody approved — and Privacy belongs to the footer's small print on a phone, not here.`,
+      );
+    }
+    const privacy = rows.filter((r) => r.file === PAGE_SPECS.privacy.file);
+    if (privacy.length !== 1) {
+      problems.push(`${page.file}: the navigation carries ${privacy.length} links to ${PAGE_SPECS.privacy.file}, not one. The notice is reachable from the footer on every page and once in the desktop row.`);
+    } else if (!/nav-item--desktop/.test(privacy[0]!.attrs)) {
+      problems.push(
+        `${page.file}: the privacy link in the nav is no longer marked phone-hidden (class="nav-item--desktop"), so it appears in the phone menu as a fifth row. The notice stays reachable from the footer's small print on a phone, and in the desktop row.`,
+      );
+    }
+  }
+
+  if (sawMenu && css) {
+    if (!/\.site-nav\s+li\.nav-item--desktop\s*\{\s*display:\s*none;?\s*\}/.test(css)) {
+      problems.push(
+        'the stylesheet no longer hides the nav\'s phone-hidden items (".site-nav li.nav-item--desktop { display: none; }"), so the privacy link is back in the phone menu whatever the markup says.',
+      );
+    }
+    if (!/@media\s*\(min-width:\s*48rem\)[\s\S]*\.site-nav li\.nav-item--desktop \{ display: block; \}/.test(css)) {
+      problems.push('the stylesheet hides the privacy link at every width: the desktop row must restore it (".site-nav li.nav-item--desktop { display: block; }" inside the 48rem block).');
+    }
+  }
+
   return problems;
 }
 
@@ -369,8 +520,15 @@ export function complianceChecks(vars: {
       }),
     );
   }
+  // A service card is one link, one action, carrying its own recorded service to a
+  // page whose form already has that service chosen (owner revision #4, 6 Oct).
+  problems.push(...serviceCardProblems({ pages, record, family: copy.conversion.family }));
   problems.push(...privacyLinkProblems(pages));
   problems.push(...headingStackProblems(pages));
+  problems.push(...wordmarkLinkProblems(pages));
+  // The phone menu: four named links, a named control, and the privacy link phone-hidden
+  // (WORKFLOW.md rule 11).
+  problems.push(...phoneMenuProblems(pages, vars.css ?? ""));
   problems.push(...externalReferenceProblems({ pages, css: vars.css ?? "", js: vars.js ?? "" }));
   problems.push(...placeholderProblems(pages));
   return problems;
@@ -498,7 +656,10 @@ async function referencedFilesExist(dir: string, html: string, css: string): Pro
     if (/^(https?:|mailto:|tel:|data:)/.test(ref)) continue;
     if (ref.startsWith("#")) continue;
     try {
-      await stat(join(dir, ref.split("?")[0]!));
+      // A fragment or a query string is not part of the file name a link points at:
+      // `contact-hot-shave.html#form` is the file `contact-hot-shave.html`. Splitting on
+      // both keeps a link with a fragment from being read as a missing file.
+      await stat(join(dir, ref.split(/[?#]/)[0]!));
     } catch {
       missing.push(ref);
     }
@@ -796,9 +957,20 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
       ),
       steps: copy.steps,
       extras: extras.map((line) => ({ label: line.label, value: line.value, source: line.source, field: line.field })),
+      /* A service card is one link to that service's own contact page (owner revision
+         #4, 6 Oct) — not a query string a script reads. The mechanism, its default and
+         every page it produces are recorded here, so a reviewer reads what a tap does
+         rather than inferring it. */
       service_action: {
         label: copy.conversion.family === "appointment" ? copy.ui.serviceActionRequest : copy.ui.serviceActionAsk,
-        parameter: "service",
+        mechanism:
+          "the whole card is one link to a page built for that recorded service " +
+          "(contact-<service-slug>.html#form), whose own service select carries that " +
+          "service's option with `selected` in the HTML — so the choice is there with " +
+          "JavaScript off, on a static host that ignores query strings. No script and " +
+          "no query string takes part.",
+        default_option: fields.fields.find((f) => f.name === "service")?.preselected ?? null,
+        pages: normaliseServices(record).map((service) => ({ service: service.name, file: servicePageFile(service.name) })),
       },
       narrative: {
         paragraphs: narrativeCount,

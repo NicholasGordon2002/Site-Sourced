@@ -239,7 +239,7 @@ tokens only.
 | Skip link | `.skip-link` | First focusable thing; appears on focus only |
 | Proposal banner | `.proposal-banner` | **Compliance. Frozen wording.** Ink strip above everything, accent hairline beneath, in normal flow, never sticky, never dismissible |
 | Header | `.site-header` | Wordmark left, call button right, five-link nav. On a phone a 44×44px hamburger summary opens the nav as a left-side panel (owner revision, 6 Oct — it was a labelled `Pages` pill); the home page's header is surface-less (`.page--index`) so the photograph starts directly under it |
-| Wordmark | `.wordmark` | Business name in Fraunces 600. The header prints the name once, here |
+| Wordmark | `.wordmark` | Business name in Fraunces 600, and the **link home**: one `<a class="wordmark" href="index.html">` on every page (owner revision, 6 Oct), underlined on hover and keyboard focus only, so the header's rest state is unchanged. The header prints the name once, here. `wordmarkLinkProblems` enforces one link, pointing at the home file, with `aria-current` still on the nav's own item |
 | Call button | `.call-button` | Ink pill with the published phone number, `tel:` link. If no phone is recorded, a muted, non-interactive note instead — never a dead `tel:` link |
 | Eyebrow | `.eyebrow` | Uppercase label line: category and city, with an accent tick (see §6) |
 | Hero | `.hero`, `.hero-img`, `.hero-scrim`, `.hero-inner` | Full-bleed photograph with a scrim and the headline block |

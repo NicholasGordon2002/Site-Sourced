@@ -16,11 +16,11 @@
  */
 import { expect, test } from "bun:test";
 
-import { complianceChecks, headingStackProblems, privacyLinkProblems } from "../src/demo/build.ts";
+import { complianceChecks, headingStackProblems, privacyLinkProblems, wordmarkLinkProblems } from "../src/demo/build.ts";
 import { composeCopy, composePrivacy, profileFor } from "../src/demo/copy.ts";
 import { resolveDelivery } from "../src/demo/delivery.ts";
 import { resolveForm } from "../src/demo/forms.ts";
-import { renderPages, type RenderContext, type RenderedPage } from "../src/demo/render.ts";
+import { renderCss, renderPages, type RenderContext, type RenderedPage } from "../src/demo/render.ts";
 import type { BusinessRecord } from "../src/demo/types.ts";
 
 const RECORD: BusinessRecord = {
@@ -93,6 +93,52 @@ test("a form page that loses the link beside the form fails the build", () => {
   );
   const problems = privacyLinkProblems(withFormLinkRemoved);
   expect(problems.join(" ")).toContain("carries the form but the privacy notice is not linked next to it");
+});
+
+/* ------------------- owner revision #5: the header wordmark links home (6 Oct) */
+
+test("the header wordmark is one link home on every page, and the nav still marks the page", () => {
+  const { pages } = render();
+  expect(wordmarkLinkProblems(pages)).toEqual([]);
+  for (const page of pages) {
+    const header = page.html.slice(page.html.indexOf("<header"), page.html.indexOf("</header>"));
+    const links = [...header.matchAll(/<a\b[^>]*class="wordmark"[^>]*>([\s\S]*?)<\/a>/g)];
+    expect(links.length).toBe(1);
+    expect(links[0]![0]).toContain('href="index.html"');
+    expect(links[0]![1]).toBe(RECORD.name);
+    expect(links[0]![1]).not.toContain("<");
+    // One target: the wordmark is not wrapped in, or wrapping, another link.
+    expect(header).not.toContain('<p class="wordmark"');
+    // The page a visitor is on is still the nav's business, not the wordmark's.
+    expect([...page.html.matchAll(/aria-current="page"/g)].length).toBe(1);
+    expect(page.html).toContain(`<a href="${page.file}" aria-current="page">`);
+  }
+});
+
+test("a wordmark that is not a link, or is two links, fails the build", () => {
+  const { pages } = render();
+  // The edit this rule exists to catch: the wordmark back to a plain paragraph.
+  const unlinked = pages.map((page) => ({
+    ...page,
+    html: page.html.replace(/<a class="wordmark" href="index.html">/, '<a class="wordmark">'),
+  }));
+  expect(wordmarkLinkProblems(unlinked).join(" ")).toContain("does not point at index.html");
+
+  // ...or a second wordmark beside it, which makes the header's own name ambiguous.
+  const two = pages.map((page) => ({
+    ...page,
+    html: page.html.replace('<a class="wordmark"', `<p class="wordmark">${RECORD.name}</p>\n      <a class="wordmark"`),
+  }));
+  expect(wordmarkLinkProblems(two).join(" ")).toContain("still carries the old <p");
+});
+
+test("the wordmark keeps its look at rest and reads as a link on hover and focus", () => {
+  const css = renderCss(profileFor(RECORD), SLUG);
+  const block = /\.wordmark \{([\s\S]*?)\n\}/.exec(css)?.[1] ?? "";
+  // No underline at rest: the design system's wordmark styling is unchanged.
+  expect(block).toContain("text-decoration: none");
+  expect(block).toContain("color: inherit");
+  expect(css).toContain(".wordmark:hover, .wordmark:focus-visible { text-decoration: underline");
 });
 
 /* --------------------------------------------------- §P6.0: the heading stack */
