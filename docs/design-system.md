@@ -214,9 +214,14 @@ form card. Depth is not used for decoration.
 - Single column below `48rem`. Above it: a two-column split (`.two-col`, `1.05fr .95fr`) for
   hours/address and for any text-plus-image block, collapsing to one column below `48rem`.
 - Services are a one-column list of cards on a phone and a two-column grid at `48rem` and up.
-- Nothing is positioned to need a fixed pixel height: the hero uses `aspect-ratio`, cards size to
-  content. There are exactly two breakpoints, `48rem` and `64rem`; a third would mean the layout
-  was fighting the content.
+- The hero is sized by `min-height: min(78svh, 34rem)` (`22rem` as the fallback line for a
+  browser without `svh`), so it fills the first screen on a phone and is capped on a tall
+  desktop monitor; cards size to content. There are exactly two breakpoints, `48rem` and
+  `64rem`; a third would mean the layout was fighting the content.
+- The home page's header is surface-less (`background: transparent; border-bottom: 0`) and the
+  photograph starts directly under it, so the home page reads as one surface. Inner pages keep
+  the header's own surface and hairline, which is what gives `.page-head` a top edge. The page
+  id is carried on `<html class="page page--{id}">`.
 - Tap targets are at least 44×44px. The call button in the header and the submit button in the
   form are the two that matter most and both are taller than that.
 

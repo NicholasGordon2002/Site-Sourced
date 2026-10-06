@@ -732,7 +732,7 @@ export function renderPage(ctx: RenderContext, id: PageId): string {
     .join("\n\n");
 
   return `<!doctype html>
-<html lang="en-CA">
+<html lang="en-CA" class="page page--${id}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -939,6 +939,14 @@ a:hover { text-decoration-thickness: 2px; }
   gap: var(--s-3) var(--s-4);
   padding: var(--s-4) 0;
 }
+
+/* The home page is one surface: the header sits on the same paper as the photograph
+   below it, with no hairline between them, and the picture starts directly under the
+   header. Inner pages keep the surface and its hairline, which is what gives the
+   page-head band a top edge. Nothing overlays the photograph, so no contrast pair
+   changes: the wordmark and the call button stay ink on paper. */
+.page--index .site-header { background: transparent; border-bottom: 0; }
+.page--index .header-inner { padding: var(--s-3) 0; }
 .wordmark {
   flex: 1 1 auto;
   min-width: 0;
@@ -1057,10 +1065,14 @@ a:hover { text-decoration-thickness: 2px; }
 }
 .hero > * { grid-area: 1 / 1; }
 .hero--photo { background: #1A1D21; }
+/* The picture fills the first screen on a phone and is bounded on a tall desktop
+   monitor: the 22rem line is the fallback for a browser without svh. Height only —
+   the bytes the hero costs are set by its srcset and the per-page weight budget. */
 .hero-img {
   width: 100%;
   height: 100%;
   min-height: 22rem;
+  min-height: min(78svh, 34rem);
   object-fit: cover;
   object-position: center;
 }
@@ -1338,7 +1350,10 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 
 @media (min-width: 48rem) {
   :root { --gutter: 2rem; }
-  .hero-img { min-height: 28rem; max-height: 34rem; }
+  /* The hero's min-height — min(78svh, 34rem) — is the same at every width: from 48rem
+     up, the viewport-height term exceeds the 34rem cap on any screen taller than about
+     700px, so a desktop hero is capped at 34rem and a phone hero fills what it can. No
+     separate upper bound is needed: the 34rem in the min() is it. */
   .hero-inner { padding: var(--s-9) 0 var(--s-8); }
   .services { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .two-col { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: var(--s-7); align-items: start; }
