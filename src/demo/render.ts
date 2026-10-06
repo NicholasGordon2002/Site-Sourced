@@ -959,7 +959,14 @@ export function renderCss(profile: CategoryProfile, slug: string): string {
   /* Type */
   --font-display: "Fraunces", Georgia, "Times New Roman", serif;
   --font-body: "Source Sans 3", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
-  --fs-display: clamp(2.1rem, 8.5vw, 3.4rem);
+  /* CANDIDATE A (owner's type-treatment ask, 6 Oct 2026) — a display-scale push, same
+     two faces, no new file. The tokens below replace the ones docs/design-system.md §2
+     carries; if this candidate is the one the owner picks, that section's table changes
+     in the same commit. --fs-page is new here: an inner page's title used to borrow
+     --fs-h2 (24px at 360px, barely above a section heading), so the loudest thing on
+     an inner page was the least designed thing on it. */
+  --fs-display: clamp(2.4rem, 11vw, 3.6rem);
+  --fs-page: clamp(2.1rem, 8.5vw, 2.6rem);
   --fs-h2: clamp(1.5rem, 5vw, 2.05rem);
   --fs-h3: 1.2rem;
   --fs-lead: clamp(1.0625rem, 2.4vw, 1.1875rem);
@@ -1030,7 +1037,7 @@ h1, h2, h3 {
   text-wrap: balance;
 }
 
-h1 { font-size: var(--fs-display); line-height: 1.05; margin: 0 0 var(--s-4); }
+h1 { font-size: var(--fs-display); line-height: 1.02; letter-spacing: -0.025em; margin: 0 0 var(--s-4); }
 h2 { font-size: var(--fs-h2); line-height: 1.15; margin: 0 0 var(--s-3); }
 h3 { font-size: var(--fs-h3); line-height: 1.25; margin: 0 0 var(--s-1); }
 
@@ -1167,7 +1174,7 @@ a:hover { text-decoration-thickness: 2px; }
   /* A phone needs the wordmark on one line with the hamburger and the header's action
      on the next, and a flex line is broken on the item's hypothetical main size before
      anything shrinks. A basis of half the row puts the wordmark and the hamburger on
-     the first line — the wordmark's own width, about 225px at 1.15rem, would otherwise
+     the first line — the wordmark's own width, about 255px at 1.3rem, would otherwise
      claim that line and leave the action nowhere but a third line — and the action,
      which cannot share a line with both, takes the second row to itself. The
      desktop block below puts the auto basis back, so the wide layout is untouched. */
@@ -1175,9 +1182,15 @@ a:hover { text-decoration-thickness: 2px; }
   min-width: 0;
   margin: 0;
   font-family: var(--font-display);
-  font-size: 1.15rem;
+  /* CANDIDATE A: the name goes up with the h1 — 18.4px to 20px. It is measured, not
+     guessed, because the row is the hard limit: at 360px the header's inner box is
+     320px, and the 44px menu chip plus the gap leaves the name 260px. Measured natural
+     widths in Fraunces: 1.15rem 231px, 1.2rem 241px, 1.25rem 251px, 1.3rem 261px — so
+     1.25rem is the ceiling and 1.3rem wrapped the name onto two lines at 360px. It also
+     means a real business whose name runs longer than these two fixtures wraps here. */
+  font-size: 1.25rem;
   line-height: 1.2;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
   /* The wordmark is a link home (owner revision, 6 Oct). At rest it keeps exactly the
      look it had as a paragraph — the site's name in the display face, no underline —
      and it shows a visitor it is a link by underlining on hover and on keyboard focus,
@@ -1402,7 +1415,7 @@ a:hover { text-decoration-thickness: 2px; }
 .hero-inner { align-self: end; padding: var(--s-7) 0 var(--s-6); }
 .hero .eyebrow { color: rgba(255, 255, 255, .9); }
 .hero .eyebrow::before { background: #fff; }
-.hero h1 { color: #fff; margin-bottom: var(--s-4); max-width: 20ch; letter-spacing: -0.02em; }
+.hero h1 { color: #fff; margin-bottom: var(--s-4); max-width: 20ch; letter-spacing: -0.035em; }
 .hero-lead { margin: 0; max-width: 30rem; font-size: var(--fs-lead); line-height: 1.5; color: rgba(255, 255, 255, .94); }
 .hero-actions { display: flex; flex-wrap: wrap; gap: var(--s-3); margin: var(--s-5) 0 0; max-width: none; }
 .hero :focus-visible { outline-color: #fff; }
@@ -1426,7 +1439,7 @@ a:hover { text-decoration-thickness: 2px; }
   background: var(--paper-2);
   border-bottom: var(--rule);
 }
-.page-head h1 { font-size: var(--fs-h2); margin-bottom: var(--s-3); }
+.page-head h1 { font-size: var(--fs-page); line-height: 1.05; margin-bottom: var(--s-3); }
 .page-head .lead { margin: 0; }
 
 /* --------------------------------------------------------------- sections */
@@ -1758,7 +1771,8 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 }
 
 @media (min-width: 64rem) {
-  .wordmark { font-size: 1.25rem; }
+  /* CANDIDATE A: steps up from the phone's 1.25rem, so the wide header keeps its gain. */
+  .wordmark { font-size: 1.4rem; }
 }
 
 /* ------------------------------------------------------------ preferences */
