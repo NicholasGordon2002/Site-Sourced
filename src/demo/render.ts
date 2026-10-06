@@ -979,7 +979,13 @@ a:hover { text-decoration-thickness: 2px; }
 .page--index .site-header { background: transparent; border-bottom: 0; }
 .page--index .header-inner { padding: var(--s-3) 0; }
 .wordmark {
-  flex: 1 1 auto;
+  /* A phone needs the wordmark and the call button on one row, and a flex line is
+     broken on the item's hypothetical main size before anything shrinks: with an
+     auto basis the wordmark's own width (about 225px at 1.15rem) pushed the call
+     button onto a line of its own. A zero basis lets it share the row and shrink to
+     the space left, wrapping to two lines the height of the button. The desktop
+     block below puts the auto basis back, so the wide layout is untouched. */
+  flex: 1 1 0;
   min-width: 0;
   margin: 0;
   font-family: var(--font-display);
@@ -997,7 +1003,14 @@ a:hover { text-decoration-thickness: 2px; }
    sibling, never its child: a nav inside a closed <details> cannot be revealed by CSS.
 
    From 48rem the summary goes and the same list sits inline on the wordmark's line. */
-.site-menu { margin: 0; }
+/* The wrap fallback named in the punch-list plan, applied because the measurement
+   said so: with the summary in the wordmark's slot the phone broke to three rows
+   (summary 44px, wordmark, call button — 158px of header). A flex basis of 100% puts the
+   summary on its own row, which is the slot the old nav row held, and order 4/5
+   makes it follow the wordmark and the call button rather than lead them, so the
+   header is back to the two rows item 44 describes (wordmark + call button, then the
+   full-width navigation row). Desktop hides the summary and is unaffected. */
+.site-menu { flex: 1 1 100%; order: 4; margin: 0; }
 .site-menu-summary {
   display: inline-flex;
   align-items: center;
@@ -1016,7 +1029,7 @@ a:hover { text-decoration-thickness: 2px; }
 .site-menu-summary::marker { content: ""; }
 .site-menu[open] .site-menu-summary { background: var(--accent-soft); border-color: var(--accent); }
 
-.site-nav { display: none; flex: 1 1 100%; order: 4; }
+.site-nav { display: none; flex: 1 1 100%; order: 5; }
 .site-menu[open] ~ .site-nav { display: block; }
 .site-nav ul {
   display: flex;
@@ -1420,6 +1433,7 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
   /* Desktop keeps the plain inline row it has always had: the summary goes, the nav
      comes back into the flow, and the links lose the phone panel's row shape. */
   .site-menu { display: none; }
+  .wordmark { flex: 1 1 auto; }
   .site-nav { display: block; flex: 1 1 auto; order: 2; margin-left: var(--s-6); }
   .site-nav ul { flex-direction: row; flex-wrap: wrap; gap: 0 var(--s-4); }
   .site-nav a {
