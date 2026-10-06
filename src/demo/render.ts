@@ -324,7 +324,14 @@ function headerBlock(ctx: RenderContext, id: PageId): string {
       <details class="site-menu">
         <summary class="site-menu-summary" aria-label="Pages"><span class="visually-hidden">Pages</span><span class="site-menu-icon" aria-hidden="true"></span></summary>
       </details>
-      <p class="wordmark">${esc(record.name)}</p>
+      <!-- The wordmark is the site's name, so it is the way home: one link to the
+           demo's own home page, and on a client's site to theirs. It is a link at
+           every width and on every page, including the home page itself, where a
+           visitor who opened a deep page expects it to work. Its styling keeps the
+           wordmark's own look — no underline until a pointer or the keyboard is on
+           it (.wordmark in the stylesheet) — so the header reads as it always has.
+           One link: nothing is nested inside it. -->
+      <a class="wordmark" href="${PAGE_SPECS.index.file}">${esc(record.name)}</a>
 ${navBlock(copy, id, "site-nav", "Pages")}
 ${call ? `${call}\n` : ""}    </div>
   </header>`;
@@ -1014,7 +1021,16 @@ a:hover { text-decoration-thickness: 2px; }
   font-size: 1.15rem;
   line-height: 1.2;
   letter-spacing: -0.01em;
+  /* The wordmark is a link home (owner revision, 6 Oct). At rest it keeps exactly the
+     look it had as a paragraph — the site's name in the display face, no underline —
+     and it shows a visitor it is a link by underlining on hover and on keyboard focus,
+     which is also the only state in which an underline here would mean anything. The
+     colour is inherited, so the header's contrast pairs are unchanged: body text on
+     paper and on the footer, both measured in docs/design-system.md §3. */
+  color: inherit;
+  text-decoration: none;
 }
+.wordmark:hover, .wordmark:focus-visible { text-decoration: underline; text-underline-offset: 3px; }
 .site-header .call-button { margin-left: auto; }
 /* Off-screen, still read aloud. The phone menu's summary draws three lines, so its name
    cannot be its visible text; this carries the name a screen reader reads. */

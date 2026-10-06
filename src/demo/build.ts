@@ -183,6 +183,66 @@ export function headingStackProblems(pages: RenderedPage[]): string[] {
 }
 
 /**
+ * The header's wordmark is the way home — one link, on every page (owner revision #5,
+ * 6 Oct 2026).
+ *
+ * Until this revision the wordmark was a `<p>`: a visitor who had opened a deep page
+ * (a demo link arrives at whatever page we sent) had no way back to the home page
+ * except the nav's own Home link, which on a phone sits behind the menu. The owner
+ * asked for the site's name in the header to be the link home. It is the plainest
+ * thing a visitor tries, so it is checked rather than assumed:
+ *
+ *   - the header carries **exactly one** `<a class="wordmark">`, pointing at the
+ *     demo's home file, and it holds the business's name and nothing else — no nested
+ *     link, no second target, no `<p class="wordmark">` left behind beside it;
+ *   - the page's own nav item still carries `aria-current="page"`, because the
+ *     wordmark is not a substitute for the navigation marking where a visitor is.
+ *
+ * The check reads the rendered header only: a wordmark-shaped link in a footer is not
+ * this rule, and the footer deliberately carries no page list.
+ */
+export function wordmarkLinkProblems(pages: RenderedPage[]): string[] {
+  const problems: string[] = [];
+  for (const page of pages) {
+    const start = page.html.indexOf("<header");
+    const end = page.html.indexOf("</header>");
+    const header = start >= 0 && end > start ? page.html.slice(start, end) : "";
+    const links = [...header.matchAll(/<a\b[^>]*class="wordmark"[^>]*>([\s\S]*?)<\/a>/g)];
+    if (/<p\b[^>]*class="wordmark"/.test(header)) {
+      problems.push(
+        `${page.file}: the header still carries the old <p class="wordmark"> as well as the link (or instead of it). The site's name in the header is one link home — one element, not two.`,
+      );
+    }
+    if (links.length !== 1) {
+      problems.push(
+        `${page.file}: the header carries ${links.length} wordmark links, not one. The business's name in the header is a single link to ${PAGE_SPECS.index.file} — duplicate or nested targets make the header's own name ambiguous to a screen reader and to a tap.`,
+      );
+      continue;
+    }
+    const link = links[0]!;
+    if (!link[0].includes(`href="${PAGE_SPECS.index.file}"`)) {
+      problems.push(
+        `${page.file}: the header wordmark does not point at ${PAGE_SPECS.index.file}, the demo's home page. The name in the header is the way home on every page.`,
+      );
+    }
+    if (/<a\b/i.test(link[1]!)) {
+      problems.push(`${page.file}: the header wordmark has a link nested inside it. One target per link.`);
+    }
+    if (/<[a-z]/i.test(link[1]!) || link[1]!.trim() === "") {
+      problems.push(
+        `${page.file}: the header wordmark carries markup or nothing at all rather than the business's name in plain text. The header's link text is the business's own name, exactly as the footer prints it.`,
+      );
+    }
+    if (!/<li[^>]*>\s*<a[^>]*aria-current="page"/.test(page.html)) {
+      problems.push(
+        `${page.file}: no nav item is marked aria-current="page". The wordmark is a link home, not a replacement for the navigation saying which page a visitor is on.`,
+      );
+    }
+  }
+  return problems;
+}
+
+/**
  * Everything that must be true for a bundle to be publishable at all — one list, one
  * throw — checked **on every page**, because the plan's compliance rules are per page
  * and never inherited. It covers the pages' compliance strings, the contact form, and
@@ -371,6 +431,7 @@ export function complianceChecks(vars: {
   }
   problems.push(...privacyLinkProblems(pages));
   problems.push(...headingStackProblems(pages));
+  problems.push(...wordmarkLinkProblems(pages));
   problems.push(...externalReferenceProblems({ pages, css: vars.css ?? "", js: vars.js ?? "" }));
   problems.push(...placeholderProblems(pages));
   return problems;
