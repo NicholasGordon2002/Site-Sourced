@@ -24,10 +24,13 @@
  * thing on the site that needs script, so every other page works with JavaScript off
  * and asks the browser for one file less.
  *
- * Navigation is plain links to real files, in the header and repeated in the footer.
- * There is no hamburger menu and no JavaScript: on the published host a bundle is
- * served as flat files, so `services.html` is a path that serves and `/services/` is
- * not — the links point at files for exactly that reason.
+ * Navigation is plain links to real files, in the header and nowhere else: on a phone
+ * they sit behind a CSS-only `<details>` disclosure labelled `Pages`, and from `48rem`
+ * they are the inline row. There is no JavaScript-driven nav: on the published host a
+ * bundle is served as flat files, so `services.html` is a path that serves and
+ * `/services/` is not — the links point at files for exactly that reason. The footer
+ * carries no page list; the privacy notice is linked from its small print on every
+ * page, and from beside the form.
  *
  * The HTML is deliberately readable. A client who opens index.html in a text editor
  * can find their own sentences and change them.
@@ -356,7 +359,13 @@ ${details ? `        <p class="footer-contact">\n          ${details}\n        <
 ${copy.contactCaveat && spec.printsDetails ? `        <!-- Compliance: the caveat that belongs with the printed details, derived from the
              record's source. Do not remove. -->
         <p class="footer-small">${esc(copy.contactCaveat)}</p>
-` : ""}${navBlock(copy, id, "footer-nav", "Pages")}
+` : ""}        <!-- Compliance: the privacy notice must stay reachable from the footer of every
+             page and from beside the form. It used to be reachable through the footer's
+             copy of the page navigation, which item 54 removed; this link is now the
+             footer's only route to it. Do not remove. -->
+        <p class="footer-small">
+          <a href="${PAGE_SPECS.privacy.file}">Privacy notice</a>
+        </p>
         <!-- Compliance: the provenance line, derived from the record's source. It may not
              credit a source the record does not name. Do not remove. -->
         <p class="footer-small">
@@ -415,14 +424,13 @@ ${caption ? `      <!-- Compliance: an AI-generated placeholder is labelled as a
       <figcaption class="wrap muted hero-caption">${esc(caption)}</figcaption>\n` : ""}    </figure>`;
 }
 
-function aboutSection(ctx: RenderContext, paragraphs: string[]): string {
+function aboutSection(ctx: RenderContext, paragraphs: string[], heading: boolean): string {
   const { record, copy, images } = ctx;
   const image = aboutImage(images);
   const caption = illustrationCaption(images, "about", record.name);
   return `    <section class="section" id="about">
       <div class="wrap">
-        <h2>About ${esc(record.name)}</h2>
-${paragraphs.map((p) => `        <p>${esc(p)}</p>`).join("\n")}
+${heading ? `        <h2>About ${esc(record.name)}</h2>\n` : ""}${paragraphs.map((p) => `        <p>${esc(p)}</p>`).join("\n")}
 ${paragraphs.length < copy.about.length ? `        <p><a class="link-quiet link-quiet--inline" href="${PAGE_SPECS.about.file}">More about ${esc(record.name)}</a></p>\n` : ""}${image ? `        <figure class="about-figure">
           <img class="about-photo" src="${esc(image.file!)}"${sizeAttrs(image)} alt="" loading="lazy" decoding="async">
 ${caption ? `          <!-- Compliance: an AI-generated placeholder is labelled as an illustration. Do not remove. -->
@@ -564,10 +572,13 @@ function contactFormSection(ctx: RenderContext): string {
   const hidden = Object.entries(form.hiddenFields)
     .map(([k, v]) => `            <input type="hidden" name="${esc(k)}" value="${esc(v)}">`)
     .join("\n");
+  // No section heading: the page's own <h1> is this page's title ("Contact" in demo
+  // phase, "Contact {name}" on a client's site), so a heading here printed the same
+  // words twice in a row (§P6.0). The delivery notice below already says what the form
+  // is and who receives a message, exactly as services.html's block carries no heading
+  // because its <h1> is already the offering.
   return `    <section class="section section--alt" id="form">
       <div class="wrap">
-        <h2>${esc(copy.contactCtaHeading)}</h2>
-
         <!-- Compliance: this notice must stay next to the form. It is derived from
              the delivery the record describes, never written by hand. -->
         <p class="form-notice">${esc(copy.formNotice)}</p>
@@ -634,9 +645,11 @@ function sectionHtml(ctx: RenderContext, id: PageId, section: SectionId): string
     case "hero":
       return heroSection(ctx);
     case "about-short":
-      return aboutSection(ctx, ctx.copy.about.slice(0, ctx.copy.aboutExcerptLength));
+      return aboutSection(ctx, ctx.copy.about.slice(0, ctx.copy.aboutExcerptLength), true);
+    // The About page's own body: its page head already says "About {name}", so the
+    // section carries no heading of its own (§P6.0 — a page never repeats its h1).
     case "about-full":
-      return aboutSection(ctx, ctx.copy.about);
+      return aboutSection(ctx, ctx.copy.about, false);
     case "services":
       return id === "index" ? servicesHomeSection(ctx) : servicesPageSection(ctx);
     case "how":
@@ -1381,20 +1394,11 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 .site-footer code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1em; color: #E8EBEE; }
 .site-footer :focus-visible { outline-color: #fff; }
 
-/* The same four links again, plus the privacy notice: on a phone the footer is the
-   second place a visitor looks, and the privacy notice is linked from every page. */
-.footer-nav { margin: 0 0 var(--s-5); }
-.footer-nav ul { display: flex; flex-direction: column; gap: var(--s-1); margin: 0; padding: 0; list-style: none; }
-.footer-nav a {
-  display: inline-flex;
-  align-items: center;
-  min-height: 2.25rem;
-  color: #fff;
-  font-weight: 600;
-  text-decoration: none;
-}
-.footer-nav a:hover { text-decoration: underline; }
-.footer-nav a[aria-current="page"] { color: #fff; text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 4px; }
+/* The footer carries no list of page links: the header is the navigation, on a phone
+   behind the Pages disclosure and on a desktop as the inline row. The one page link
+   that must stay reachable from every page — the privacy notice — sits in the small
+   print above, as inline 14px text rather than a 44px target. That is deliberate: the
+   footer's job is to be read, and the phone's large targets are in the header. */
 
 /* ------------------------------------------------------------ wider screens */
 
@@ -1405,7 +1409,12 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
      700px, so a desktop hero is capped at 34rem and a phone hero fills what it can. No
      separate upper bound is needed: the 34rem in the min() is it. */
   .hero-inner { padding: var(--s-9) 0 var(--s-8); }
-  .services { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* Level rows: a card whose service has a recorded note and one without end at the
+     same height instead of leaving the shorter card floating. The grid has no height of
+     its own, so 1fr auto-rows resolve to the tallest card's height. On a phone the list
+     is one column, where unequal heights are honest and a reserved empty box would be
+     unexplainable — and no note is ever written to fill one. */
+  .services { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 1fr; align-items: stretch; }
   .two-col { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: var(--s-7); align-items: start; }
   .footer-grid { grid-template-columns: 1.1fr 0.9fr; gap: var(--s-8); }
   /* Desktop keeps the plain inline row it has always had: the summary goes, the nav
@@ -1427,8 +1436,6 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
   .page-head { padding: var(--s-8) 0 var(--s-6); }
   .form-actions .button { width: auto; }
   .privacy-notice h2 { font-size: var(--fs-h3); }
-  .footer-nav ul { flex-direction: row; flex-wrap: wrap; gap: var(--s-5); }
-  .footer-nav a { min-height: 2rem; }
 }
 
 @media (min-width: 64rem) {
