@@ -244,6 +244,96 @@ export function wordmarkLinkProblems(pages: RenderedPage[]): string[] {
 }
 
 /**
+ * The phone menu is the four page links the owner named, opened by a named control
+ * (WORKFLOW.md rule 11; owner revision, 6 Oct 2026 — owed by the session that wired it).
+ *
+ * The menu is a pure-CSS `<details>` whose summary is a 44×44px hamburger, and the
+ * designer wired it in the previous session without a build check, which is the state
+ * rule 11 forbids: a rule that lives only in prose rots. What this refuses:
+ *
+ *   - **anything but the four links** the owner named (Home, Services, About, Contact,
+ *     in that order). A fifth row is a menu that has quietly become the footer's page
+ *     list again;
+ *   - **a control with no accessible name**. Three lines are not a label: the summary
+ *     carries `aria-label` and a visually-hidden word, and losing both leaves an
+ *     icon-only control a screen reader cannot read;
+ *   - **a privacy link that is not marked phone-hidden.** The notice stays out of the
+ *     phone menu and reachable from the footer's small print on every page — which
+ *     `privacyLinkProblems` checks separately — and it keeps its place in the desktop
+ *     row, so the wide layout is unchanged. Un-hiding it in the phone panel would put a
+ *     fifth row in a menu the owner asked to hold four.
+ *
+ * The stylesheet is checked too when it is passed in: the class only means anything if
+ * the phone rule hides it and the desktop block restores it.
+ */
+export function phoneMenuProblems(pages: RenderedPage[], css = ""): string[] {
+  const problems: string[] = [];
+  const menuFiles = PAGE_IDS.filter((id) => id !== "privacy").map((id) => PAGE_SPECS[id].file);
+  let sawMenu = false;
+
+  for (const page of pages) {
+    const at = page.html.indexOf('<details class="site-menu">');
+    if (at < 0) {
+      problems.push(
+        `${page.file}: the header carries no phone menu (<details class="site-menu">). Phones need the four page links behind a control — the desktop row is hidden from 48rem only.`,
+      );
+      continue;
+    }
+    sawMenu = true;
+    const details = page.html.slice(at, page.html.indexOf("</details>", at));
+    const summary = /<summary([^>]*)>([\s\S]*?)<\/summary>/.exec(details);
+    if (!summary) {
+      problems.push(`${page.file}: the phone menu's control is not a <summary>, so it cannot be opened without JavaScript.`);
+    } else {
+      const aria = /\baria-label="([^"]*)"/.exec(summary[1]!)?.[1]?.trim() ?? "";
+      const spoken = /<span[^>]*class="visually-hidden"[^>]*>([^<]*)<\/span>/.exec(summary[2]!)?.[1]?.trim() ?? "";
+      const text = summary[2]!.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
+      if (!aria && !spoken && !text) {
+        problems.push(
+          `${page.file}: the phone menu's control has no accessible name — neither aria-label nor a visually-hidden word inside it. A hamburger is three lines, which a screen reader reads as nothing.`,
+        );
+      }
+    }
+
+    const navAt = page.html.indexOf('<nav class="site-nav"');
+    const nav = navAt >= 0 ? page.html.slice(navAt, page.html.indexOf("</nav>", navAt)) : "";
+    if (!nav) {
+      problems.push(`${page.file}: the header carries no navigation beside the phone menu's control, so the menu opens onto nothing.`);
+      continue;
+    }
+    const rows = [...nav.matchAll(/<li([^>]*)>\s*<a\s[^>]*href="([^"]*)"/g)].map((m) => ({ attrs: m[1] ?? "", file: m[2]! }));
+    const phoneRows = rows.filter((r) => !/nav-item--desktop/.test(r.attrs));
+    const got = phoneRows.map((r) => r.file);
+    if (got.join(",") !== menuFiles.join(",")) {
+      problems.push(
+        `${page.file}: the phone menu carries [${got.join(", ") || "nothing"}], not the four links the owner named [${menuFiles.join(", ")}] (WORKFLOW.md rule 11). A fifth row, a missing page or a reordered menu is a menu nobody approved — and Privacy belongs to the footer's small print on a phone, not here.`,
+      );
+    }
+    const privacy = rows.filter((r) => r.file === PAGE_SPECS.privacy.file);
+    if (privacy.length !== 1) {
+      problems.push(`${page.file}: the navigation carries ${privacy.length} links to ${PAGE_SPECS.privacy.file}, not one. The notice is reachable from the footer on every page and once in the desktop row.`);
+    } else if (!/nav-item--desktop/.test(privacy[0]!.attrs)) {
+      problems.push(
+        `${page.file}: the privacy link in the nav is no longer marked phone-hidden (class="nav-item--desktop"), so it appears in the phone menu as a fifth row. The notice stays reachable from the footer's small print on a phone, and in the desktop row.`,
+      );
+    }
+  }
+
+  if (sawMenu && css) {
+    if (!/\.site-nav\s+li\.nav-item--desktop\s*\{\s*display:\s*none;?\s*\}/.test(css)) {
+      problems.push(
+        'the stylesheet no longer hides the nav\'s phone-hidden items (".site-nav li.nav-item--desktop { display: none; }"), so the privacy link is back in the phone menu whatever the markup says.',
+      );
+    }
+    if (!/@media\s*\(min-width:\s*48rem\)[\s\S]*\.site-nav li\.nav-item--desktop \{ display: block; \}/.test(css)) {
+      problems.push('the stylesheet hides the privacy link at every width: the desktop row must restore it (".site-nav li.nav-item--desktop { display: block; }" inside the 48rem block).');
+    }
+  }
+
+  return problems;
+}
+
+/**
  * Everything that must be true for a bundle to be publishable at all — one list, one
  * throw — checked **on every page**, because the plan's compliance rules are per page
  * and never inherited. It covers the pages' compliance strings, the contact form, and
@@ -436,6 +526,9 @@ export function complianceChecks(vars: {
   problems.push(...privacyLinkProblems(pages));
   problems.push(...headingStackProblems(pages));
   problems.push(...wordmarkLinkProblems(pages));
+  // The phone menu: four named links, a named control, and the privacy link phone-hidden
+  // (WORKFLOW.md rule 11).
+  problems.push(...phoneMenuProblems(pages, vars.css ?? ""));
   problems.push(...externalReferenceProblems({ pages, css: vars.css ?? "", js: vars.js ?? "" }));
   problems.push(...placeholderProblems(pages));
   return problems;
