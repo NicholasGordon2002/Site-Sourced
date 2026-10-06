@@ -24,10 +24,13 @@
  * thing on the site that needs script, so every other page works with JavaScript off
  * and asks the browser for one file less.
  *
- * Navigation is plain links to real files, in the header and repeated in the footer.
- * There is no hamburger menu and no JavaScript: on the published host a bundle is
- * served as flat files, so `services.html` is a path that serves and `/services/` is
- * not — the links point at files for exactly that reason.
+ * Navigation is plain links to real files, in the header and nowhere else: on a phone
+ * they sit behind a CSS-only `<details>` disclosure labelled `Pages`, and from `48rem`
+ * they are the inline row. There is no JavaScript-driven nav: on the published host a
+ * bundle is served as flat files, so `services.html` is a path that serves and
+ * `/services/` is not — the links point at files for exactly that reason. The footer
+ * carries no page list; the privacy notice is linked from its small print on every
+ * page, and from beside the form.
  *
  * The HTML is deliberately readable. A client who opens index.html in a text editor
  * can find their own sentences and change them.
@@ -296,6 +299,13 @@ function headerBlock(ctx: RenderContext, id: PageId): string {
       : `          <span class="call-button call-button--muted">${esc(copy.ui.noPhoneNote)}</span>`;
   return `  <header class="site-header">
     <div class="wrap header-inner">
+      <!-- The phone's navigation: a CSS-only disclosure, labelled in words. The <nav>
+           is this element's next sibling, never its child — a nav inside a closed
+           <details> cannot be revealed by CSS. At 48rem the summary is hidden and the
+           same list sits inline on the wordmark's line. No JavaScript, no icon. -->
+      <details class="site-menu">
+        <summary class="site-menu-summary">Pages</summary>
+      </details>
       <p class="wordmark">${esc(record.name)}</p>
 ${navBlock(copy, id, "site-nav", "Pages")}
 ${call ? `${call}\n` : ""}    </div>
@@ -349,7 +359,13 @@ ${details ? `        <p class="footer-contact">\n          ${details}\n        <
 ${copy.contactCaveat && spec.printsDetails ? `        <!-- Compliance: the caveat that belongs with the printed details, derived from the
              record's source. Do not remove. -->
         <p class="footer-small">${esc(copy.contactCaveat)}</p>
-` : ""}${navBlock(copy, id, "footer-nav", "Pages")}
+` : ""}        <!-- Compliance: the privacy notice must stay reachable from the footer of every
+             page and from beside the form. It used to be reachable through the footer's
+             copy of the page navigation, which item 54 removed; this link is now the
+             footer's only route to it. Do not remove. -->
+        <p class="footer-small">
+          <a href="${PAGE_SPECS.privacy.file}">Privacy notice</a>
+        </p>
         <!-- Compliance: the provenance line, derived from the record's source. It may not
              credit a source the record does not name. Do not remove. -->
         <p class="footer-small">
@@ -408,14 +424,13 @@ ${caption ? `      <!-- Compliance: an AI-generated placeholder is labelled as a
       <figcaption class="wrap muted hero-caption">${esc(caption)}</figcaption>\n` : ""}    </figure>`;
 }
 
-function aboutSection(ctx: RenderContext, paragraphs: string[]): string {
+function aboutSection(ctx: RenderContext, paragraphs: string[], heading: boolean): string {
   const { record, copy, images } = ctx;
   const image = aboutImage(images);
   const caption = illustrationCaption(images, "about", record.name);
   return `    <section class="section" id="about">
       <div class="wrap">
-        <h2>About ${esc(record.name)}</h2>
-${paragraphs.map((p) => `        <p>${esc(p)}</p>`).join("\n")}
+${heading ? `        <h2>About ${esc(record.name)}</h2>\n` : ""}${paragraphs.map((p) => `        <p>${esc(p)}</p>`).join("\n")}
 ${paragraphs.length < copy.about.length ? `        <p><a class="link-quiet link-quiet--inline" href="${PAGE_SPECS.about.file}">More about ${esc(record.name)}</a></p>\n` : ""}${image ? `        <figure class="about-figure">
           <img class="about-photo" src="${esc(image.file!)}"${sizeAttrs(image)} alt="" loading="lazy" decoding="async">
 ${caption ? `          <!-- Compliance: an AI-generated placeholder is labelled as an illustration. Do not remove. -->
@@ -557,10 +572,13 @@ function contactFormSection(ctx: RenderContext): string {
   const hidden = Object.entries(form.hiddenFields)
     .map(([k, v]) => `            <input type="hidden" name="${esc(k)}" value="${esc(v)}">`)
     .join("\n");
+  // No section heading: the page's own <h1> is this page's title ("Contact" in demo
+  // phase, "Contact {name}" on a client's site), so a heading here printed the same
+  // words twice in a row (§P6.0). The delivery notice below already says what the form
+  // is and who receives a message, exactly as services.html's block carries no heading
+  // because its <h1> is already the offering.
   return `    <section class="section section--alt" id="form">
       <div class="wrap">
-        <h2>${esc(copy.contactCtaHeading)}</h2>
-
         <!-- Compliance: this notice must stay next to the form. It is derived from
              the delivery the record describes, never written by hand. -->
         <p class="form-notice">${esc(copy.formNotice)}</p>
@@ -627,9 +645,11 @@ function sectionHtml(ctx: RenderContext, id: PageId, section: SectionId): string
     case "hero":
       return heroSection(ctx);
     case "about-short":
-      return aboutSection(ctx, ctx.copy.about.slice(0, ctx.copy.aboutExcerptLength));
+      return aboutSection(ctx, ctx.copy.about.slice(0, ctx.copy.aboutExcerptLength), true);
+    // The About page's own body: its page head already says "About {name}", so the
+    // section carries no heading of its own (§P6.0 — a page never repeats its h1).
     case "about-full":
-      return aboutSection(ctx, ctx.copy.about);
+      return aboutSection(ctx, ctx.copy.about, false);
     case "services":
       return id === "index" ? servicesHomeSection(ctx) : servicesPageSection(ctx);
     case "how":
@@ -732,7 +752,7 @@ export function renderPage(ctx: RenderContext, id: PageId): string {
     .join("\n\n");
 
   return `<!doctype html>
-<html lang="en-CA">
+<html lang="en-CA" class="page page--${id}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -918,12 +938,23 @@ a:hover { text-decoration-thickness: 2px; }
   color: #fff;
   border-bottom: 3px solid var(--accent);
 }
+/* The three standalone compliance lines — this banner, the footer disclaimer and the
+   illustration caption — are centred at both widths. They stand on their own with
+   nothing beside them, so a centred block does not break a reading line. The two lines
+   that sit beside a control (the printed-details caveat and the form-delivery notice)
+   stay left-aligned: they are read as prose attached to the details and the button.
+
+   The inline-auto margin also fixes the alignment this line had: a bare
+   margin: 0 used to beat the wrap rule's margin-inline: auto, so the banner's text sat
+   flush to the viewport's left edge while the rest of the page was inset by the
+   gutter. */
 .proposal-banner p {
-  margin: 0;
+  margin: 0 auto;
   padding: 0.7rem 0;
   font-size: var(--fs-small);
   line-height: 1.5;
   max-width: 60em;
+  text-align: center;
 }
 
 /* ----------------------------------------------------------------- header */
@@ -939,8 +970,22 @@ a:hover { text-decoration-thickness: 2px; }
   gap: var(--s-3) var(--s-4);
   padding: var(--s-4) 0;
 }
+
+/* The home page is one surface: the header sits on the same paper as the photograph
+   below it, with no hairline between them, and the picture starts directly under the
+   header. Inner pages keep the surface and its hairline, which is what gives the
+   page-head band a top edge. Nothing overlays the photograph, so no contrast pair
+   changes: the wordmark and the call button stay ink on paper. */
+.page--index .site-header { background: transparent; border-bottom: 0; }
+.page--index .header-inner { padding: var(--s-3) 0; }
 .wordmark {
-  flex: 1 1 auto;
+  /* A phone needs the wordmark and the call button on one row, and a flex line is
+     broken on the item's hypothetical main size before anything shrinks: with an
+     auto basis the wordmark's own width (about 225px at 1.15rem) pushed the call
+     button onto a line of its own. A zero basis lets it share the row and shrink to
+     the space left, wrapping to two lines the height of the button. The desktop
+     block below puts the auto basis back, so the wide layout is untouched. */
+  flex: 1 1 0;
   min-width: 0;
   margin: 0;
   font-family: var(--font-display);
@@ -950,30 +995,64 @@ a:hover { text-decoration-thickness: 2px; }
 }
 .site-header .call-button { margin-left: auto; }
 
-/* The navigation. On a phone it takes its own full-width row under the wordmark —
-   four short labels, all visible, no menu to open and nothing to script. From 48rem
-   it sits on the wordmark's line. */
-.site-nav { flex: 1 1 100%; order: 4; }
+/* The navigation, in two shapes and with no JavaScript in either.
+
+   On a phone the five links are a disclosure: a summary labelled in words — Pages,
+   because there is no icon set and an unlabelled glyph is not a control a visitor can
+   read — opens a list of full-width 44px rows. The <nav> is the summary's next
+   sibling, never its child: a nav inside a closed <details> cannot be revealed by CSS.
+
+   From 48rem the summary goes and the same list sits inline on the wordmark's line. */
+/* The wrap fallback named in the punch-list plan, applied because the measurement
+   said so: with the summary in the wordmark's slot the phone broke to three rows
+   (summary 44px, wordmark, call button — 158px of header). A flex basis of 100% puts the
+   summary on its own row, which is the slot the old nav row held, and order 4/5
+   makes it follow the wordmark and the call button rather than lead them, so the
+   header is back to the two rows item 44 describes (wordmark + call button, then the
+   full-width navigation row). Desktop hides the summary and is unaffected. */
+.site-menu { flex: 1 1 100%; order: 4; margin: 0; }
+.site-menu-summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0 var(--s-4);
+  border: var(--rule);
+  border-radius: var(--r-md);
+  background: var(--paper-2);
+  color: var(--ink);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  list-style: none;
+  cursor: pointer;
+}
+.site-menu-summary::-webkit-details-marker { display: none; }
+.site-menu-summary::marker { content: ""; }
+.site-menu[open] .site-menu-summary { background: var(--accent-soft); border-color: var(--accent); }
+
+.site-nav { display: none; flex: 1 1 100%; order: 5; }
+.site-menu[open] ~ .site-nav { display: block; }
 .site-nav ul {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0 var(--s-4);
+  flex-direction: column;
+  gap: var(--s-2);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 .site-nav a {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   min-height: 2.75rem;
+  padding: 0 var(--s-4);
+  border-radius: var(--r-md);
+  background: var(--paper-2);
   font-size: 0.9375rem;
   font-weight: 600;
   color: var(--body-text);
   text-decoration: none;
-  border-bottom: 2px solid transparent;
 }
-.site-nav a:hover { color: var(--ink); border-bottom-color: var(--line); }
-.site-nav a[aria-current="page"] { color: var(--accent-ink); border-bottom-color: var(--accent); }
+.site-nav a:hover { color: var(--ink); background: #F1EEE8; }
+.site-nav a[aria-current="page"] { background: var(--accent-soft); color: var(--accent-ink); }
 
 /* ---------------------------------------------------------------- buttons */
 
@@ -1057,10 +1136,14 @@ a:hover { text-decoration-thickness: 2px; }
 }
 .hero > * { grid-area: 1 / 1; }
 .hero--photo { background: #1A1D21; }
+/* The picture fills the first screen on a phone and is bounded on a tall desktop
+   monitor: the 22rem line is the fallback for a browser without svh. Height only —
+   the bytes the hero costs are set by its srcset and the per-page weight budget. */
 .hero-img {
   width: 100%;
   height: 100%;
   min-height: 22rem;
+  min-height: min(78svh, 34rem);
   object-fit: cover;
   object-position: center;
 }
@@ -1081,7 +1164,10 @@ a:hover { text-decoration-thickness: 2px; }
    under the picture, in normal flow. Its wording is fixed by build-gated copy; only
    its spacing is design. */
 .hero-figure, .about-figure { margin: 0; }
-.hero-caption { margin: var(--s-3) 0 0; padding-bottom: var(--s-1); font-size: var(--fs-small); }
+/* A standalone notice, centred like the banner and the footer disclaimer. The auto
+   inline margin keeps the wrap measure this element also carries — a bare
+   margin: var(--s-3) 0 0 used to cancel it and leave the caption flush to the left. */
+.hero-caption { margin: var(--s-3) auto 0; padding-bottom: var(--s-1); font-size: var(--fs-small); text-align: center; }
 
 /* ----------------------------------------------------------------- page head */
 
@@ -1307,50 +1393,63 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 .site-footer a { color: #fff; text-decoration-color: rgba(255, 255, 255, .45); }
 .site-footer a:hover { text-decoration-color: #fff; }
 .site-footer p { max-width: 46em; }
+/* A standalone notice, centred like the banner and the hero caption. The accent bar
+   that used to sit on its left was a left-alignment device, so it goes with the
+   alignment and nothing decorative replaces it. */
 .disclaimer {
-  margin: var(--s-4) 0 0;
-  padding-left: var(--s-4);
-  border-left: 4px solid var(--accent);
+  margin: var(--s-4) auto 0;
   color: #fff;
   font-size: 0.9375rem;
+  text-align: center;
 }
 .footer-small { margin: 0 0 var(--s-4); }
 .footer-small:last-child { margin-bottom: 0; }
 .site-footer code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1em; color: #E8EBEE; }
 .site-footer :focus-visible { outline-color: #fff; }
 
-/* The same four links again, plus the privacy notice: on a phone the footer is the
-   second place a visitor looks, and the privacy notice is linked from every page. */
-.footer-nav { margin: 0 0 var(--s-5); }
-.footer-nav ul { display: flex; flex-direction: column; gap: var(--s-1); margin: 0; padding: 0; list-style: none; }
-.footer-nav a {
-  display: inline-flex;
-  align-items: center;
-  min-height: 2.25rem;
-  color: #fff;
-  font-weight: 600;
-  text-decoration: none;
-}
-.footer-nav a:hover { text-decoration: underline; }
-.footer-nav a[aria-current="page"] { color: #fff; text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 4px; }
+/* The footer carries no list of page links: the header is the navigation, on a phone
+   behind the Pages disclosure and on a desktop as the inline row. The one page link
+   that must stay reachable from every page — the privacy notice — sits in the small
+   print above, as inline 14px text rather than a 44px target. That is deliberate: the
+   footer's job is to be read, and the phone's large targets are in the header. */
 
 /* ------------------------------------------------------------ wider screens */
 
 @media (min-width: 48rem) {
   :root { --gutter: 2rem; }
-  .hero-img { min-height: 28rem; max-height: 34rem; }
+  /* The hero's min-height — min(78svh, 34rem) — is the same at every width: from 48rem
+     up, the viewport-height term exceeds the 34rem cap on any screen taller than about
+     700px, so a desktop hero is capped at 34rem and a phone hero fills what it can. No
+     separate upper bound is needed: the 34rem in the min() is it. */
   .hero-inner { padding: var(--s-9) 0 var(--s-8); }
-  .services { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* Level rows: a card whose service has a recorded note and one without end at the
+     same height instead of leaving the shorter card floating. The grid has no height of
+     its own, so 1fr auto-rows resolve to the tallest card's height. On a phone the list
+     is one column, where unequal heights are honest and a reserved empty box would be
+     unexplainable — and no note is ever written to fill one. */
+  .services { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 1fr; align-items: stretch; }
   .two-col { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: var(--s-7); align-items: start; }
   .footer-grid { grid-template-columns: 1.1fr 0.9fr; gap: var(--s-8); }
-  .site-nav { flex: 1 1 auto; order: 2; margin-left: var(--s-6); }
-  .site-nav a { min-height: 2rem; }
+  /* Desktop keeps the plain inline row it has always had: the summary goes, the nav
+     comes back into the flow, and the links lose the phone panel's row shape. */
+  .site-menu { display: none; }
+  .wordmark { flex: 1 1 auto; }
+  .site-nav { display: block; flex: 1 1 auto; order: 2; margin-left: var(--s-6); }
+  .site-nav ul { flex-direction: row; flex-wrap: wrap; gap: 0 var(--s-4); }
+  .site-nav a {
+    display: inline-flex;
+    min-height: 2rem;
+    padding: 0;
+    border-radius: 0;
+    background: none;
+    border-bottom: 2px solid transparent;
+  }
+  .site-nav a:hover { background: none; color: var(--ink); border-bottom-color: var(--line); }
+  .site-nav a[aria-current="page"] { background: none; color: var(--accent-ink); border-bottom-color: var(--accent); }
   .site-header .call-button { order: 3; }
   .page-head { padding: var(--s-8) 0 var(--s-6); }
   .form-actions .button { width: auto; }
   .privacy-notice h2 { font-size: var(--fs-h3); }
-  .footer-nav ul { flex-direction: row; flex-wrap: wrap; gap: var(--s-5); }
-  .footer-nav a { min-height: 2rem; }
 }
 
 @media (min-width: 64rem) {

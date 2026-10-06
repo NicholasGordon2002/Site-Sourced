@@ -117,6 +117,72 @@ export function placeholderProblems(pages: RenderedPage[]): string[] {
 }
 
 /**
+ * The privacy notice is reachable from every page, and from the form itself.
+ *
+ * It always was reachable — through the footer's copy of the page navigation, which
+ * item 54 of the owner's punch list removed. Removing the navigation without replacing
+ * that route would have left the requirement satisfied by nothing, so the rule is
+ * asserted here rather than assumed: every page's footer carries a link to the notice,
+ * and the page that carries the form carries one next to it as well (the two are
+ * different obligations — a footer link is not a link beside a control).
+ */
+export function privacyLinkProblems(pages: RenderedPage[]): string[] {
+  const problems: string[] = [];
+  const href = `href="${PAGE_SPECS.privacy.file}"`;
+  for (const page of pages) {
+    const footerAt = page.html.indexOf("<footer");
+    const inFooter = footerAt >= 0 && page.html.slice(footerAt).includes(href);
+    if (!inFooter) {
+      problems.push(
+        `${page.file}: the footer carries no link to ${PAGE_SPECS.privacy.file}. The privacy notice must be reachable from every page — the footer's small print is its only route now that the footer carries no page list.`,
+      );
+    }
+    if (PAGE_SPECS[page.id].carriesForm) {
+      const beside = footerAt >= 0 ? page.html.slice(0, footerAt).includes(href) : page.html.includes(href);
+      if (!beside) {
+        problems.push(
+          `${page.file}: carries the form but the privacy notice is not linked next to it. A visitor asked for their details must be able to read what happens to them without leaving the form.`,
+        );
+      }
+    }
+  }
+  return problems;
+}
+
+/**
+ * A page never opens by saying its own name twice.
+ *
+ * §P6.0 of the punch list: `contact.html` carried `<h1>Contact</h1>` from its page head
+ * and `<h2>Contact</h2>` from the form section — the same words, one under the other,
+ * with the form-delivery notice already saying what the form is. The `services.html`
+ * page had already solved it the same way (`the h1 is the offering, so no h2`), and the
+ * About page's own body repeated `About {name}` the same way, so the rule is stated once
+ * for every page rather than patched per page.
+ *
+ * The check reads only `<main>`: the footer's `<h2 class="footer-biz">` deliberately
+ * repeats the business's name, which on the home page is also the `<h1>`.
+ */
+export function headingStackProblems(pages: RenderedPage[]): string[] {
+  const problems: string[] = [];
+  const text = (html: string) => html.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
+  for (const page of pages) {
+    const start = page.html.indexOf("<main");
+    const end = page.html.indexOf("</main>");
+    const main = start >= 0 && end > start ? page.html.slice(start, end) : "";
+    const h1 = /<h1[^>]*>([\s\S]*?)<\/h1>/.exec(main);
+    if (!h1) continue;
+    const title = text(h1[1]!);
+    const repeated = [...main.matchAll(/<h2[^>]*>([\s\S]*?)<\/h2>/g)].some((m) => text(m[1]!) === title);
+    if (repeated) {
+      problems.push(
+        `${page.file}: a section heading repeats the page's own heading ("${title}"). A page that says its name twice in a row has no heading stack — name the section by what it adds, or drop the heading where the page head already says it (.service: services.html's block carries none for the same reason).`,
+      );
+    }
+  }
+  return problems;
+}
+
+/**
  * Everything that must be true for a bundle to be publishable at all — one list, one
  * throw — checked **on every page**, because the plan's compliance rules are per page
  * and never inherited. It covers the pages' compliance strings, the contact form, and
@@ -303,6 +369,8 @@ export function complianceChecks(vars: {
       }),
     );
   }
+  problems.push(...privacyLinkProblems(pages));
+  problems.push(...headingStackProblems(pages));
   problems.push(...externalReferenceProblems({ pages, css: vars.css ?? "", js: vars.js ?? "" }));
   problems.push(...placeholderProblems(pages));
   return problems;

@@ -213,10 +213,17 @@ form card. Depth is not used for decoration.
   (`width: min(var(--wrap), 100% - var(--gutter) * 2)`).
 - Single column below `48rem`. Above it: a two-column split (`.two-col`, `1.05fr .95fr`) for
   hours/address and for any text-plus-image block, collapsing to one column below `48rem`.
-- Services are a one-column list of cards on a phone and a two-column grid at `48rem` and up.
-- Nothing is positioned to need a fixed pixel height: the hero uses `aspect-ratio`, cards size to
-  content. There are exactly two breakpoints, `48rem` and `64rem`; a third would mean the layout
-  was fighting the content.
+- Services are a one-column list of cards on a phone and a two-column grid at `48rem` and up,
+  where `grid-auto-rows: 1fr` levels the rows so a card with a note and one without end at the
+  same height. On a phone unequal heights are honest: nothing is written to fill the gap.
+- The hero is sized by `min-height: min(78svh, 34rem)` (`22rem` as the fallback line for a
+  browser without `svh`), so it fills the first screen on a phone and is capped on a tall
+  desktop monitor; cards size to content. There are exactly two breakpoints, `48rem` and
+  `64rem`; a third would mean the layout was fighting the content.
+- The home page's header is surface-less (`background: transparent; border-bottom: 0`) and the
+  photograph starts directly under it, so the home page reads as one surface. Inner pages keep
+  the header's own surface and hairline, which is what gives `.page-head` a top edge. The page
+  id is carried on `<html class="page page--{id}">`.
 - Tap targets are at least 44×44px. The call button in the header and the submit button in the
   form are the two that matter most and both are taller than that.
 
@@ -231,7 +238,7 @@ tokens only.
 | --- | --- | --- |
 | Skip link | `.skip-link` | First focusable thing; appears on focus only |
 | Proposal banner | `.proposal-banner` | **Compliance. Frozen wording.** Ink strip above everything, accent hairline beneath, in normal flow, never sticky, never dismissible |
-| Header | `.site-header` | Wordmark left, call button right. No navigation in S1 — S2 adds the four-page nav |
+| Header | `.site-header` | Wordmark left, call button right, five-link nav. On a phone the nav is a `Pages` disclosure; the home page's header is surface-less (`.page--index`) so the photograph starts directly under it |
 | Wordmark | `.wordmark` | Business name in Fraunces 600. The header prints the name once, here |
 | Call button | `.call-button` | Ink pill with the published phone number, `tel:` link. If no phone is recorded, a muted, non-interactive note instead — never a dead `tel:` link |
 | Eyebrow | `.eyebrow` | Uppercase label line: category and city, with an accent tick (see §6) |
@@ -250,6 +257,7 @@ tokens only.
 | Contact fallback | `.contact-fallback` | Printed phone and email next to the form, with the caveat |
 | Footer | `.site-footer` | Ink surface, two columns from `48rem`: identity + contact + disclaimer left; small print right |
 | Micro print | `.footer-small` | `--fs-small` (0.875rem) at `--footer-ink`. Never below 14px — this is the legal text and it must be readable, not merely present |
+| Centred notice | `.proposal-banner p`, `.disclaimer`, `.hero-caption` | The three **standalone** compliance lines: `text-align: center` and `margin-inline: auto`, at both widths. Nothing decorative replaces the disclaimer's old left accent bar. The caveat and the form-delivery notice sit beside a control and stay left-aligned — the basis is placement, not length |
 
 ### The family layer's own components (built 4 Oct; `src/demo/family-render.ts` + `src/demo/render.ts`)
 
@@ -381,10 +389,14 @@ rest by reusing these sections rather than inventing new ones.
 | About | `about.html` | The About paragraphs, the about photograph, hours + address, contact CTA |
 | Contact | `contact.html` | The form, the delivery notice, printed phone/email with the caveat, directions, hours |
 
-- Navigation: four plain text links in the header (`48rem`+), and the same four as a stacked
-  list in the footer on a phone. No hamburger menu, no JavaScript-driven nav: the pages are few
-  and the labels are short.
-- The current page is marked with `aria-current="page"` and a small accent underline.
+- Navigation lives in the header and nowhere else: **five** plain text links (the privacy notice
+  included) on the wordmark's line from `48rem`, and behind a CSS-only `<details>` disclosure
+  labelled in words — `Pages` — below it. No JavaScript-driven nav, no icon-only control, and
+  the `<nav>` is the summary's **next sibling**, never its child: a nav inside a closed
+  `<details>` cannot be revealed by CSS. The footer carries no page list; the privacy notice is
+  linked from its small print on every page, which `privacyLinkProblems` enforces.
+- The current page is marked with `aria-current="page"`: an accent underline in the desktop row,
+  an accent wash on the phone's panel row.
 - Each page repeats the banner, the footer disclaimer and the contact caveat in full. Compliance
   is per-page, never inherited.
 - `noindex, nofollow` on every page, plus `rel="canonical"` to nothing — the demo never
