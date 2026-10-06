@@ -198,16 +198,19 @@ export interface ManifestImage {
 
 /** The bundle manifest: our own audit trail, and the hand-over answer sheet. */
 /**
- * How the home page's header sits on the hero photograph (owner retouch, 6 Oct 2026),
- * read from the stylesheet the bundle ships: the shared grid cell, the wash, the alpha
- * it runs at and the contrast white reaches on it over the lightest pixel a photograph
- * can hold. `null` means no wash was found — a build refusal, not a bundle.
+ * How the home page's header sits on the hero photograph (owner revisions, 6 Oct 2026),
+ * read from the stylesheet the bundle ships: the shared grid cell, the **two light
+ * separators** that now delimit the header instead of a wash, the **text shadow** that
+ * keeps white glyphs legible over the picture, and the header's own box and row count at
+ * the four phone widths, measured in a browser. `null` means the header box could not be
+ * read — a build refusal, not a bundle.
  */
 export interface ManifestHeaderOverlay {
   cell: string;
-  wash: string;
-  lightest_alpha: number;
-  white_on_wash: number;
+  separators: string;
+  text_shadow: string;
+  measured: string;
+  legibility: string;
   inner_pages: string;
 }
 

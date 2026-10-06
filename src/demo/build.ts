@@ -711,42 +711,101 @@ export function headerOverlayProblems(pages: RenderedPage[], css = ""): string[]
     );
   }
 
-  /* 5. The wash, and the text colour that reads on it. */
-  const wash = (headerDecls.get("background-image") ?? headerDecls.get("background") ?? "").trim();
-  let washOverWhite: Rgb | null = null;
-  let lightestAlpha = 0;
-  let whiteOnWash: number | null = null;
-  if (!/linear-gradient\(/.test(wash)) {
+  /* 5. No wash on the header's box at all — the owner had it removed on 6 Oct. */
+  const merged = overlayRuleDeclarations(base, (one) => one === ".site-header" || one === `${overlay} .site-header`);
+  const SCUM: { property: string; what: string }[] = [
+    { property: "background", what: "a background" },
+    { property: "background-color", what: "a background colour" },
+    { property: "background-image", what: "a wash" },
+    { property: "backdrop-filter", what: "a blur over the picture behind it" },
+    { property: "filter", what: "a filter over the picture behind it" },
+    { property: "box-shadow", what: "a shadow around its box" },
+  ];
+  // There is no wash any more, so the clauses below that measured a colour against it
+  // have nothing to measure against: they keep their structural half and stay inert here.
+  const washOverWhite: Rgb | null = null;
+  const transparent = (value: string) => /^(none|transparent|initial|unset|0)$/i.test(value.trim());
+  for (const entry of SCUM) {
+    const declared = (merged.get(entry.property) ?? "").trim();
+    if (declared === "" || transparent(declared)) continue;
     problems.push(
-      `the home header carries no wash of its own (a linear-gradient in ${overlay} .site-header's background). The picture behind it is unknown at build time, so without a wash nothing makes the header's text legible over it.`,
+      `the home header carries ${entry.what} again (${entry.property}: ${declared} reaching ${overlay} .site-header). The owner asked for the wash to be removed on 6 Oct 2026: the photograph runs to the header's top edge and the header's box is bare — what delimits it is one light rule at each edge, nothing else.`,
     );
-  } else {
-    const stops = rgbaStops(wash);
-    if (stops.length === 0) {
+  }
+
+  /* 6. One light separator at each edge — the thing that delimits the header now. */
+  const edgeRule = (side: "top" | "bottom") => {
+    const value = (merged.get(`border-${side}`) ?? "").trim();
+    const shorthand = /^([\d.]+)px\s+(solid|dashed|dotted)\s+(.+)$/.exec(value);
+    return {
+      value,
+      width: shorthand ? `${shorthand[1]}px` : (merged.get(`border-${side}-width`) ?? "").trim(),
+      style: shorthand ? shorthand[2]! : (merged.get(`border-${side}-style`) ?? "").trim(),
+      colour: shorthand ? shorthand[3]!.trim() : (merged.get(`border-${side}-color`) ?? "").trim(),
+    };
+  };
+  const lightRule = (colour: string): { rgb: Rgb; alpha: number } | null => {
+    const rgba = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*(\.?\d+)\s*)?\)$/i.exec(colour);
+    const rgb: Rgb | null = rgba ? [Number(rgba[1]), Number(rgba[2]), Number(rgba[3])] : overlayColour(colour, tokens);
+    const alpha = rgba && rgba[4] !== undefined ? Number(rgba[4]) : 1;
+    if (!rgb) return null;
+    return rgb.every((channel) => channel >= 200) && alpha >= 0.25 && alpha <= 0.9 ? { rgb, alpha } : null;
+  };
+  for (const side of ["top", "bottom"] as const) {
+    const rule = edgeRule(side);
+    const where = side === "top" ? "between the header and the proposal banner" : "between the header and the hero content";
+    if (rule.width === "" || /^0/.test(rule.width) || rule.style === "none") {
       problems.push(
-        `the home header's wash holds no rgba() stop this build can read (${wash.slice(0, 80)}), so nothing proves the header's text is legible over the lightest pixel a photograph can hold. An opaque-only gradient hides the photograph as well.`,
+        `the home header has no separator at its ${side} edge (a light 1px border-${side} on ${overlay} .site-header): ${where}, the photograph and the header run together with nothing ruling the header off, and with the wash gone that rule is the whole of the delimitation the owner asked for on 6 Oct.`,
       );
-    } else {
-      const lightest = stops.reduce((min, stop) => (stop.alpha < min.alpha ? stop : min));
-      lightestAlpha = lightest.alpha;
-      washOverWhite = overOpaque(lightest, white);
-      whiteOnWash = contrastRatio(white, washOverWhite);
-      if (whiteOnWash < WASH_TEXT_CONTRAST) {
-        problems.push(
-          `the home header's wash is too light for white text: its lightest stop (alpha ${lightest.alpha}) composites over pure white to rgb(${washOverWhite.join(", ")}), where white text reaches ${whiteOnWash.toFixed(2)}:1 — under the ${WASH_TEXT_CONTRAST}:1 this header needs. The photograph is unknown at build time, so the ratio has to hold over the lightest pixel it can hold, not over the picture that happens to be in front of it.`,
-        );
-      }
+      continue;
+    }
+    const px = Number(/^([\d.]+)px$/.exec(rule.width)?.[1] ?? "9");
+    if (px > 2) {
+      problems.push(
+        `the home header's ${side} separator is ${rule.width} thick (border-${side}: ${rule.value}), which reads as a border box or a band rather than the hairline the owner asked for: one light 1px rule ${where}.`,
+      );
+      continue;
+    }
+    if (!lightRule(rule.colour)) {
+      problems.push(
+        `the home header's ${side} separator is not a light rule this build can read as one (border-${side}-color: ${rule.colour || "nothing"}): a separator over an unknown photograph has to be a light, partly transparent white — a dark or opaque rule reads as a box edge, and a value this build cannot read proves nothing.`,
+      );
     }
   }
+
+  /* 7. The glyph-level device that replaces the wash. Text colour, then the halo. */
   const headerInk = overlayColour(headerDecls.get("color") ?? "", tokens);
   if (!headerInk) {
     problems.push(
-      `${overlay} .site-header declares no readable text colour (its own, not an inherited one): on the wash the body colour is ${washOverWhite ? contrastRatio([61, 68, 76], washOverWhite).toFixed(2) : "1.71"}:1.`,
+      `${overlay} .site-header declares no readable text colour (its own, not an inherited one): with the wash gone the body colour sits straight on the photograph at 1.7:1.`,
     );
-  } else if (washOverWhite && contrastRatio(headerInk, washOverWhite) < WASH_TEXT_CONTRAST) {
+  } else if (relativeLuminance(headerInk) < 0.75) {
     problems.push(
-      `the home header's text colour reaches only ${contrastRatio(headerInk, washOverWhite).toFixed(2)}:1 on the wash (rgb(${headerInk.join(", ")}) over rgb(${washOverWhite.join(", ")})), under the ${WASH_TEXT_CONTRAST}:1 a header on an unknown photograph needs.`,
+      `the home header's text colour is rgb(${headerInk.join(", ")}) — ${(relativeLuminance(headerInk) * 100).toFixed(0)}% of the luminance of white — while the header's own type is white on an unknown photograph: a mid or dark ink here is unreadable over half the pictures a demo can carry.`,
     );
+  }
+  const shadowDecl = (
+    overlayRuleDeclarations(base, (selector) => selector === `${overlay} .site-header .wordmark`).get("text-shadow") ?? ""
+  ).trim();
+  const shadow = /(-?[\d.]+)(?:px)?\s+(-?[\d.]+)(?:px)?\s+([\d.]+)(?:px)?\s+rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*(\.?\d+))?\s*\)/.exec(shadowDecl);
+  if (!shadow) {
+    problems.push(
+      `the wordmark declares no text shadow (${overlay} .site-header .wordmark { text-shadow: … }). With the wash gone nothing sits between white type and the photograph, and a soft ink halo behind the glyphs is the whole of the legibility device now.`,
+    );
+  } else {
+    const inkish = relativeLuminance([Number(shadow[4]), Number(shadow[5]), Number(shadow[6])]);
+    const alpha = shadow[7] === undefined ? 1 : Number(shadow[7]);
+    const blur = Number(shadow[3]);
+    if (inkish > 0.2) {
+      problems.push(
+        `the wordmark's text shadow is not ink (rgb(${shadow[4]}, ${shadow[5]}, ${shadow[6]}) is a light halo): a light shadow behind white glyphs over a photograph does nothing at all.`,
+      );
+    } else if (alpha < 0.4 || blur < 1 || blur > 4) {
+      problems.push(
+        `the wordmark's text shadow is too weak to be the legibility device (alpha ${alpha}, blur ${blur}px): under 0.4 alpha the glyph edges stay on the photograph's own pixels, and over 4px of blur the halo smears into a shadow the header's design refuses.`,
+      );
+    }
   }
   if ((overlayRuleDeclarations(base, (selector) => selector === ".wordmark").get("color") ?? "").trim() !== "inherit") {
     problems.push(
@@ -869,27 +928,39 @@ export function headerOverlayProblems(pages: RenderedPage[], css = ""): string[]
  * the bundle ships — so a reviewer reads the wash, the alpha it runs at and the contrast
  * white reaches on it, rather than inferring any of them from the page.
  */
+/**
+ * What the manifest records about the home header's treatment, read from the stylesheet
+ * the bundle ships — so a reviewer reads the two separators and the halo that replaced the
+ * wash, rather than inferring either from the page.
+ */
 export function headerOverlayMeasure(css: string): {
   cell: string;
-  wash: string;
-  lightest_alpha: number;
-  white_on_wash: number;
+  separators: string;
+  text_shadow: string;
+  measured: string;
+  legibility: string;
   inner_pages: string;
 } | null {
   const base = overlayStyleRules(css).filter((rule) => rule.at === "");
   const overlay = `.${HEADER_OVERLAY_CLASS}`;
-  const headerDecls = overlayRuleDeclarations(base, (selector) => selector === `${overlay} .site-header`);
-  const wash = (headerDecls.get("background-image") ?? headerDecls.get("background") ?? "").trim();
-  const stops = rgbaStops(wash);
-  if (!/linear-gradient\(/.test(wash) || stops.length === 0) return null;
-  const lightest = stops.reduce((min, stop) => (stop.alpha < min.alpha ? stop : min));
+  const merged = overlayRuleDeclarations(base, (one) => one === ".site-header" || one === `${overlay} .site-header`);
+  const background = (merged.get("background") ?? "").trim();
+  if (!/^(none|transparent)$/i.test(background)) return null;
+  const top = (merged.get("border-top") ?? "").trim();
+  const bottom = (merged.get("border-bottom") ?? "").trim();
+  const shadow = (
+    overlayRuleDeclarations(base, (selector) => selector === `${overlay} .site-header .wordmark`).get("text-shadow") ?? ""
+  ).trim();
   const placed = (selector: string) =>
     (overlayRuleDeclarations(base, (one) => one === selector).get("grid-area") ?? "auto").trim();
   return {
     cell: `The header and the page body share one grid cell (${overlay} .site-header at ${placed(`${overlay} .site-header`)}, ${overlay} main at ${placed(`${overlay} main`)}, the header taking the top of it): the hero photograph starts at the proposal banner's bottom edge, behind the header. The photograph's own height is unchanged — it is the header's former row that the picture fills — and the page below the hero is the page it was.`,
-    wash,
-    lightest_alpha: lightest.alpha,
-    white_on_wash: Number(contrastRatio([255, 255, 255], overOpaque(lightest, [255, 255, 255])).toFixed(2)),
+    separators: `${background} background and one light rule at each edge — border-top: ${top}, border-bottom: ${bottom}. The two rules are the whole of the delimitation: the header's box is bare, so the photograph shows through it.`,
+    text_shadow: shadow === "" ? "none" : shadow,
+    measured:
+      "The header's own box and row count are rendered numbers, and no stylesheet assertion measures a box: they are taken in a browser at 320/360/390/420px on both fixtures and reported with the change (see design/, 6 Oct 2026).",
+    legibility:
+      "White glyphs over an unknown photograph cannot be proved legible at build time once the wash is gone: this build asserts the device (a soft ink halo behind the wordmark's strokes, and the same on the wide row's links) and the measured contrast is reported from the rendered pixels of both fixtures rather than asserted here.",
     inner_pages:
       "No overlay on an inner page: every overlay rule is scoped to .page--index, which only the home page carries, and inner pages have no photograph — their header keeps the paper surface and its hairline (headerOverlayProblems).",
   };

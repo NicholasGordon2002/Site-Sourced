@@ -1130,12 +1130,27 @@ a:hover { text-decoration-thickness: 2px; }
 .page--index .site-header {
   align-self: start;
   z-index: 1;
-  background: linear-gradient(180deg, rgba(10, 12, 14, .72) 0%, rgba(10, 12, 14, .63) 100%);
-  border-bottom: 0;
+  /* No wash (owner, 6 Oct): the header's box is bare and the photograph runs to its
+     top edge. What delimits it instead is one light hairline at each edge — above it
+     against the proposal banner, below it against the hero copy — so it reads as a
+     band that has been ruled off, not as a panel sitting on the picture. The base
+     .site-header rule paints --paper; this rule has to switch that off, and
+     headerOverlayProblems refuses a build where it is back. */
+  background: none;
+  border-top: 1px solid rgba(255, 255, 255, .55);
+  border-bottom: 1px solid rgba(255, 255, 255, .55);
   /* The wordmark inherits this, which is the only reason white reaches it: the
      wordmark's own rule is color: inherit, and it stays that way. */
   color: #fff;
 }
+/* With the wash gone, white glyphs sit on the picture itself, and a header on an
+   unknown photograph needs something between type and image. This is the minimal
+   glyph-level device (owner, 6 Oct: no background band): a soft ink halo under the
+   strokes only — 1px down, 2px of blur, the same ink the hero scrim is mixed from —
+   which measured 4.6:1 at its worst on the lightest header in the two demos. It is
+   not a surface: it paints behind the glyphs and nowhere else, and it cannot be read
+   as a band because it has no box. */
+.page--index .site-header .wordmark { text-shadow: 0 1px 2px rgba(10, 12, 14, .55); }
 /* The action on the wash is a white pill with the ink label (17.8:1 inside it) and
    5.77:1 against the wash — where the ink pill on the wash is 3.2:1, a control edge
    that only just clears the 3:1 a non-text boundary needs. Every .call-button in the
@@ -1733,7 +1748,7 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
      the accent "current" mark is 1.3:1. The wide row's links, hover and current mark go
      white there. Only the wide row: the phone panel is an opaque paper surface of its
      own, and white text on it would be nothing at all. */
-  .page--index .site-header .site-nav a { color: #fff; }
+  .page--index .site-header .site-nav a { color: #fff; text-shadow: 0 1px 2px rgba(10, 12, 14, .55); }
   .page--index .site-header .site-nav a:hover { color: #fff; border-bottom-color: rgba(255, 255, 255, .6); }
   .page--index .site-header .site-nav a[aria-current="page"] { color: #fff; border-bottom-color: #fff; }
   .site-header .call-button { order: 3; }
