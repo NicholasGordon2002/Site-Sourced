@@ -1266,6 +1266,14 @@ a:hover { text-decoration-thickness: 2px; }
 
 .address { font-style: normal; font-weight: 600; color: var(--ink); line-height: 1.5; }
 .address-links { margin: var(--s-4) 0 0; }
+/* The hours/address split is two blocks inside one section. On a phone they stack, and
+   they used to touch — the hours card's bottom margin is 0 and the second block began
+   the moment the first ended, so "Where {name} is" read as part of the card above it.
+   The gap is the token every section boundary in the template is built from rather than
+   a number of its own: --section-y, the section's own top spacing, so the pair reads
+   like the section boundary it is. Above 48rem the pair is the two-column grid below,
+   whose own gap does this job, so the margin goes there. */
+.two-col > div + div { margin-top: var(--section-y); }
 .page-head + .section { padding-top: var(--s-7); }
 
 /* The card: one white surface with a hairline edge, used for the service list and
@@ -1494,6 +1502,8 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
      unexplainable — and no note is ever written to fill one. */
   .services { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 1fr; align-items: stretch; }
   .two-col { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: var(--s-7); align-items: start; }
+  /* The stacked pair's gap (see the phone rule) is the grid's own gap up here. */
+  .two-col > div + div { margin-top: 0; }
   .footer-grid { grid-template-columns: 1.1fr 0.9fr; gap: var(--s-8); }
   /* Desktop keeps the plain inline row it has always had: the summary goes, the nav
      comes back into the flow — the phone panel's geometry undone property by property,
