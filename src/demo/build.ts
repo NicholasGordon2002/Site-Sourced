@@ -440,6 +440,461 @@ export function phoneMenuProblems(pages: RenderedPage[], css = ""): string[] {
   return problems;
 }
 
+/* ------------------------------------- the home header, sitting on the hero photograph */
+
+/** The class the home page's `html` element carries to put the header on the picture. */
+export const HEADER_OVERLAY_CLASS = "page--index";
+/**
+ * White text on the header's wash must reach this, over **the lightest pixel a
+ * photograph can hold** — the picture behind the header is unknown at build time, so the
+ * floor is measured against a wash composited over pure white and cannot depend on it.
+ */
+export const WASH_TEXT_CONTRAST = 5.6;
+/** A control's own boundary — and the focus ring — against the wash. */
+export const WASH_CONTROL_CONTRAST = 3;
+/** A label inside a filled control, against that fill. */
+const LABEL_CONTRAST = 4.5;
+
+type Rgb = [number, number, number];
+
+/** WCAG relative luminance of an 8-bit sRGB colour. */
+function relativeLuminance(rgb: Rgb): number {
+  const [r, g, b] = rgb.map((value) => {
+    const c = value / 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+}
+
+/** The WCAG contrast ratio between two opaque colours. */
+function contrastRatio(one: Rgb, two: Rgb): number {
+  const a = relativeLuminance(one);
+  const b = relativeLuminance(two);
+  const [hi, lo] = a > b ? [a, b] : [b, a];
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+/** The rgba() stops a declaration holds, each with the alpha it composites at. */
+function rgbaStops(declaration: string): { rgb: Rgb; alpha: number }[] {
+  return [...declaration.matchAll(/rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*(?:,\s*(\.?\d+)\s*)?\)/g)].map(
+    (m) => ({
+      rgb: [Number(m[1]), Number(m[2]), Number(m[3])] as Rgb,
+      alpha: m[4] === undefined ? 1 : Number(m[4]),
+    }),
+  );
+}
+
+/** A translucent colour over an opaque one: what a wash looks like over a pixel. */
+function overOpaque(fg: { rgb: Rgb; alpha: number }, bg: Rgb): Rgb {
+  return fg.rgb.map((value, i) => Math.round(value * fg.alpha + bg[i]! * (1 - fg.alpha))) as Rgb;
+}
+
+/**
+ * Every `selector { declarations }` in a stylesheet, at any depth, with the at-rule it
+ * sits in — so a width block can be told from the base rules, and nothing is read as a
+ * base rule that is not. Comments are removed first: they are prose, not CSS.
+ */
+function overlayStyleRules(css: string, at = ""): { selector: string; body: string; at: string }[] {
+  const clean = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  const rules: { selector: string; body: string; at: string }[] = [];
+  let i = 0;
+  while (i < clean.length) {
+    const open = clean.indexOf("{", i);
+    if (open < 0) break;
+    const selector = clean.slice(i, open).trim();
+    let depth = 1;
+    let j = open + 1;
+    for (; j < clean.length && depth > 0; j += 1) {
+      if (clean[j] === "{") depth += 1;
+      else if (clean[j] === "}") depth -= 1;
+    }
+    const inner = clean.slice(open + 1, j - 1);
+    if (selector.startsWith("@")) rules.push(...overlayStyleRules(inner, selector));
+    else if (selector !== "") rules.push({ selector, body: inner, at });
+    i = j;
+  }
+  return rules;
+}
+
+/** property → value for one rule's declarations, the later one winning, as CSS does. */
+function overlayDeclarations(body: string): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const chunk of body.split(";")) {
+    const at = chunk.indexOf(":");
+    if (at < 0) continue;
+    const property = chunk.slice(0, at).trim().toLowerCase();
+    const value = chunk.slice(at + 1).trim();
+    if (property !== "") out.set(property, value);
+  }
+  return out;
+}
+
+/** The declarations that reach one selector, merged across the rules that match it. */
+function overlayRuleDeclarations(
+  rules: { selector: string; body: string }[],
+  matches: (selector: string) => boolean,
+): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const rule of rules) {
+    if (!matches(rule.selector)) continue;
+    for (const [property, value] of overlayDeclarations(rule.body)) out.set(property, value);
+  }
+  return out;
+}
+
+/** The selectors in one rule's list, trimmed. */
+const selectorList = (selector: string): string[] => selector.split(",").map((part) => part.trim());
+
+/** A colour value as an opaque rgb triple: hex, or one of the stylesheet's own tokens. */
+function overlayColour(value: string, tokens: Map<string, string>): Rgb | null {
+  const text = value.trim();
+  const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(text);
+  if (hex) {
+    const digits = hex[1]!;
+    const parts =
+      digits.length === 3
+        ? [...digits].map((c) => parseInt(c + c, 16))
+        : [0, 2, 4].map((i) => parseInt(digits.slice(i, i + 2), 16));
+    return parts as Rgb;
+  }
+  if (/^white$/i.test(text)) return [255, 255, 255];
+  if (/^black$/i.test(text)) return [0, 0, 0];
+  const token = /^var\(\s*(--[\w-]+)\s*\)$/.exec(text);
+  if (token) {
+    const inner = tokens.get(token[1]!) ?? "";
+    return inner !== "" && inner !== text ? overlayColour(inner, tokens) : null;
+  }
+  return null;
+}
+
+/**
+ * The owner's retouch of 6 Oct 2026 — the home page's hero photograph runs up to the
+ * proposal banner and the header sits on it — as a rule the build enforces
+ * (WORKFLOW.md rule 6: a page rule that lives only in prose or a comment rots, and this
+ * one is CSS-wide while the safety of one page depends on the scope of another).
+ *
+ * What it refuses:
+ *
+ *   1. **the overlay class anywhere but the home page** — `page--index` puts the header
+ *      on a photograph, and an inner page has none: white text on white paper;
+ *   2. **an overlay declaration that is not scoped to that class** — a shared grid cell,
+ *      a wash, white text, a white action, a white focus ring or a stacking order that
+ *      reaches the header of a page with no photograph behind it;
+ *   3. **a header and a page body that are not in the same definite cell**. They must
+ *      share one row *and* one explicit column: a row without a column lets
+ *      auto-placement start a second, implicit column — sized by its content, leaving the
+ *      real one nothing — and the photograph then runs beside the header, not under it;
+ *   4. **a wash too light to be legible**, measured rather than asserted: its lightest
+ *      stop is composited over pure white (the lightest pixel a photograph can hold) and
+ *      white text must reach 5.6:1 on the result, whatever the picture turns out to be;
+ *   5. **an action or a focus ring that disappears into the wash**, and a label that
+ *      disappears into its own fill: 3:1 for a control's edge and the ring, 4.5:1 for
+ *      text inside the fill. The header's action is deliberately off the ink pill — it is
+ *      the white one on the wash — and the muted "no phone on file" chip is not an action
+ *      and must not be painted as one;
+ *   6. **header text with no colour to inherit**: the wordmark's rule is color: inherit,
+ *      and that is the only reason the header's colour reaches the business name;
+ *   7. **a header that stretches down the photograph or sinks under it**: it must be
+ *      pushed to the top of its cell and stack above the picture, and the base header
+ *      must stay positioned or the stacking does nothing;
+ *   8. **white navigation over a panel whose surface has gone**: the wide row's links go
+ *      white on the wash, the phone panel's stay dark on its own opaque surface;
+ *   9. **the phone header's two rows flattened**: the wordmark's half-row basis, the 44px
+ *      hamburger and the 44px action are what make it two rows, and a third row is a
+ *      layout the owner signed off.
+ *
+ * What it deliberately does **not** claim: the row *count* and the header's height are
+ * rendered boxes, and no stylesheet assertion measures a box. Those numbers are taken in
+ * a browser at 320/360/390/420px and reported with the change; this pins the mechanism
+ * that produces them, and the CSS-derived contrast of the wash.
+ */
+export function headerOverlayProblems(pages: RenderedPage[], css = ""): string[] {
+  const problems: string[] = [];
+  const overlay = `.${HEADER_OVERLAY_CLASS}`;
+  const white: Rgb = [255, 255, 255];
+
+  /* 1. The overlay class is on the home page and nowhere else. */
+  for (const page of pages) {
+    const classes = (/<html[^>]*\bclass="([^"]*)"/.exec(page.html)?.[1] ?? "").split(/\s+/).filter(Boolean);
+    const isHome = page.file === PAGE_SPECS.index.file;
+    const carries = classes.includes(HEADER_OVERLAY_CLASS);
+    if (isHome && !carries) {
+      problems.push(
+        `${page.file}: the home page does not carry class="${HEADER_OVERLAY_CLASS}", so the header and the hero photograph are back in two rows and the white band between the banner and the picture is back (owner retouch, 6 Oct).`,
+      );
+    }
+    if (!isHome && carries) {
+      problems.push(
+        `${page.file}: class="${HEADER_OVERLAY_CLASS}" is on a page with no hero. It puts the header on a wash over paper — white text on white — and the overlaid header belongs to the home page alone (owner retouch, 6 Oct).`,
+      );
+    }
+  }
+
+  // The marking half is checked on the pages alone; everything below it is a claim about
+  // the stylesheet and needs the one the bundle ships. A caller with no stylesheet gets no
+  // stylesheet half — the convention `phoneMenuProblems` already sets — and the build
+  // itself always passes one (`headerOverlayProblems(pages, vars.css ?? "")`). Honest
+  // limit, stated rather than hidden: a caller that forgets it is unchecked here.
+  if (css === "") return problems;
+
+  const all = overlayStyleRules(css);
+  const base = all.filter((rule) => rule.at === "");
+  const wide = all.filter((rule) => /min-width:\s*48rem/.test(rule.at));
+  const scoped = (selector: string) => selector.includes(overlay);
+  const mentionsHeader = (selector: string) => /\.site-header\b|(^|[\s,>+~])(body|main)\b/.test(selector);
+  const tokens = overlayRuleDeclarations(base, (selector) => selector === ":root");
+
+  /* 2. No overlay declaration may reach a header with no photograph behind it. */
+  const MARKS: { what: string; re: RegExp }[] = [
+    { what: "a shared grid cell", re: /\bgrid-(area|row|column)\s*:|(^|;)\s*display\s*:\s*grid\b/ },
+    { what: "a wash over the photograph", re: /linear-gradient\([^;]*rgba\(/ },
+    { what: "white header text", re: /(^|;)\s*color\s*:\s*#(?:fff|ffffff)\b|(^|;)\s*color\s*:\s*white\s*(;|$)/i },
+    { what: "a white action on the wash", re: /(^|;)\s*background(-color)?\s*:\s*#(?:fff|ffffff)\b|(^|;)\s*background(-color)?\s*:\s*white\s*(;|$)/i },
+    { what: "a white focus ring on the wash", re: /outline-color\s*:\s*#(?:fff|ffffff)\b|outline-color\s*:\s*white\s*(;|$)/i },
+    { what: "the header stacked above the page", re: /(^|;)\s*z-index\s*:\s*\d/ },
+  ];
+  for (const rule of all) {
+    if (scoped(rule.selector) || !mentionsHeader(rule.selector)) continue;
+    const hit = MARKS.find((mark) => mark.re.test(rule.body));
+    if (hit) {
+      problems.push(
+        `the stylesheet puts ${hit.what} on "${rule.selector}", which is not scoped to ${overlay}. An inner page has no photograph behind its header, so the overlaid header is the home page's alone.`,
+      );
+    }
+  }
+
+  /* 3. The header and the page body share one definite grid cell. */
+  const cell = (selector: string) => {
+    const declared = overlayRuleDeclarations(base, (one) => one === selector);
+    const area = declared.get("grid-area");
+    if (area) {
+      const [row = "", column = ""] = area.split("/").map((part) => part.trim());
+      return { row, column };
+    }
+    return { row: (declared.get("grid-row") ?? "").trim(), column: (declared.get("grid-column") ?? "").trim() };
+  };
+  const definite = (value: string) => value !== "" && value !== "auto";
+  const place = { header: cell(`${overlay} .site-header`), main: cell(`${overlay} main`) };
+  const bodyGrid = overlayRuleDeclarations(base, (selector) => selector === `${overlay} body`).get("display") ?? "";
+  if (bodyGrid !== "grid") {
+    problems.push(
+      `the home page's body is not a grid (${overlay} body { display: grid }): the header and the page body cannot share a cell, so the photograph starts below the header again and the white band is back.`,
+    );
+  }
+  if (![place.header.row, place.header.column, place.main.row, place.main.column].every(definite)) {
+    problems.push(
+      `the home header and the page body are not both placed in one definite row and column (${overlay} .site-header and ${overlay} main: got header ${place.header.row || "auto"}/${place.header.column || "auto"}, main ${place.main.row || "auto"}/${place.main.column || "auto"}). A row without a column lets auto-placement start a second, implicit column — sized by its content, leaving the real one nothing — and the photograph then runs beside the header instead of up to the banner.`,
+    );
+  } else if (place.header.row !== place.main.row || place.header.column !== place.main.column) {
+    problems.push(
+      `the home header (${place.header.row}/${place.header.column}) and the page body (${place.main.row}/${place.main.column}) are placed in different cells, so the header is not on the photograph: the hero must start at the banner's bottom edge, behind the header.`,
+    );
+  }
+
+  /* 4. The header takes the top of the cell and stacks above the picture. */
+  const headerDecls = overlayRuleDeclarations(base, (selector) => selector === `${overlay} .site-header`);
+  if ((headerDecls.get("align-self") ?? "").trim() !== "start") {
+    problems.push(
+      `the home header is not pushed to the top of its cell (align-self: start): as a grid item it stretches to the whole row, so its wash would run down the photograph instead of sitting on it.`,
+    );
+  }
+  if (!(Number(headerDecls.get("z-index") ?? "") >= 1)) {
+    problems.push(
+      `the home header does not stack above the photograph (a z-index of 1 or more in ${overlay} .site-header): the hero is painted after it, so the wash, the white text and the action all disappear under the picture.`,
+    );
+  }
+  if (!/(relative|absolute|fixed|sticky)/.test(overlayRuleDeclarations(base, (one) => one === ".site-header").get("position") ?? "")) {
+    problems.push(
+      "the header is no longer positioned (position: relative in the base .site-header rule), so the home page's z-index does nothing and the photograph covers the header.",
+    );
+  }
+
+  /* 5. The wash, and the text colour that reads on it. */
+  const wash = (headerDecls.get("background-image") ?? headerDecls.get("background") ?? "").trim();
+  let washOverWhite: Rgb | null = null;
+  let lightestAlpha = 0;
+  let whiteOnWash: number | null = null;
+  if (!/linear-gradient\(/.test(wash)) {
+    problems.push(
+      `the home header carries no wash of its own (a linear-gradient in ${overlay} .site-header's background). The picture behind it is unknown at build time, so without a wash nothing makes the header's text legible over it.`,
+    );
+  } else {
+    const stops = rgbaStops(wash);
+    if (stops.length === 0) {
+      problems.push(
+        `the home header's wash holds no rgba() stop this build can read (${wash.slice(0, 80)}), so nothing proves the header's text is legible over the lightest pixel a photograph can hold. An opaque-only gradient hides the photograph as well.`,
+      );
+    } else {
+      const lightest = stops.reduce((min, stop) => (stop.alpha < min.alpha ? stop : min));
+      lightestAlpha = lightest.alpha;
+      washOverWhite = overOpaque(lightest, white);
+      whiteOnWash = contrastRatio(white, washOverWhite);
+      if (whiteOnWash < WASH_TEXT_CONTRAST) {
+        problems.push(
+          `the home header's wash is too light for white text: its lightest stop (alpha ${lightest.alpha}) composites over pure white to rgb(${washOverWhite.join(", ")}), where white text reaches ${whiteOnWash.toFixed(2)}:1 — under the ${WASH_TEXT_CONTRAST}:1 this header needs. The photograph is unknown at build time, so the ratio has to hold over the lightest pixel it can hold, not over the picture that happens to be in front of it.`,
+        );
+      }
+    }
+  }
+  const headerInk = overlayColour(headerDecls.get("color") ?? "", tokens);
+  if (!headerInk) {
+    problems.push(
+      `${overlay} .site-header declares no readable text colour (its own, not an inherited one): on the wash the body colour is ${washOverWhite ? contrastRatio([61, 68, 76], washOverWhite).toFixed(2) : "1.71"}:1.`,
+    );
+  } else if (washOverWhite && contrastRatio(headerInk, washOverWhite) < WASH_TEXT_CONTRAST) {
+    problems.push(
+      `the home header's text colour reaches only ${contrastRatio(headerInk, washOverWhite).toFixed(2)}:1 on the wash (rgb(${headerInk.join(", ")}) over rgb(${washOverWhite.join(", ")})), under the ${WASH_TEXT_CONTRAST}:1 a header on an unknown photograph needs.`,
+    );
+  }
+  if ((overlayRuleDeclarations(base, (selector) => selector === ".wordmark").get("color") ?? "").trim() !== "inherit") {
+    problems.push(
+      "the wordmark no longer inherits its colour (.wordmark { color: inherit }): that inheritance is the only reason the home header's legible colour reaches the business name, so the wordmark would keep the body colour on the wash.",
+    );
+  }
+
+  /* 6. The action: the white pill on the wash, and never the muted chip. */
+  const actionRules = base.filter(
+    (rule) => scoped(rule.selector) && /\.site-header\b/.test(rule.selector) && selectorList(rule.selector).some((one) => one.includes(".call-button")),
+  );
+  const paint = (rule: { body: string }) => {
+    const declared = overlayDeclarations(rule.body);
+    return declared.has("background") || declared.has("background-color");
+  };
+  const resting = actionRules.filter((rule) => !/:hover/.test(rule.selector));
+  for (const rule of actionRules) {
+    if (!paint(rule) || /--muted/.test(rule.selector)) continue;
+    problems.push(
+      `the home header's action is painted by "${rule.selector}", which also catches the muted "no phone on file" chip (.call-button--muted on a record with no phone). The chip is not an action: exclude it with :not(.call-button--muted).`,
+    );
+  }
+  const painted = resting.filter(paint);
+  const ink = overlayColour(tokens.get("--ink") ?? "", tokens) ?? ([22, 24, 27] as Rgb);
+  const inkOnWash = washOverWhite ? contrastRatio(ink, washOverWhite) : null;
+  if (painted.length === 0) {
+    problems.push(
+      `the home header's action is not switched off the ink pill: on the wash the ink pill's own edge is ${inkOnWash ? inkOnWash.toFixed(2) : "3.09"}:1, a control boundary that only just clears the 3:1 it needs, and it is judged on every photograph. Give it a white fill with an ink label (${overlay} .site-header .call-button:not(.call-button--muted)).`,
+    );
+  } else {
+    const actionDecls = overlayRuleDeclarations(resting, () => true);
+    const fill = overlayColour(actionDecls.get("background") ?? actionDecls.get("background-color") ?? "", tokens);
+    const label = overlayColour(actionDecls.get("color") ?? "", tokens);
+    if (!fill) {
+      problems.push(
+        `the home header's action is painted with a fill this build cannot read as a colour (${actionDecls.get("background") ?? "nothing"}), so its own edge against the wash is unknown.`,
+      );
+    } else if (washOverWhite && contrastRatio(fill, washOverWhite) < WASH_CONTROL_CONTRAST) {
+      problems.push(
+        `the home header's action reaches only ${contrastRatio(fill, washOverWhite).toFixed(2)}:1 against the wash (rgb(${fill.join(", ")}) on rgb(${washOverWhite.join(", ")})), under the 3:1 a control's own boundary needs.`,
+      );
+    }
+    if (!label) {
+      problems.push(`the home header's action declares no readable label colour, so the label inside its fill is unchecked.`);
+    } else if (fill && contrastRatio(label, fill) < LABEL_CONTRAST) {
+      problems.push(
+        `the label inside the home header's action reaches only ${contrastRatio(label, fill).toFixed(2)}:1 against its own fill (rgb(${label.join(", ")}) on rgb(${fill.join(", ")})), under the ${LABEL_CONTRAST}:1 text needs.`,
+      );
+    }
+  }
+
+  /* 7. The focus ring, which the accent colour cannot be on the wash. */
+  const ringRules = base.filter(
+    (rule) => scoped(rule.selector) && /:focus-visible/.test(rule.selector) && /\.site-header\b/.test(rule.selector),
+  );
+  const accent = overlayColour(tokens.get("--accent") ?? "", tokens);
+  const accentOnWash = accent && washOverWhite ? contrastRatio(accent, washOverWhite) : null;
+  const ringColour = overlayColour(overlayRuleDeclarations(ringRules, () => true).get("outline-color") ?? "", tokens);
+  if (!ringColour) {
+    problems.push(
+      `the home header's focus ring is not set for the wash (${overlay} .site-header :focus-visible { outline-color: … }): the accent ring on it is ${accentOnWash ? accentOnWash.toFixed(2) : "1.29"}:1 — invisible — and a focus indicator needs 3:1.`,
+    );
+  } else if (washOverWhite && contrastRatio(ringColour, washOverWhite) < WASH_CONTROL_CONTRAST) {
+    problems.push(
+      `the home header's focus ring reaches only ${contrastRatio(ringColour, washOverWhite).toFixed(2)}:1 on the wash (rgb(${ringColour.join(", ")}) on rgb(${washOverWhite.join(", ")})), under the 3:1 a focus indicator needs.`,
+    );
+  }
+
+  /* 8. The wide row's links on the wash, and the phone panel's own surface. */
+  const navWide = wide.filter(
+    (rule) => scoped(rule.selector) && /\.site-nav\b/.test(rule.selector) && !/:hover/.test(rule.selector),
+  );
+  const navInk = overlayColour(overlayRuleDeclarations(navWide, () => true).get("color") ?? "", tokens);
+  const bodyOnWash = washOverWhite ? contrastRatio([61, 68, 76], washOverWhite) : null;
+  if (!navInk) {
+    problems.push(
+      `the wide row's navigation keeps its own colour on the wash (needs ${overlay} .site-header .site-nav a inside the 48rem block): from 48rem the nav sits in the header, on the photograph, where the body colour is ${bodyOnWash ? bodyOnWash.toFixed(2) : "1.71"}:1.`,
+    );
+  } else if (washOverWhite && contrastRatio(navInk, washOverWhite) < LABEL_CONTRAST) {
+    problems.push(
+      `the wide row's navigation reaches only ${contrastRatio(navInk, washOverWhite).toFixed(2)}:1 on the wash (rgb(${navInk.join(", ")}) on rgb(${washOverWhite.join(", ")})), under the ${LABEL_CONTRAST}:1 a link needs.`,
+    );
+  }
+  const panel = overlayRuleDeclarations(base, (selector) => selector === ".site-nav");
+  if (!overlayColour(panel.get("background") ?? "", tokens)) {
+    problems.push(
+      `the phone menu's panel no longer has an opaque surface of its own (.site-nav { background: var(--paper) }): the white links the wide row uses do not apply in the panel, so its own colour has to stand on a surface — a translucent or missing one leaves dark links over the photograph.`,
+    );
+  }
+
+  /* 9. The two rows a phone header has, and the 44px controls that make them. */
+  const wordmarkBase = (overlayRuleDeclarations(base, (selector) => selector === ".wordmark").get("flex") ?? "").trim();
+  if (!/^1\s+1\s+50%$/.test(wordmarkBase)) {
+    problems.push(
+      `the wordmark's phone basis has changed (${wordmarkBase === "" ? "no flex declared" : `flex: ${wordmarkBase}`}, not flex: 1 1 50%): that half-row basis is what keeps a phone header to two rows — the hamburger and the wordmark on one, the action on the next — and the wide row restores flex: 1 1 auto.`,
+    );
+  }
+  const wordmarkWide = (overlayRuleDeclarations(wide, (selector) => selector === ".wordmark").get("flex") ?? "").trim();
+  if (!/^1\s+1\s+auto$/.test(wordmarkWide)) {
+    problems.push(
+      `the 48rem block no longer restores the wordmark's own basis (flex: 1 1 auto), so the wide header is not the row it has always been.`,
+    );
+  }
+  const menuChip = overlayRuleDeclarations(base, (selector) => selector === ".site-menu-summary");
+  if (!/2\.75rem/.test(menuChip.get("width") ?? "") || !/2\.75rem/.test(menuChip.get("height") ?? "")) {
+    problems.push(
+      `the phone menu's control is no longer 44×44px (2.75rem, the printable minimum): its height is half of a phone header row, so the row the owner signed off moves with it.`,
+    );
+  }
+  const actionBox = overlayRuleDeclarations(base, (selector) => selectorList(selector).includes(".call-button")).get("min-height") ?? "";
+  if (!/2\.75rem/.test(actionBox)) {
+    problems.push(
+      `the header's action is no longer at least 44px tall (min-height: 2.75rem on .call-button): it is the second of a phone header's two rows, and its height is what makes that row.`,
+    );
+  }
+
+  return problems;
+}
+
+/**
+ * What the manifest records about the home header's treatment, read from the stylesheet
+ * the bundle ships — so a reviewer reads the wash, the alpha it runs at and the contrast
+ * white reaches on it, rather than inferring any of them from the page.
+ */
+export function headerOverlayMeasure(css: string): {
+  cell: string;
+  wash: string;
+  lightest_alpha: number;
+  white_on_wash: number;
+  inner_pages: string;
+} | null {
+  const base = overlayStyleRules(css).filter((rule) => rule.at === "");
+  const overlay = `.${HEADER_OVERLAY_CLASS}`;
+  const headerDecls = overlayRuleDeclarations(base, (selector) => selector === `${overlay} .site-header`);
+  const wash = (headerDecls.get("background-image") ?? headerDecls.get("background") ?? "").trim();
+  const stops = rgbaStops(wash);
+  if (!/linear-gradient\(/.test(wash) || stops.length === 0) return null;
+  const lightest = stops.reduce((min, stop) => (stop.alpha < min.alpha ? stop : min));
+  const placed = (selector: string) =>
+    (overlayRuleDeclarations(base, (one) => one === selector).get("grid-area") ?? "auto").trim();
+  return {
+    cell: `The header and the page body share one grid cell (${overlay} .site-header at ${placed(`${overlay} .site-header`)}, ${overlay} main at ${placed(`${overlay} main`)}, the header taking the top of it): the hero photograph starts at the proposal banner's bottom edge, behind the header. The photograph's own height is unchanged — it is the header's former row that the picture fills — and the page below the hero is the page it was.`,
+    wash,
+    lightest_alpha: lightest.alpha,
+    white_on_wash: Number(contrastRatio([255, 255, 255], overOpaque(lightest, [255, 255, 255])).toFixed(2)),
+    inner_pages:
+      "No overlay on an inner page: every overlay rule is scoped to .page--index, which only the home page carries, and inner pages have no photograph — their header keeps the paper surface and its hairline (headerOverlayProblems).",
+  };
+}
+
 /**
  * Everything that must be true for a bundle to be publishable at all — one list, one
  * throw — checked **on every page**, because the plan's compliance rules are per page
@@ -667,6 +1122,10 @@ export function complianceChecks(vars: {
   // The phone menu: four named links, a named control, and the privacy link phone-hidden
   // (WORKFLOW.md rule 11).
   problems.push(...phoneMenuProblems(pages, vars.css ?? ""));
+  // The home header on the hero photograph (owner retouch, 6 Oct): the overlay class on
+  // the home page alone, every overlay rule scoped to it, and the wash's contrast over
+  // the lightest pixel a photograph can hold — measured, not asserted.
+  problems.push(...headerOverlayProblems(pages, vars.css ?? ""));
   problems.push(...externalReferenceProblems({ pages, css: vars.css ?? "", js: vars.js ?? "" }));
   problems.push(...placeholderProblems(pages));
   return problems;
@@ -1129,6 +1588,11 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
     },
     files: [...files, "manifest.json"].sort(),
     images,
+    /* The home header on the hero photograph (owner retouch, 6 Oct): the cell the header
+       and the body share, the wash, its lightest alpha and the contrast white reaches on
+       it — read from the stylesheet the bundle ships, so a reviewer reads the numbers
+       rather than inferring them. */
+    header: headerOverlayMeasure(css),
     /* Which family the page converts for, the rule that decided it, and the primary
        contact label with its own basis — derived in family.ts, recorded here so a
        reviewer reads the result and the reason together. */

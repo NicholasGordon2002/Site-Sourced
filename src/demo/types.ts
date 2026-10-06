@@ -197,6 +197,20 @@ export interface ManifestImage {
 }
 
 /** The bundle manifest: our own audit trail, and the hand-over answer sheet. */
+/**
+ * How the home page's header sits on the hero photograph (owner retouch, 6 Oct 2026),
+ * read from the stylesheet the bundle ships: the shared grid cell, the wash, the alpha
+ * it runs at and the contrast white reaches on it over the lightest pixel a photograph
+ * can hold. `null` means no wash was found — a build refusal, not a bundle.
+ */
+export interface ManifestHeaderOverlay {
+  cell: string;
+  wash: string;
+  lightest_alpha: number;
+  white_on_wash: number;
+  inner_pages: string;
+}
+
 export interface DemoManifest {
   generator: string;
   generated_at: string;
@@ -219,6 +233,8 @@ export interface DemoManifest {
   };
   files: string[];
   images: ManifestImage[];
+  /** The home header's treatment over the hero photograph, read from the stylesheet. */
+  header: ManifestHeaderOverlay | null;
   /**
    * Which conversion family this bundle is for, how that was worked out, and the primary
    * contact label it carries with its own basis. Both are derived from the record — the

@@ -1047,12 +1047,51 @@ a:hover { text-decoration-thickness: 2px; }
   padding: var(--s-4) 0;
 }
 
-/* The home page is one surface: the header sits on the same paper as the photograph
-   below it, with no hairline between them, and the picture starts directly under the
-   header. Inner pages keep the surface and its hairline, which is what gives the
-   page-head band a top edge. Nothing overlays the photograph, so no contrast pair
-   changes: the wordmark and the call button stay ink on paper. */
-.page--index .site-header { background: transparent; border-bottom: 0; }
+/* The home page is one surface, and the header sits **on** the photograph (owner
+   retouch, 6 Oct 2026). The header and the page body are given the same grid row, so
+   the picture behind the header runs up to the proposal banner and no white band sits
+   between them; the header takes the top of that row (align-self: start) and paints
+   above the picture (z-index, which works because .site-header is positioned). The
+   banner keeps row 1 and the footer row 3, so the page below the hero is exactly the
+   page it was. The photograph's own height is untouched: it is the header's former
+   row that the picture now fills.
+
+   An inner page has no photograph, so nothing there overlays anything. page--index is
+   on the home page alone, and headerOverlayProblems in build.ts refuses an overlay
+   rule that is not scoped to it. Those pages keep the paper surface and the hairline
+   that gives the page-head band its top edge.
+
+   The wash below is the header's own, because the picture is unknown until it is
+   drawn: it must hold up over the lightest pixel a photograph can contain, which is
+   pure white. Its lightest stop is rgba(10, 12, 14, .63), and no part of the wash is
+   lighter than that, so white text on it is 5.77:1 whatever the picture turns out to
+   be. */
+/* Every one of the four is placed in the one column explicitly: a row without a
+   column lets auto-placement find the cell occupied and start a second, implicit
+   column, which is sized by its content and leaves the real one nothing to give. */
+.page--index body { display: grid; grid-template-columns: minmax(0, 1fr); }
+.page--index .proposal-banner { grid-area: 1 / 1; }
+.page--index .site-header { grid-area: 2 / 1; }
+.page--index main { grid-area: 2 / 1; }
+.page--index .site-footer { grid-area: 3 / 1; }
+.page--index .site-header {
+  align-self: start;
+  z-index: 1;
+  background: linear-gradient(180deg, rgba(10, 12, 14, .72) 0%, rgba(10, 12, 14, .63) 100%);
+  border-bottom: 0;
+  /* The wordmark inherits this, which is the only reason white reaches it: the
+     wordmark's own rule is color: inherit, and it stays that way. */
+  color: #fff;
+}
+/* The action on the wash is a white pill with the ink label (17.8:1 inside it) and
+   5.77:1 against the wash — where the ink pill on the wash is 3.2:1, a control edge
+   that only just clears the 3:1 a non-text boundary needs. The muted "no phone on
+   file" chip is not an action at all, so it keeps its own opaque surface. */
+.page--index .site-header .call-button:not(.call-button--muted) { background: #fff; color: var(--ink); }
+.page--index .site-header .call-button:not(.call-button--muted):hover { background: #F1EEE8; color: var(--ink); }
+/* The accent focus ring is 1.3:1 on the wash — invisible, and an outright failure of
+   the 3:1 an indicator needs. Inside this header the ring is white (5.77:1 there). */
+.page--index .site-header :focus-visible { outline-color: #fff; }
 .page--index .header-inner { padding: var(--s-3) 0; }
 .wordmark {
   /* A phone needs the wordmark on one line with the hamburger and the call button on
@@ -1625,6 +1664,14 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
   }
   .site-nav a:hover { background: none; color: var(--ink); border-bottom-color: var(--line); }
   .site-nav a[aria-current="page"] { background: none; color: var(--accent-ink); border-bottom-color: var(--accent); }
+  /* From 48rem the nav sits in the header row rather than in the phone panel — and on
+     the home page that row is now on the photograph, where the body colour is 1.7:1 and
+     the accent "current" mark is 1.3:1. The wide row's links, hover and current mark go
+     white there. Only the wide row: the phone panel is an opaque paper surface of its
+     own, and white text on it would be nothing at all. */
+  .page--index .site-header .site-nav a { color: #fff; }
+  .page--index .site-header .site-nav a:hover { color: #fff; border-bottom-color: rgba(255, 255, 255, .6); }
+  .page--index .site-header .site-nav a[aria-current="page"] { color: #fff; border-bottom-color: #fff; }
   .site-header .call-button { order: 3; }
   .page-head { padding: var(--s-8) 0 var(--s-6); }
   .form-actions .button { width: auto; }
