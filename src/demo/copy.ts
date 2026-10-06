@@ -1350,33 +1350,43 @@ export function collectionProblems(vars: {
 }): string[] {
   const { pages, privacy, form, fields } = vars;
   const problems: string[] = [];
-  const contact = pages.find((p) => p.html.includes('id="contact-form"'));
-  if (!contact) {
+  // Every page that carries the form — including each per-service contact page a
+  // service card links to, which is the same form with one option chosen. The notice is
+  // one notice for the bundle, and it must be true on all of them.
+  const contacts = pages.filter((p) => p.html.includes('id="contact-form"'));
+  if (contacts.length === 0) {
     problems.push(
       "no rendered page carries the contact form, so the privacy notice's collection list cannot be checked against the fields a visitor is actually asked for.",
     );
     return problems;
   }
+  // The field names across every form page, so the failure message below names what a
+  // visitor is asked for wherever they open the form.
+  const renderedEverywhere = new Set<string>();
 
-  const formHtml = contact.html.slice(contact.html.indexOf("<form"), contact.html.indexOf("</form>"));
-  const rendered = new Set<string>();
-  // `select` is in the list as well as `input` and `textarea`: a field the visitor
-  // answers from a menu is still a field the notice has to name.
-  for (const m of formHtml.matchAll(/<(?:input|textarea|select)[^>]*\bname="([^"]+)"/g)) {
-    const name = m[1]!;
-    // The honeypot and the provider's hidden instructions are not fields a visitor
-    // fills in, so they are not part of what the notice says is collected.
-    if (name.startsWith("_") || name === "botcheck" || /type="hidden"/.test(m[0]!)) continue;
-    rendered.add(name);
-  }
-  for (const m of formHtml.matchAll(/<input[^>]*type="hidden"[^>]*\bname="([^"]+)"/g)) rendered.delete(m[1]!);
+  for (const contact of contacts) {
+    const formHtml = contact.html.slice(contact.html.indexOf("<form"), contact.html.indexOf("</form>"));
+    const rendered = new Set<string>();
+    // `select` is in the list as well as `input` and `textarea`: a field the visitor
+    // answers from a menu is still a field the notice has to name.
+    for (const m of formHtml.matchAll(/<(?:input|textarea|select)[^>]*\bname="([^"]+)"/g)) {
+      const name = m[1]!;
+      // The honeypot and the provider's hidden instructions are not fields a visitor
+      // fills in, so they are not part of what the notice says is collected.
+      if (name.startsWith("_") || name === "botcheck" || /type="hidden"/.test(m[0]!)) continue;
+      rendered.add(name);
+    }
+    for (const m of formHtml.matchAll(/<input[^>]*type="hidden"[^>]*\bname="([^"]+)"/g)) rendered.delete(m[1]!);
 
-  const known = new Map(fields.map((f) => [f.name, f]));
-  for (const name of rendered) {
-    if (!known.has(name)) {
-      problems.push(
-        `the contact form on ${contact.file} asks for a "${name}" field that the privacy notice has no phrase for, so the notice cannot say it is collected. Add it to FORM_FIELDS in fields.ts (and to the notice's list) or stop asking for it.`,
-      );
+    for (const name of rendered) renderedEverywhere.add(name);
+
+    const known = new Map(fields.map((f) => [f.name, f]));
+    for (const name of rendered) {
+      if (!known.has(name)) {
+        problems.push(
+          `the contact form on ${contact.file} asks for a "${name}" field that the privacy notice has no phrase for, so the notice cannot say it is collected. Add it to FORM_FIELDS in fields.ts (and to the notice's list) or stop asking for it.`,
+        );
+      }
     }
   }
 
@@ -1385,7 +1395,7 @@ export function collectionProblems(vars: {
   const expected = collectionSentence(fields);
   if (!collectionText.includes(expected)) {
     problems.push(
-      `the privacy notice's collection sentence does not match the fields the form renders. The form asks for ${[...rendered].join(", ")}, so the notice must say: "${expected}" (got: "${collectionText}"). A visitor must be told everything the form collects.`,
+      `the privacy notice's collection sentence does not match the fields the form renders. The form asks for ${[...renderedEverywhere].join(", ")}, so the notice must say: "${expected}" (got: "${collectionText}"). A visitor must be told everything the form collects.`,
     );
   }
   // A provider whose record states it logs more than the typed fields must say so.

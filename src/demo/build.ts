@@ -34,7 +34,7 @@ import {
   slugify,
 } from "./copy.ts";
 import { contactLabelProblems, familyHonestyProblems, familyProblems, submitLabelProblems } from "./family.ts";
-import { SECTION_ORDER, extrasLines, familyRenderingProblems, type PageKey } from "./family-render.ts";
+import { SECTION_ORDER, extrasLines, familyRenderingProblems, serviceCardProblems, type PageKey } from "./family-render.ts";
 import { currentRetentionPractice, PRACTICE_FILE, readRetentionPractice, type RetentionPractice } from "./retention.ts";
 import type { FormDelivery } from "./delivery.ts";
 import { formDeliveryProblems, resolveDelivery } from "./delivery.ts";
@@ -53,6 +53,7 @@ import {
   renderFavicon,
   renderJs,
   renderPages,
+  servicePageFile,
   type RenderContext,
   type RenderedPage,
 } from "./render.ts";
@@ -429,6 +430,9 @@ export function complianceChecks(vars: {
       }),
     );
   }
+  // A service card is one link, one action, carrying its own recorded service to a
+  // page whose form already has that service chosen (owner revision #4, 6 Oct).
+  problems.push(...serviceCardProblems({ pages, record, family: copy.conversion.family }));
   problems.push(...privacyLinkProblems(pages));
   problems.push(...headingStackProblems(pages));
   problems.push(...wordmarkLinkProblems(pages));
@@ -559,7 +563,10 @@ async function referencedFilesExist(dir: string, html: string, css: string): Pro
     if (/^(https?:|mailto:|tel:|data:)/.test(ref)) continue;
     if (ref.startsWith("#")) continue;
     try {
-      await stat(join(dir, ref.split("?")[0]!));
+      // A fragment or a query string is not part of the file name a link points at:
+      // `contact-hot-shave.html#form` is the file `contact-hot-shave.html`. Splitting on
+      // both keeps a link with a fragment from being read as a missing file.
+      await stat(join(dir, ref.split(/[?#]/)[0]!));
     } catch {
       missing.push(ref);
     }
@@ -857,9 +864,20 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
       ),
       steps: copy.steps,
       extras: extras.map((line) => ({ label: line.label, value: line.value, source: line.source, field: line.field })),
+      /* A service card is one link to that service's own contact page (owner revision
+         #4, 6 Oct) — not a query string a script reads. The mechanism, its default and
+         every page it produces are recorded here, so a reviewer reads what a tap does
+         rather than inferring it. */
       service_action: {
         label: copy.conversion.family === "appointment" ? copy.ui.serviceActionRequest : copy.ui.serviceActionAsk,
-        parameter: "service",
+        mechanism:
+          "the whole card is one link to a page built for that recorded service " +
+          "(contact-<service-slug>.html#form), whose own service select carries that " +
+          "service's option with `selected` in the HTML — so the choice is there with " +
+          "JavaScript off, on a static host that ignores query strings. No script and " +
+          "no query string takes part.",
+        default_option: fields.fields.find((f) => f.name === "service")?.preselected ?? null,
+        pages: normaliseServices(record).map((service) => ({ service: service.name, file: servicePageFile(service.name) })),
       },
       narrative: {
         paragraphs: narrativeCount,

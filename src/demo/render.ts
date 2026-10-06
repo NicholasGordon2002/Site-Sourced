@@ -41,7 +41,7 @@
 import type { BusinessRecord, ManifestImage } from "./types.ts";
 import type { DemoCopy, PrivacyNotice } from "./copy.ts";
 import type { CategoryProfile } from "./copy.ts";
-import { familyFields, normaliseHours, normaliseServices } from "./copy.ts";
+import { familyFields, normaliseHours, normaliseServices, slugify } from "./copy.ts";
 import { illustrationLabel, isIllustrativeImage } from "./copy.ts";
 import type { FormDelivery } from "./delivery.ts";
 import type { FieldGroup, FieldSpec } from "./fields.ts";
@@ -96,6 +96,19 @@ export interface RenderedPage {
   id: PageId;
   file: string;
   html: string;
+}
+
+/**
+ * What makes one page differ from its plain sibling.
+ *
+ * There is one such difference today: a **per-service contact page** — the page a
+ * service card links to — which renders the same contact page with the tapped
+ * service's option carrying `selected`. It is a variant of the five-page contract,
+ * not a sixth kind of page: same shell, same furniture, same form, one option chosen.
+ */
+export interface PageVariant {
+  /** The recorded service this page's form has already chosen. */
+  preselectService?: string;
 }
 
 export function esc(s: string): string {
@@ -165,20 +178,27 @@ function hoursBlock(record: BusinessRecord, copy: DemoCopy): string {
  * itself, so no page skips a heading level.
  */
 /**
- * The link a service card carries to the form, with the recorded service name in the
- * query string (design spec §6).
+ * The contact page a service card is its own link to, and the fragment that lands the
+ * visitor on the form (owner revision #4, 6 Oct 2026).
  *
- * The parameter is inert on a static host: with JavaScript off the select keeps its
- * default and the `#form` fragment still jumps to the form. With JavaScript on —
- * `site.js` is loaded by the contact page and nothing else — it preselects the option
- * whose value equals the parameter, case-insensitively. The option values are the
- * recorded service names **verbatim**, which is what makes that match possible at all.
- * The apostrophe is percent-encoded explicitly: `encodeURIComponent` leaves it alone,
- * and escaping it into `&#39;` afterwards would put the link and its own check in
- * disagreement about what the parameter says.
+ * A card is **one link, one action, carrying its own service**: tapping "Hot shave"
+ * opens a contact page whose select already says "Hot shave". That page is a real file
+ * the build writes (`contact-hot-shave.html`), because the choice has to be in the HTML
+ * the browser receives: a query string, a fragment or a script would all leave a
+ * visitor with JavaScript off on a form that asks nothing. The option the card's
+ * service selects is rendered with `selected` on that page, so the answer is there
+ * before any script runs — and there is no script involved in it at all.
+ *
+ * The name is `slugify`d from the recorded service: one page per recorded service, and
+ * `serviceCardProblems` (family-render.ts) refuses a card whose destination does not
+ * really carry that service.
  */
+export function servicePageFile(service: string): string {
+  return `contact-${slugify(service)}.html`;
+}
+
 function serviceActionHref(name: string): string {
-  return `contact.html?service=${encodeURIComponent(name).replace(/'/g, "%27")}#form`;
+  return `${servicePageFile(name)}#form`;
 }
 
 function servicesBlock(record: BusinessRecord, level: 2 | 3, copy: DemoCopy): string {
@@ -190,11 +210,15 @@ function servicesBlock(record: BusinessRecord, level: 2 | 3, copy: DemoCopy): st
   // The action asks for the thing; it never promises a price, which is why Family B
   // says "Ask about this" and never "Get a quote" (design spec §6).
   const action = copy.conversion.family === "appointment" ? copy.ui.serviceActionRequest : copy.ui.serviceActionAsk;
+  // The whole card is the link — heading, note and action label inside one <a> — so
+  // there is one target per card and nothing else to tap. The label is the action a
+  // visitor reads; the service it carries is the card's own.
   return `        <ul class="services">\n${services
     .map(
       (s) =>
-        `          <li class="card"><${heading}>${esc(s.name)}</${heading}>${s.note ? `<p>${esc(s.note)}</p>` : ""}` +
-        `<p class="service-action"><a class="link-quiet link-quiet--inline" href="${esc(serviceActionHref(s.name))}">${esc(action)}</a></p></li>`,
+        `          <li class="card"><a class="service-card" href="${esc(serviceActionHref(s.name))}">` +
+        `<${heading}>${esc(s.name)}</${heading}>${s.note ? `<p>${esc(s.note)}</p>` : ""}` +
+        `<p class="service-action">${esc(action)}</p></a></li>`,
     )
     .join("\n")}\n        </ul>`;
 }
@@ -249,7 +273,7 @@ function illustrationCaption(images: ManifestImage[], role: "hero" | "about", bu
 
 /* ----------------------------------------------------------------- page shell */
 
-function pageTitle(ctx: RenderContext, id: PageId): string {
+function pageTitle(ctx: RenderContext, id: PageId, variant?: PageVariant): string {
   const { record, copy } = ctx;
   const city = record.address?.city;
   switch (id) {
@@ -258,7 +282,12 @@ function pageTitle(ctx: RenderContext, id: PageId): string {
     case "about":
       return `${copy.pages.about.title} — ${record.category}${city ? ` in ${city}` : ""} (design proposal)`;
     case "contact":
-      return `${copy.pages.contact.title} — ${record.name} (design proposal)`;
+      // A page built for one recorded service names it in its title, so the tab a
+      // visitor opened says which service the form is already set to. The service name
+      // is the record's own — nothing here composes copy.
+      return variant?.preselectService
+        ? `${copy.pages.contact.title}: ${variant.preselectService} — ${record.name} (design proposal)`
+        : `${copy.pages.contact.title} — ${record.name} (design proposal)`;
     case "privacy":
       return copy.pages.privacy.title;
     default:
@@ -528,15 +557,20 @@ function fieldLabel(copy: DemoCopy, field: FieldSpec): string {
  * marker: a select whose default is one of its own options is never empty but is
  * equally not something a visitor could fail to answer.
  */
-function fieldHtml(copy: DemoCopy, field: FieldSpec): string {
+function fieldHtml(copy: DemoCopy, field: FieldSpec, preselectService?: string): string {
   const label = fieldLabel(copy, field);
+  // The one thing a per-service contact page changes: the service select carries the
+  // recorded service the visitor tapped as its `selected` option, in the HTML, with no
+  // script and no query string involved. Every other field — and the plain contact
+  // page, which passes nothing — keeps the default the field's own set decided.
+  const selected = field.name === "service" && preselectService ? preselectService : field.preselected;
 
   if (field.control === "checkbox" || field.control === "radio") {
     const chips = (field.options ?? [])
       .map(
         (option) =>
           `              <label class="chip"><input type="${field.control}" name="${field.name}" value="${esc(option)}"${
-            field.preselected === option ? " checked" : ""
+            selected === option ? " checked" : ""
           }><span class="chip-text">${esc(option)}</span></label>`,
       )
       .join("\n");
@@ -561,7 +595,7 @@ ${chips}
     const options = (field.options ?? [])
       .map(
         (option) =>
-          `              <option value="${esc(option)}"${field.preselected === option ? " selected" : ""}>${esc(option)}</option>`,
+          `              <option value="${esc(option)}"${selected === option ? " selected" : ""}>${esc(option)}</option>`,
       )
       .join("\n");
     return `          <div class="field">
@@ -583,14 +617,14 @@ ${control}
 }
 
 /** One fieldset: a short small-caps legend over the fields it groups. */
-function fieldGroupHtml(copy: DemoCopy, group: FieldGroup, index: number): string {
+function fieldGroupHtml(copy: DemoCopy, group: FieldGroup, index: number, preselectService?: string): string {
   return `          <fieldset class="field-group${index > 0 ? " field-group--second" : ""}">
             <legend class="field-group-legend">${esc(group.legend)}</legend>
-${group.fields.map((field) => fieldHtml(copy, field)).join("\n")}
+${group.fields.map((field) => fieldHtml(copy, field, preselectService)).join("\n")}
           </fieldset>`;
 }
 
-function contactFormSection(ctx: RenderContext): string {
+function contactFormSection(ctx: RenderContext, preselectService?: string): string {
   const { copy, form } = ctx;
   const fields = familyFields(ctx.record);
   const honeypot = form.provider.key === "web3forms" ? "botcheck" : "_gotcha";
@@ -611,7 +645,7 @@ function contactFormSection(ctx: RenderContext): string {
         <form class="contact-form" id="contact-form" method="POST" action="${esc(form.endpoint)}"
               data-encode="${esc(form.provider.encode)}" data-success="${esc(copy.formSuccess)}"
               data-failure="${esc(copy.formFailure)}">
-${fields.groups.map((group, index) => fieldGroupHtml(copy, group, index)).join("\n")}
+${fields.groups.map((group, index) => fieldGroupHtml(copy, group, index, preselectService)).join("\n")}
           <div class="hp" aria-hidden="true">
             <label for="cf-${honeypot}">${esc(copy.ui.honeypot)}</label>
             <input id="cf-${honeypot}" name="${honeypot}" type="text" tabindex="-1" autocomplete="off">
@@ -663,7 +697,7 @@ ${blocks}
  * home page carries its "How an inquiry works" between the recorded services and the
  * hours, and Family A's does not, without either of them being a branch in the template.
  */
-function sectionHtml(ctx: RenderContext, id: PageId, section: SectionId): string {
+function sectionHtml(ctx: RenderContext, id: PageId, section: SectionId, variant?: PageVariant): string {
   switch (section) {
     case "head":
       return pageHead(ctx, id);
@@ -684,7 +718,7 @@ function sectionHtml(ctx: RenderContext, id: PageId, section: SectionId): string
     case "extras":
       return extrasSection(ctx);
     case "form":
-      return contactFormSection(ctx);
+      return contactFormSection(ctx, variant?.preselectService);
     case "privacy":
       return privacySection(ctx);
     case "cta":
@@ -765,14 +799,14 @@ ${items}
  * disclaimer and its own copy of whatever compliance line belongs to its content,
  * because compliance is per-page and never inherited.
  */
-export function renderPage(ctx: RenderContext, id: PageId): string {
+export function renderPage(ctx: RenderContext, id: PageId, variant?: PageVariant): string {
   const { record, copy, delivery } = ctx;
   const spec = PAGE_SPECS[id];
   // The page's blocks, in this family's order. A block that renders nothing — the
   // extras card on a record with no extras, the steps on an appointment page — is
   // dropped rather than left as an empty section.
   const body = SECTION_ORDER[copy.conversion.family][id]
-    .map((section) => sectionHtml(ctx, id, section))
+    .map((section) => sectionHtml(ctx, id, section, variant))
     .filter((block) => block !== "")
     .join("\n\n");
 
@@ -783,7 +817,7 @@ export function renderPage(ctx: RenderContext, id: PageId): string {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <!-- Compliance: this page must never appear in search results. Do not remove this line. -->
   <meta name="robots" content="noindex, nofollow">
-  <title>${esc(pageTitle(ctx, id))}</title>
+  <title>${esc(pageTitle(ctx, id, variant))}</title>
   <meta name="description" content="${esc(pageDescription(ctx, id))}">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
@@ -812,9 +846,22 @@ ${spec.carriesForm ? `  <!-- The only page that loads a script: the form is the 
 `;
 }
 
-/** Every page of one bundle, in order. */
+/**
+ * Every page of one bundle, in order: the five the page contract names, then one
+ * contact page per recorded service — the destination a service card is its own link
+ * to, with that service already chosen in the HTML (owner revision #4, 6 Oct 2026).
+ *
+ * A record with no recorded services gets no such page, exactly as it gets no service
+ * cards: the list is the record's, and a gap is never filled.
+ */
 export function renderPages(ctx: RenderContext): RenderedPage[] {
-  return PAGE_IDS.map((id) => ({ id, file: PAGE_SPECS[id].file, html: renderPage(ctx, id) }));
+  const core = PAGE_IDS.map((id) => ({ id, file: PAGE_SPECS[id].file, html: renderPage(ctx, id) }));
+  const servicePages = normaliseServices(ctx.record).map((service) => ({
+    id: "contact" as PageId,
+    file: servicePageFile(service.name),
+    html: renderPage(ctx, "contact", { preselectService: service.name }),
+  }));
+  return [...core, ...servicePages];
 }
 
 /** The home page alone — kept for the tests and callers that only want it. */
@@ -1302,8 +1349,32 @@ a:hover { text-decoration-thickness: 2px; }
 }
 
 .services { list-style: none; margin: var(--s-5) 0 0; padding: 0; display: grid; gap: var(--s-3); }
-.services li.card { padding: var(--s-4) var(--s-5); }
+/* A service card is one link (owner revision, 6 Oct): the whole surface is the target,
+   and the card's own padding moves onto that link so the tap area is the card and not
+   the text in it. The list item keeps the surface, the hairline and the radius, and
+   clips the link's hover fill to that radius; the flex stretch makes the link as tall
+   as the tallest card in the row, so a card's hover state is the card, not a stripe
+   through the middle of it. */
+.services li.card {
+  padding: 0;
+  display: flex;
+  overflow: hidden;
+  transition: border-color .15s ease;
+}
+.services li.card:hover, .services li.card:focus-within { border-color: var(--accent); }
+.services .service-card {
+  display: block;
+  flex: 1 1 auto;
+  padding: var(--s-4) var(--s-5);
+  color: inherit;
+  text-decoration: none;
+}
 .services p { margin: 0; max-width: none; color: var(--muted); font-size: 0.9375rem; }
+/* The action line is the only part of a card that is underlined at rest: it is the one
+   piece of the card that reads as the thing to do, and a visitor who cannot see the
+   hover state still needs to know the card is the action. */
+.services .service-action { margin: var(--s-3) 0 0; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+.services li.card:hover .service-action, .services .service-card:focus-visible .service-action { color: var(--accent-ink); text-decoration-thickness: 2px; }
 
 .hours { margin: var(--s-5) 0 0; max-width: 30rem; overflow: hidden; }
 .hours-row {
@@ -1588,22 +1659,11 @@ export function renderJs(): string {
 (function () {
   "use strict";
 
-  // A service card links here as contact.html?service=<recorded name>#form. The query
-  // string does nothing by itself: with this script off the select keeps its default and
-  // the #form fragment still lands on the form. With it, the option whose value matches
-  // the parameter (case-insensitively) is selected — the option values are the recorded
-  // service names verbatim, which is the only reason that match can be made at all.
-  var service = document.getElementById("cf-service");
-  if (service) {
-    var wanted = null;
-    try { wanted = new URLSearchParams(window.location.search).get("service"); } catch (err) { wanted = null; }
-    if (wanted) {
-      var lower = wanted.toLowerCase();
-      for (var i = 0; i < service.options.length; i++) {
-        if (service.options[i].value.toLowerCase() === lower) { service.selectedIndex = i; break; }
-      }
-    }
-  }
+  // Nothing here preselects anything. A service card is one link to its own contact
+  // page (contact-hot-shave.html), where the service's option already carries
+  // \`selected\` in the HTML the browser received — so the choice a visitor made is
+  // there with this script switched off, on a static host, with no query string read
+  // and no fragment parsed. This file only posts the form and reports the outcome.
 
   var form = document.getElementById("contact-form");
   if (!form) return;
