@@ -14,7 +14,7 @@
  * not allowed to make, the build fails loudly instead of shipping.
  */
 
-import { copyFile, mkdir, readdir, rm, stat } from "node:fs/promises";
+import { copyFile, mkdir, readdir, rm, rmdir, stat } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 
 import type { BundleResult, BusinessRecord, DemoManifest, ManifestImage } from "./types.ts";
@@ -503,6 +503,23 @@ export function complianceChecks(vars: {
     }
     if (!html.includes(copy.footerDisclaimer)) {
       problems.push(`${on}: the footer disclaimer is not present next to the business's name`);
+    } else {
+      // Presence was never the whole rule: checklist #3 says the disclaimer sits **with
+      // the business's name and contact details**, in the footer. It was written there by
+      // the renderer and asserted by nothing, so a disclaimer once counted in the page
+      // body — or inside the footer but above the name — passed. Both are refused here.
+      const footerAt = html.indexOf("<footer");
+      const footerEnd = footerAt >= 0 ? html.indexOf("</footer>", footerAt) : -1;
+      const footer = footerAt >= 0 && footerEnd > footerAt ? html.slice(footerAt, footerEnd) : "";
+      if (!footer.includes(copy.footerDisclaimer)) {
+        problems.push(
+          `${on}: the footer disclaimer is outside <footer>. It is only somewhere on the page — the disclaimer belongs beside the business's name and its contact details, in the footer, where the visitor reading them also reads who the page is from.`,
+        );
+      } else if (footer.indexOf(copy.footerDisclaimer) < footer.indexOf('class="footer-biz"')) {
+        problems.push(
+          `${on}: the footer disclaimer sits inside <footer> but above the business's name rather than beside it. Checklist #3 puts the disclaimer with the name and contact details it qualifies.`,
+        );
+      }
     }
     if (/©\s*<strong>?/.test(html) || html.includes(`© ${record.name}`)) {
       problems.push(`${on}: a copyright line naming the business is present`);
@@ -778,6 +795,50 @@ async function referencedFilesExist(dir: string, html: string, css: string): Pro
   return missing;
 }
 
+/**
+ * A bundle contains what the build put in it and nothing else — files **and** directories.
+ *
+ * The file half is not new: without it a file from an earlier run survives in the folder,
+ * which is how a re-encoded hero could leave its 2.6 MB predecessor sitting in the
+ * published demo path, reachable at a guessable URL, long after the page stopped referring
+ * to it. The directory half came out of the 6 Oct gate audit: `buildBundle` `mkdir`s `img/`
+ * before it writes anything, and nothing in it is the current build's output, so every
+ * fixture bundle shipped an **empty `img/`**. The old prune skipped non-files, so it stayed.
+ *
+ * A directory is only removed when it is empty after the file prune — so a folder holding
+ * anything the bundle ships is untouched, and the bundle root is never a candidate.
+ * Removed paths are returned rather than logged, so the caller decides how loud to be.
+ */
+export async function pruneLeftovers(dir: string, keep: Set<string>): Promise<{ files: string[]; dirs: string[] }> {
+  const files: string[] = [];
+  const dirs: string[] = [];
+  const present = await readdir(dir, { recursive: true, withFileTypes: true });
+  for (const entry of present) {
+    if (!entry.isFile()) continue;
+    const rel = entry.parentPath ? relative(dir, join(entry.parentPath, entry.name)) : entry.name;
+    if (keep.has(rel)) continue;
+    await rm(join(dir, rel), { force: true });
+    files.push(rel);
+  }
+  // Deepest first, so `img/generated/` can empty before `img/` is tested. `rmdir` (not a
+  // recursive removal) is deliberate: it refuses to take anything with it.
+  const subdirs = present
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => (entry.parentPath ? relative(dir, join(entry.parentPath, entry.name)) : entry.name))
+    .sort((a, b) => b.split("/").length - a.split("/").length);
+  for (const rel of subdirs) {
+    try {
+      if ((await readdir(join(dir, rel))).length > 0) continue;
+      await rmdir(join(dir, rel));
+      dirs.push(rel);
+    } catch {
+      // Already gone, or not empty despite the reading above: either way there is nothing
+      // here to report and nothing to remove.
+    }
+  }
+  return { files, dirs };
+}
+
 export async function buildBundle(record: BusinessRecord, opts: BuildOptions): Promise<BundleResult> {
   const slug = (record.slug ?? "").trim() || slugify(record.name);
   const dir = join(opts.outRoot, slug);
@@ -963,15 +1024,17 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   // A bundle contains what this build put in it and nothing else. Without this, a
   // file from an earlier build survives in the folder — which is how a re-encoded hero
   // could leave its 2.6 MB predecessor sitting in the published demo path, still
-  // reachable at a guessable URL, long after the page stopped referring to it.
+  // reachable at a guessable URL, long after the page stopped referring to it. Directories
+  // go the same way when they end up empty: the gate audit of 6 Oct found an empty `img/`
+  // on every fixture bundle, left by the build's own `mkdir` for images that are written
+  // elsewhere today.
   const keep = new Set<string>([...files, "manifest.json"]);
-  const present = await readdir(dir, { recursive: true, withFileTypes: true });
-  for (const entry of present) {
-    if (!entry.isFile()) continue;
-    const rel = entry.parentPath ? relative(dir, join(entry.parentPath, entry.name)) : entry.name;
-    if (keep.has(rel)) continue;
-    await rm(join(dir, rel), { force: true });
+  const pruned = await pruneLeftovers(dir, keep);
+  for (const rel of pruned.files) {
     warnings.push(`removed ${rel}, a file inside this bundle that this build did not write (a leftover from an earlier run).`);
+  }
+  for (const rel of pruned.dirs) {
+    warnings.push(`removed ${rel}, an empty directory inside this bundle — it holds no file the bundle ships, and an empty folder in a published path is a path a visitor can still land on.`);
   }
 
   // Every page, not just the home page: a nav link to a file that was never written,
