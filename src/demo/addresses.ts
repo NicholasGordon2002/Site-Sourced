@@ -346,8 +346,9 @@ function around(html: string, value: string): string {
  *     (`555-0100…0199`), so the "example" label would be false;
  *   - the word "published" describing an invented number;
  *   - a client's own site with no phone at all: broken, not cautious;
- *   - a sentence pointing a visitor at "the phone number printed with it" when the page
- *     prints no phone number.
+ *   - a sentence pointing a visitor at a printed number ("…use the phone number printed
+ *     with it", or the older "the phone number **or email address** printed with it") when
+ *     the page prints no phone number.
  */
 export function phoneProblems(vars: {
   record: BusinessRecord;
