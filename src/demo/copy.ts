@@ -38,7 +38,7 @@ import {
 import { inquirySteps, type ExtraLabels } from "./family-render.ts";
 import type { ResolvedForm } from "./forms.ts";
 import { resolveProvenance, type Provenance } from "./provenance.ts";
-import { resolvePhone, type ResolvedPhone } from "./addresses.ts";
+import { addressLine, resolvePhone, type ResolvedPhone } from "./addresses.ts";
 import {
   currentRetentionPractice,
   practiceSentence,
@@ -260,6 +260,47 @@ export function normaliseHours(record: BusinessRecord): { rows: HoursRow[]; note
   }
   if (typeof h === "string" && h.trim()) return { rows: expandOsmHours(h.trim()), note: "" };
   return { rows: [], note: "no hours recorded" };
+}
+
+/**
+ * Every detail a page's copy can name as something the page carries: the four the composer
+ * writes sentences about. Not a category or a phase — a fact about the record.
+ */
+export type CarriedDetail = "hours" | "address" | "phone number" | "email address";
+
+/**
+ * Which of those details this record carries, in the order a sentence names them.
+ *
+ * The record-side half of one rule: **a page may name only the details the record actually
+ * carries**. `composeCopy` reads it to write the sentences that name a detail (the hero's
+ * offering line, the contact lead, the contact call to action), and
+ * `printedDetailClaimProblems` reads it to check the finished page — so a sentence and the
+ * check on it cannot answer "does this record print an X?" differently.
+ *
+ * "Carries" is decided by the same facts the pages render from: `normaliseHours` (the
+ * function `render.ts` builds the hours table with, so an unparsable or empty `hours` field
+ * is not a detail the page shows), `addressLine` (the same string every page writes),
+ * and the two contact fields as the pages' own fallback block prints them.
+ */
+export function carriedDetails(record: BusinessRecord): CarriedDetail[] {
+  const out: CarriedDetail[] = [];
+  if (normaliseHours(record).rows.length > 0) out.push("hours");
+  if (addressLine(record).trim()) out.push("address");
+  if ((record.phone ?? "").trim()) out.push("phone number");
+  if ((record.email ?? "").trim()) out.push("email address");
+  return out;
+}
+
+/** `"a, b and c"` — how a sentence names a list of details, and a lone detail on its own. */
+function sentenceList(items: readonly string[]): string {
+  if (items.length === 0) return "";
+  if (items.length === 1) return items[0]!;
+  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]!}`;
+}
+
+/** The same list where it opens a sentence: "Hours, address and phone number …". */
+function capitalise(text: string): string {
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
 }
 
 const DAY_NAMES: Record<string, string> = {
@@ -696,20 +737,39 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
         ? serviceNames[0]
         : `${serviceNames.slice(0, -1).join(", ")} and ${serviceNames[serviceNames.length - 1]}`;
 
+  const heroEyebrow = [record.category, city ? `${city}, ${province}` : province].filter(Boolean).join(" · ");
+
+  // **The details this record actually carries**, decided in one place. Every sentence that
+  // names one of them reads this: the offering line below, the contact lead and the contact
+  // call to action further down, and the clause that reads the finished page
+  // (`printedDetailClaimProblems`) — so a sentence and the check on it cannot answer the
+  // question "does this record print an X?" differently.
+  const carried = carriedDetails(record);
+  const hasPhone = carried.includes("phone number");
+  const hasEmail = carried.includes("email address");
+
   // The hero says three things and no more: what this is and where (the eyebrow),
   // whose name is on the door (the h1, in render.ts), and what is recorded for it
   // (the offering line). The identity sentence — "X is a barber shop in Hamilton" —
   // is written once, in About: the hero used to open by repeating the business's own
   // name back at the visitor, which is the one thing they already know.
-  const heroEyebrow = [record.category, city ? `${city}, ${province}` : province].filter(Boolean).join(" · ");
+  //
   // "As published" is a claim about where the details came from, so it follows the
   // record's declared source like the footer line does: a fictional example business
   // gets the wording that belongs to it rather than one the record cannot support.
+  //
+  // The offering line names **exactly the details the record carries** and no others. It
+  // used to read "Hours, address and phone number" on every record with no services
+  // recorded, whatever the record held — so a record with no phone number told a visitor,
+  // in the largest type on the page, that the hero carried one, while the contact page two
+  // taps away said "No phone number is recorded for this business." Same rule as the
+  // contact call to action (7 Oct), same derivation. With nothing carried there is no
+  // sentence at all — render.ts drops the empty `<p>` — rather than a list of absences.
   const heroLead = serviceNames.length > 0
     ? serviceNames.join(" · ")
-    : provenance.published
-      ? `Hours, address and phone number as published for this ${cat}.`
-      : `Hours, address and phone number invented for this example ${cat}.`;
+    : carried.length === 0
+      ? ""
+      : `${capitalise(sentenceList(carried))} ${provenance.published ? `as published for this ${cat}` : `invented for this example ${cat}`}.`;
 
   // The record's own narrative, spliced between the identity line and the services
   // sentence. Built as an array rather than indexed: the narrative moves the positions
@@ -756,7 +816,7 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
   // demonstration message comes to us, so the lead's first sentence repeated it, and a
   // record that prints neither a phone number nor an email address must not promise a
   // detail the page does not show (lead ruling R4).
-  const printedDetails = [record.phone?.trim() ? "phone number" : "", record.email?.trim() ? "email address" : ""].filter(Boolean);
+  const printedDetails = [hasPhone ? "phone number" : "", hasEmail ? "email address" : ""].filter(Boolean);
   // The phrase that names the details this record prints — "the phone number", "the email
   // address", or both — and nothing when it prints neither. **Two** sentences point a
   // visitor at a printed detail (the contact page's lead and the contact call to action on
@@ -1570,5 +1630,125 @@ export function fictionalNarrativeProblems(record: BusinessRecord): string[] {
     }
   }
 
+  return problems;
+}
+
+/* --------------------------------------- one rule: a page names only what it prints */
+
+/**
+ * Each detail as a page writes it — the wording, and the pattern that recognises it.
+ *
+ * The wording is what builds the list pattern below, and the pattern is what reads a
+ * captured claim, so a detail cannot be named one way and recognised another.
+ */
+const NAMED_DETAILS: { detail: CarriedDetail; wording: string; re: RegExp }[] = [
+  { detail: "hours", wording: "hours", re: /\b(?:opening hours|hours)\b/i },
+  { detail: "address", wording: "address(?:es)?", re: /\baddress(?:es)?\b/i },
+  { detail: "phone number", wording: "phone numbers?", re: /\bphone numbers?\b/i },
+  { detail: "email address", wording: "e-?mail address(?:es)?", re: /\be-?mail address(?:es)?\b/i },
+];
+
+/**
+ * A list of details, exactly as the composer writes one: one detail, or several joined by a
+ * comma, "and" or "or" — "hours, address and phone number".
+ *
+ * The shape is deliberately this narrow. The clause reads claims, and a claim it can check
+ * is one that **is** a list of the four details the composer writes about; anything else is
+ * prose, and prose is not this clause's business. It is what keeps the about line — "Every
+ * detail here — hours, address, contact details — is invented for this fictional example
+ * business." — out of the clause: that sentence names the details it prints in a shape this
+ * one does not claim to read (its standing is `source_kind`'s business).
+ *
+ * "email address" is listed before "address", so a list naming the email address captures
+ * the longer name rather than the address inside it.
+ */
+const DETAIL_LIST_PATTERN = `(?:${NAMED_DETAILS.map((d) => d.wording).join("|")})(?:\\s*(?:,|and|or)\\s*(?:${NAMED_DETAILS.map((d) => d.wording).join("|")}))*`;
+
+/**
+ * The two claim shapes the composer itself writes that name a printed detail, and the
+ * details each shape is the owner of.
+ *
+ * The phone half of "printed with it" is **not** here: `addresses.ts`'s `phoneProblems`
+ * already refuses that sentence when no phone number prints (widened 7 Oct), and one rule
+ * has one owner. Nothing may sit between the two halves of a shape but the list itself — a
+ * tag or a full stop ends the match — so two unrelated mentions cannot be welded into one
+ * claim.
+ */
+const DETAIL_CLAIM_SHAPES: { what: string; owns: readonly CarriedDetail[]; source: string }[] = [
+  {
+    what: "the hero's offering line",
+    owns: ["hours", "address", "phone number", "email address"],
+    source: `(${DETAIL_LIST_PATTERN})\\s+(?:as published|invented) for this\\b`,
+  },
+  {
+    what: "the sentence that sends a visitor to a printed detail",
+    owns: ["hours", "address", "email address"],
+    source: `(${DETAIL_LIST_PATTERN})\\s+printed with it\\b`,
+  },
+];
+
+/** Which of the four details a captured list names, and nothing when it names none. */
+function detailsNamedIn(list: string): CarriedDetail[] {
+  // "email address" contains "address", so the bare-address name is read with the email
+  // names taken out; every other name is unambiguous.
+  const withoutEmail = list.replace(/\be-?mail address(?:es)?\b/gi, "");
+  return NAMED_DETAILS.filter(({ detail, re }) => re.test(detail === "address" ? withoutEmail : list)).map((d) => d.detail);
+}
+
+/** A quoted claim, short enough to read in a refusal message. */
+function clip(text: string, max = 110): string {
+  return text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`;
+}
+
+/**
+ * **A page may not name a printed detail it does not print.** One clause for the class, read
+ * from the rendered pages because that is what a visitor can read — the same half
+ * `phoneProblems` reads for the phone number.
+ *
+ * It recognises the two claim shapes the composer writes that name a detail (see
+ * `DETAIL_CLAIM_SHAPES`): the hero's offering line — "Hours, address and phone number
+ * invented for this example bookshop." — and the sentence that sends a visitor to a printed
+ * detail ("…use the phone number printed with it"). Every detail the claim names must be one
+ * `carriedDetails(record)` says the record carries; a name it does not carry is refused, and
+ * the message quotes the claim it found so the refusal is the page's own words.
+ *
+ * **What it does not cover**, so nobody reads more into it than it does:
+ *
+ *   - the **phone number** in "printed with it" — `phoneProblems` owns that sentence, and a
+ *     record with no phone is refused there (the clause that was blind until 7 Oct);
+ *   - **generic** phrases — "the contact details printed with this form", "the details
+ *     printed on this page" — which name no detail, so there is nothing to compare;
+ *   - **statements of absence** and the fallback block's labels ("No phone number is
+ *     recorded for this business."): saying a detail is missing is the opposite of a claim
+ *     that it is there;
+ *   - the **business's own words** (`about_paragraphs`, a service note, the extras card),
+ *     printed verbatim — their standing is `source_kind`'s business, not this clause's;
+ *   - any sentence that **is not one of these two shapes**. It is a guard on the claims we
+ *     publish, not a proof about English: it fires on the shapes it knows and stays silent
+ *     elsewhere rather than guessing. It is paired with the derivation in `composeCopy`,
+ *     which is what keeps the sentence true in the first place.
+ */
+export function printedDetailClaimProblems(vars: {
+  record: BusinessRecord;
+  /** The rendered pages: what a visitor can actually read, never the composer's intent. */
+  pages: { file: string; html: string }[];
+}): string[] {
+  const { record, pages } = vars;
+  const carried = carriedDetails(record);
+  const problems: string[] = [];
+  for (const page of pages) {
+    for (const shape of DETAIL_CLAIM_SHAPES) {
+      for (const m of page.html.matchAll(new RegExp(shape.source, "gi"))) {
+        const named = detailsNamedIn(m[1] ?? "").filter((detail) => shape.owns.includes(detail));
+        const missing = named.filter((detail) => !carried.includes(detail));
+        if (missing.length === 0) continue;
+        const claim = (m[0] ?? "").replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
+        problems.push(
+          `${page.file} names ${missing.map((d) => `"${d}"`).join(" and ")} in ${shape.what} ("${clip(claim)}"), but the record for ${record.name} carries ${sentenceList(missing.map((d) => `no ${d}`))}, so no page prints ${missing.length === 1 ? "one" : "them"}. ` +
+            `A page may not name a printed detail it does not print: build the sentence from the record's own details, or drop the clause and say what the page does offer.`,
+        );
+      }
+    }
+  }
   return problems;
 }
