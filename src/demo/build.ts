@@ -570,10 +570,15 @@ function overlayColour(value: string, tokens: Map<string, string>): Rgb | null {
 }
 
 /**
- * The owner's retouch of 6 Oct 2026 — the home page's hero photograph runs up to the
- * proposal banner and the header sits on it — as a rule the build enforces
- * (WORKFLOW.md rule 6: a page rule that lives only in prose or a comment rots, and this
- * one is CSS-wide while the safety of one page depends on the scope of another).
+ * The home page's header, sitting on the hero photograph (owner retouch, 6 Oct 2026) — as
+ * a rule the build enforces (WORKFLOW.md rule 6: a page rule that lives only in prose or a
+ * comment rots, and this one is CSS-wide while the safety of one page depends on the scope
+ * of another).
+ *
+ * The owner has now rejected **two** header shapes in one day: the flat dark wash, and then
+ * the bare box ruled off by a light hairline at each edge. What this check requires is the
+ * third: **a scrim of the hero's own ink that eases out of the picture** — a background
+ * treatment that flows into the hero, with no separator at either edge.
  *
  * What it refuses:
  *
@@ -586,29 +591,44 @@ function overlayColour(value: string, tokens: Map<string, string>): Rgb | null {
  *      share one row *and* one explicit column: a row without a column lets
  *      auto-placement start a second, implicit column — sized by its content, leaving the
  *      real one nothing — and the photograph then runs beside the header, not under it;
- *   4. **a wash too light to be legible**, measured rather than asserted: its lightest
- *      stop is composited over pure white (the lightest pixel a photograph can hold) and
- *      white text must reach 5.6:1 on the result, whatever the picture turns out to be;
- *   5. **an action or a focus ring that disappears into the wash**, and a label that
+ *   4. **a header box with no scrim on it** — with the hairlines gone the scrim is the
+ *      only thing between white type and an unknown photograph — **or a scrim that is not
+ *      the hero's ink** (a light veil, a grey, the accent), **or one too light where the
+ *      type lands**, measured rather than asserted: every stop in the box's top 70% is
+ *      composited over pure white (the lightest pixel a photograph can hold) and white
+ *      text must reach 5.6:1 on the result;
+ *   5. **a scrim that does not flow**: one that is still painting at the header's bottom
+ *      edge (the band the owner rejected, drawn by the alpha instead of a rule), one that
+ *      deepens again as it descends, one that starts below its own top edge, or one whose
+ *      paper surface shows through the transparent tail because the background colour was
+ *      never switched off;
+ *   6. **a hairline at either edge, or on any other side** — top, right, bottom, left.
+ *      The two separators the owner rejected are refused outright, *including the base
+ *      rule's own* `border-bottom: var(--rule)`: on the home page the scoped `border: 0`
+ *      is the only thing switching that 1px light line off, so its removal is a failure
+ *      of this check rather than a cosmetic edit;
+ *   7. **a shadow, a blur or a filter standing in for an edge** — a box-shadow is an edge
+ *      and a backdrop blur is a panel by another name, both of which the owner refused;
+ *   8. **an action or a focus ring that disappears into the scrim**, and a label that
  *      disappears into its own fill: 3:1 for a control's edge and the ring, 4.5:1 for
  *      text inside the fill. The header's action is deliberately off the ink pill — it is
- *      the white one on the wash — and it is the only element in the header wearing the
+ *      the white one on the scrim — and it is the only element in the header wearing the
  *      button treatment (`headerActionProblems` refuses a second one);
- *   6. **header text with no colour to inherit**: the wordmark's rule is color: inherit,
+ *   9. **header text with no colour to inherit**: the wordmark's rule is color: inherit,
  *      and that is the only reason the header's colour reaches the business name;
- *   7. **a header that stretches down the photograph or sinks under it**: it must be
+ *  10. **a header that stretches down the photograph or sinks under it**: it must be
  *      pushed to the top of its cell and stack above the picture, and the base header
  *      must stay positioned or the stacking does nothing;
- *   8. **white navigation over a panel whose surface has gone**: the wide row's links go
- *      white on the wash, the phone panel's stay dark on its own opaque surface;
- *   9. **the phone header's two rows flattened**: the wordmark's half-row basis, the 44px
+ *  11. **white navigation over a panel whose surface has gone**: the wide row's links go
+ *      white on the scrim, the phone panel's stay dark on its own opaque surface;
+ *  12. **the phone header's two rows flattened**: the wordmark's half-row basis, the 44px
  *      hamburger and the 44px action are what make it two rows, and a third row is a
  *      layout the owner signed off.
  *
  * What it deliberately does **not** claim: the row *count* and the header's height are
  * rendered boxes, and no stylesheet assertion measures a box. Those numbers are taken in
  * a browser at 320/360/390/420px and reported with the change; this pins the mechanism
- * that produces them, and the CSS-derived contrast of the wash.
+ * that produces them, and the CSS-derived contrast of the scrim.
  */
 export function headerOverlayProblems(pages: RenderedPage[], css = ""): string[] {
   const problems: string[] = [];
@@ -711,74 +731,146 @@ export function headerOverlayProblems(pages: RenderedPage[], css = ""): string[]
     );
   }
 
-  /* 5. No wash on the header's box at all — the owner had it removed on 6 Oct. */
+  /* 5. The surface: a scrim of the hero's own ink that eases out of the picture.
+     This replaces the clause that used to refuse every background on this box. The owner
+     rejected both earlier shapes on 6 Oct 2026 — first the flat dark wash, then the bare
+     box ruled off by a hairline at each edge — and asked for a clean background treatment
+     that flows into the hero with no separator at either edge. So the surface is required
+     now, and required to be a particular *shape*: a top-to-bottom scrim of the hero's ink,
+     strong enough where the type lands, reaching alpha 0 at the header's bottom edge —
+     which is what "flows into the hero" means mechanically. The header's last pixel is the
+     hero's pixel, so there is no edge for an eye to find. */
   const merged = overlayRuleDeclarations(base, (one) => one === ".site-header" || one === `${overlay} .site-header`);
-  const SCUM: { property: string; what: string }[] = [
-    { property: "background", what: "a background" },
-    { property: "background-color", what: "a background colour" },
-    { property: "background-image", what: "a wash" },
-    { property: "backdrop-filter", what: "a blur over the picture behind it" },
-    { property: "filter", what: "a filter over the picture behind it" },
-    { property: "box-shadow", what: "a shadow around its box" },
-  ];
-  // There is no wash any more, so the clauses below that measured a colour against it
-  // have nothing to measure against: they keep their structural half and stay inert here.
-  const washOverWhite: Rgb | null = null;
-  const transparent = (value: string) => /^(none|transparent|initial|unset|0)$/i.test(value.trim());
-  for (const entry of SCUM) {
-    const declared = (merged.get(entry.property) ?? "").trim();
-    if (declared === "" || transparent(declared)) continue;
+  const shorthand = (merged.get("background") ?? "").trim();
+  const declaredImage = (merged.get("background-image") ?? "").trim();
+  const image = /gradient\(/.test(declaredImage) ? declaredImage : shorthand;
+  // A `background` shorthand carrying the gradient declares its own background-image and
+  // leaves the colour at its initial transparent, so it needs no separate switch-off.
+  const bgColour = (
+    merged.get("background-color") ?? (/gradient\(/.test(shorthand) ? "transparent" : shorthand)
+  ).trim();
+  /** The ink the hero's own scrim is mixed from is near-black; anything lighter is a veil. */
+  const inkIsInkish = (rgb: Rgb) => relativeLuminance(rgb) <= 0.05;
+  const whiteOn = (stop: { rgb: Rgb; alpha: number }) => contrastRatio(white, overOpaque(stop, white));
+  /** The last 30% of the box is the fade into the picture. */
+  const TYPE_BAND = 0.7;
+  let scrimStops: { rgb: Rgb; alpha: number }[] = [];
+  let scrimPositions: number[] = [];
+  const gradient = /^linear-gradient\(\s*180deg\s*,([\s\S]*)\)$/.exec(image);
+  if (!gradient) {
     problems.push(
-      `the home header carries ${entry.what} again (${entry.property}: ${declared} reaching ${overlay} .site-header). The owner asked for the wash to be removed on 6 Oct 2026: the photograph runs to the header's top edge and the header's box is bare — what delimits it is one light rule at each edge, nothing else.`,
+      `the home header has no surface of its own (${overlay} .site-header { background-image: linear-gradient(180deg, …) }): the white wordmark, the wide row's links and the action sit straight on an unknown photograph, which is as low as 1.7:1 anywhere and 4.2:1 over the lightest photograph this build has built (northshore, 360px, 6 Oct 2026 — below AA). The scrim is what carries the type now (owner, 6 Oct 2026).`,
+    );
+  } else {
+    const body = gradient[1]!;
+    scrimStops = rgbaStops(body);
+    scrimPositions = [...body.matchAll(/([\d.]+)%/g)].map((m) => Number(m[1]));
+    const where = (index: number) =>
+      scrimPositions[index] === undefined ? `stop ${index + 1} of ${scrimStops.length}` : `${scrimPositions[index]}%`;
+    if (scrimStops.length < 2 || scrimPositions.length !== scrimStops.length) {
+      problems.push(
+        `the home header's scrim is not a set of stops this build can read (${overlay} .site-header { background-image: ${image} }): every stop needs the ink and the position it sits at — rgba(10, 12, 14, .64) 70% — or the contrast it leaves under the type is unknown.`,
+      );
+    } else {
+      const stray = scrimStops.findIndex((stop) => !inkIsInkish(stop.rgb));
+      if (stray >= 0) {
+        const stop = scrimStops[stray]!;
+        problems.push(
+          `the home header's scrim is not mixed from the hero's own ink (rgb(${stop.rgb.join(", ")}) at ${where(stray)}): a scrim in another colour — a light veil, a grey, the accent — reads as a panel laid over the picture rather than the picture darkening, and white type on a light one is unreadable. The hero's own scrim is rgba(10, 12, 14, …); this one continues it.`,
+        );
+      }
+      for (const [index, stop] of scrimStops.entries()) {
+        const position = scrimPositions[index]!;
+        // The band the type can land in is the top 70% of the box: from the wordmark's row
+        // (and the wide row's links and the action on a desktop) down to the fade.
+        if (position > TYPE_BAND * 100) continue;
+        if (whiteOn(stop) < WASH_TEXT_CONTRAST) {
+          problems.push(
+            `the home header's scrim is too light where the type lands (${where(index)}: rgba(${stop.rgb.join(", ")}, ${stop.alpha}) leaves white text ${whiteOn(stop).toFixed(2)}:1 over the lightest pixel a photograph can hold): the band the wordmark, the wide row's links and the action sit in — the box's top ${TYPE_BAND * 100}% — needs ${WASH_TEXT_CONTRAST}:1, which this build measures rather than asserts.`,
+          );
+        }
+      }
+      const last = scrimStops[scrimStops.length - 1]!;
+      const lastPosition = scrimPositions[scrimPositions.length - 1]!;
+      if (lastPosition < 100 || last.alpha > 0.02) {
+        problems.push(
+          `the home header's scrim does not reach the picture (its last stop is ${where(scrimStops.length - 1)}: rgba(${last.rgb.join(", ")}, ${last.alpha})). A scrim still painting at the header's bottom edge draws that edge — the band the owner rejected on 6 Oct 2026 — so it has to end at alpha 0 on the box's last pixel for the picture to flow into it.`,
+        );
+      }
+      const rising = scrimStops.findIndex((stop, index) => index > 0 && stop.alpha > scrimStops[index - 1]!.alpha + 0.01);
+      if (rising > 0) {
+        problems.push(
+          `the home header's scrim deepens as it goes down (${where(rising)} is heavier than ${where(rising - 1)}): a scrim that comes back after easing out reads as two surfaces with a seam between them, which is the band this build refuses. It may only get lighter as it descends.`,
+        );
+      }
+      if (scrimPositions[0] !== 0) {
+        problems.push(
+          `the home header's scrim does not start at its top edge (its first stop is at ${where(0)}): above that stop a gradient holds its first colour, so the header's top ${scrimPositions[0]}% is painted by a stop the contrast clauses never read.`,
+        );
+      }
+    }
+  }
+  if (!/^(none|transparent|initial|unset|0)$/i.test(bgColour) && !/gradient\(/.test(bgColour)) {
+    problems.push(
+      `the home header paints an opaque background colour under its scrim (background-color: ${bgColour || "nothing"} reaching ${overlay} .site-header). The base .site-header rule paints --paper and the scrim's tail is transparent, so the paper shows through as a white band along the header's bottom edge. The switch-off is background-color: transparent.`,
     );
   }
 
-  /* 6. One light separator at each edge — the thing that delimits the header now. */
-  const edgeRule = (side: "top" | "bottom") => {
-    const value = (merged.get(`border-${side}`) ?? "").trim();
-    const shorthand = /^([\d.]+)px\s+(solid|dashed|dotted)\s+(.+)$/.exec(value);
-    return {
-      value,
-      width: shorthand ? `${shorthand[1]}px` : (merged.get(`border-${side}-width`) ?? "").trim(),
-      style: shorthand ? shorthand[2]! : (merged.get(`border-${side}-style`) ?? "").trim(),
-      colour: shorthand ? shorthand[3]!.trim() : (merged.get(`border-${side}-color`) ?? "").trim(),
-    };
-  };
-  const lightRule = (colour: string): { rgb: Rgb; alpha: number } | null => {
-    const rgba = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*(\.?\d+)\s*)?\)$/i.exec(colour);
-    const rgb: Rgb | null = rgba ? [Number(rgba[1]), Number(rgba[2]), Number(rgba[3])] : overlayColour(colour, tokens);
-    const alpha = rgba && rgba[4] !== undefined ? Number(rgba[4]) : 1;
-    if (!rgb) return null;
-    return rgb.every((channel) => channel >= 200) && alpha >= 0.25 && alpha <= 0.9 ? { rgb, alpha } : null;
-  };
-  for (const side of ["top", "bottom"] as const) {
-    const rule = edgeRule(side);
-    const where = side === "top" ? "between the header and the proposal banner" : "between the header and the hero content";
-    if (rule.width === "" || /^0/.test(rule.width) || rule.style === "none") {
+  /* 6. No hairline at either edge — the shape the owner rejected on 6 Oct 2026. */
+  const homeRule = overlayRuleDeclarations(base, (one) => one === `${overlay} .site-header`);
+  const baseRule = overlayRuleDeclarations(base, (one) => one === ".site-header");
+  const off = (value: string) => value.trim() === "" || /^(0|0px|none|initial|unset)$/i.test(value.trim());
+  const homeShorthand = (homeRule.get("border") ?? "").trim();
+  for (const side of ["top", "right", "bottom", "left"] as const) {
+    // Which declaration decides this side, by the cascade: the home rule's own longhand
+    // beats its own shorthand, which beats the base rule's longhand. The check walks that
+    // order because the base `.site-header` rule ends in `border-bottom: var(--rule)` — a
+    // 1px #E6E2DA hairline — and the scoped border: 0 is the only thing switching it off.
+    // Reading the merged declarations alone would report that hairline on a correct build.
+    const home = (homeRule.get(`border-${side}`) ?? homeRule.get(`border-${side}-width`) ?? "").trim();
+    if (home !== "") {
+      if (!off(home)) {
+        problems.push(
+          `the home header carries a hairline on its ${side} edge (${overlay} .site-header { border-${side}: ${home} }). The owner rejected the ruled-off band on 6 Oct 2026: no separator at the header/hero or header/disclaimer edge — the scrim alone delimits the box, and it ends at alpha 0 so the picture runs into it.`,
+        );
+      }
+      continue;
+    }
+    if (!off(homeShorthand)) {
       problems.push(
-        `the home header has no separator at its ${side} edge (a light 1px border-${side} on ${overlay} .site-header): ${where}, the photograph and the header run together with nothing ruling the header off, and with the wash gone that rule is the whole of the delimitation the owner asked for on 6 Oct.`,
+        `the home header carries a hairline through its border shorthand (${overlay} .site-header { border: ${homeShorthand} }), which draws on all four sides. The owner rejected the ruled-off band on 6 Oct 2026: the scrim alone delimits the box.`,
       );
       continue;
     }
-    const px = Number(/^([\d.]+)px$/.exec(rule.width)?.[1] ?? "9");
-    if (px > 2) {
+    if (homeShorthand !== "") continue;
+    const inherited = (baseRule.get(`border-${side}`) ?? baseRule.get(`border-${side}-width`) ?? "").trim();
+    if (!off(inherited)) {
       problems.push(
-        `the home header's ${side} separator is ${rule.width} thick (border-${side}: ${rule.value}), which reads as a border box or a band rather than the hairline the owner asked for: one light 1px rule ${where}.`,
-      );
-      continue;
-    }
-    if (rule.style !== "solid") {
-      problems.push(
-        `the home header's ${side} separator is not a solid rule (border-${side}: ${rule.value || `${rule.width} with no style`}): a dashed or dotted hairline reads as a broken edge over a photograph, and a border with no style at all does not paint \u2014 the owner asked for one light rule ${where}.`,
-      );
-      continue;
-    }
-    if (!lightRule(rule.colour)) {
-      problems.push(
-        `the home header's ${side} separator is not a light rule this build can read as one (border-${side}-color: ${rule.colour || "nothing"}): a separator over an unknown photograph has to be a light, partly transparent white — a dark or opaque rule reads as a box edge, and a value this build cannot read proves nothing.`,
+        `the home header is not switched out of the base header's own rule (border-${side}: ${inherited} from .site-header reaching ${overlay} .site-header). That is the 1px light rule the owner rejected on 6 Oct 2026 drawn straight back in at the header/${side === "top" ? "disclaimer" : side === "bottom" ? "hero" : "side"} edge; the scoped border: 0 is what switches it off.`,
       );
     }
   }
+  const SCUM: { property: string; what: string }[] = [
+    { property: "box-shadow", what: "a shadow around its box" },
+    { property: "backdrop-filter", what: "a blur over the picture behind it" },
+    { property: "filter", what: "a filter over the picture behind it" },
+  ];
+  for (const entry of SCUM) {
+    const declared = (merged.get(entry.property) ?? "").trim();
+    if (declared === "" || /^(none|initial|unset|0)$/i.test(declared)) continue;
+    problems.push(
+      `the home header carries ${entry.what} again (${entry.property}: ${declared} reaching ${overlay} .site-header). The box is delimited by the scrim alone (owner, 6 Oct 2026): a shadow is an edge, and a blur is a panel by another name.`,
+    );
+  }
+  // The header has a surface again, so the clauses below that measure a control, a ring or
+  // a link against it are live rather than inert: every one of them is judged against the
+  // lightest pixel that surface can hold — the band's weakest stop over pure white.
+  const bandAlphas = scrimStops
+    .filter((_, index) => (scrimPositions[index] ?? 0) <= TYPE_BAND * 100)
+    .map((stop) => stop.alpha);
+  const washOverWhite: Rgb | null = bandAlphas.length
+    ? overOpaque({ rgb: [10, 12, 14], alpha: Math.min(...bandAlphas) }, white)
+    : null;
 
   /* 7. The glyph-level device that replaces the wash. Text colour, then the halo. */
   const headerInk = overlayColour(headerDecls.get("color") ?? "", tokens);
@@ -941,7 +1033,7 @@ export function headerOverlayProblems(pages: RenderedPage[], css = ""): string[]
  */
 export function headerOverlayMeasure(css: string): {
   cell: string;
-  separators: string;
+  surface: string;
   text_shadow: string;
   measured: string;
   legibility: string;
@@ -950,25 +1042,39 @@ export function headerOverlayMeasure(css: string): {
   const base = overlayStyleRules(css).filter((rule) => rule.at === "");
   const overlay = `.${HEADER_OVERLAY_CLASS}`;
   const merged = overlayRuleDeclarations(base, (one) => one === ".site-header" || one === `${overlay} .site-header`);
-  const background = (merged.get("background") ?? "").trim();
-  if (!/^(none|transparent)$/i.test(background)) return null;
-  const top = (merged.get("border-top") ?? "").trim();
-  const bottom = (merged.get("border-bottom") ?? "").trim();
+  const home = overlayRuleDeclarations(base, (one) => one === `${overlay} .site-header`);
+  const shorthand = (merged.get("background") ?? "").trim();
+  const declaredImage = (merged.get("background-image") ?? "").trim();
+  const image = /gradient\(/.test(declaredImage) ? declaredImage : shorthand;
+  const scrim = /^linear-gradient\(\s*180deg\s*,([\s\S]*)\)$/.exec(image);
+  if (!scrim) return null;
+  const stops = rgbaStops(scrim[1]!);
+  const positions = [...scrim[1]!.matchAll(/([\d.]+)%/g)].map((m) => Number(m[1]));
+  const last = stops[stops.length - 1];
+  const band = stops.filter((_, index) => (positions[index] ?? 0) <= 70);
+  if (!last || band.length === 0 || positions.length !== stops.length) return null;
+  const weakest = Math.min(...band.map((stop) => stop.alpha));
+  const lightest = overOpaque({ rgb: [10, 12, 14], alpha: weakest }, [255, 255, 255]);
+  const whiteOnLightest = contrastRatio([255, 255, 255], lightest);
   const shadow = (
     overlayRuleDeclarations(base, (selector) => selector === `${overlay} .site-header .wordmark`).get("text-shadow") ?? ""
   ).trim();
   const placed = (selector: string) =>
     (overlayRuleDeclarations(base, (one) => one === selector).get("grid-area") ?? "auto").trim();
+  const borders = (["top", "right", "bottom", "left"] as const).filter((side) => {
+    const value = (home.get(`border-${side}`) ?? home.get(`border-${side}-width`) ?? "").trim();
+    return value !== "" && !/^(0|0px|none)$/i.test(value);
+  });
   return {
     cell: `The header and the page body share one grid cell (${overlay} .site-header at ${placed(`${overlay} .site-header`)}, ${overlay} main at ${placed(`${overlay} main`)}, the header taking the top of it): the hero photograph starts at the proposal banner's bottom edge, behind the header. The photograph's own height is unchanged — it is the header's former row that the picture fills — and the page below the hero is the page it was.`,
-    separators: `${background} background and one light rule at each edge — border-top: ${top}, border-bottom: ${bottom}. The two rules are the whole of the delimitation: the header's box is bare, so the photograph shows through it.`,
+    surface: `A scrim of the hero's own ink over the top of the photograph, ${stops.length} stops, easing from rgba(10, 12, 14, ${stops[0]!.alpha}) at ${positions[0]}% to alpha ${last.alpha} at ${positions[positions.length - 1]}%, so it has released the picture entirely by the header's bottom edge and there is no band edge to see: ${image}. Its lightest value in the band the type lands in — the box's top 70%, where the wordmark, the wide row's links and the action all sit — is rgba(10, 12, 14, ${weakest}), which is rgb(${lightest.join(", ")}) composited over the lightest pixel a photograph can hold (pure white): white text on that measures ${whiteOnLightest.toFixed(2)}:1 against the ${WASH_TEXT_CONTRAST}:1 this build requires. The control, the focus ring and the wide row's links are judged against the same value. ${borders.length === 0 ? "No rule at either edge: no border is declared on any side of the home header" : `A border IS declared on ${borders.join(", ")} of the home header`}, so nothing separates the header from the proposal banner above it or the hero photograph below it.`,
     text_shadow: shadow === "" ? "none" : shadow,
     measured:
       "The header's own box and row count are rendered numbers, and no stylesheet assertion measures a box: they are taken in a browser at 320/360/390/420px on both fixtures and reported with the change (see design/, 6 Oct 2026).",
     legibility:
-      "White glyphs over an unknown photograph cannot be proved legible at build time once the wash is gone: this build asserts the device (a soft ink halo behind the wordmark's strokes, and the same on the wide row's links) and the measured contrast is reported from the rendered pixels of both fixtures rather than asserted here.",
+      "The scrim, not a glyph shadow, is what carries the type now, and the number above is what it reaches over the worst pixel a photograph can hold — a photograph-independent guarantee, where the ink halo the owner had before could not reach AA over pure white at all. The wordmark keeps its halo as a glyph-edge softener; it is no longer the device that decides legibility.",
     inner_pages:
-      "No overlay on an inner page: every overlay rule is scoped to .page--index, which only the home page carries, and inner pages have no photograph — their header keeps the paper surface and its hairline (headerOverlayProblems).",
+      "No overlay on an inner page: every overlay rule is scoped to .page--index, which only the home page carries, and inner pages have no photograph — their header keeps the paper surface and the hairline under it (headerOverlayProblems).",
   };
 }
 

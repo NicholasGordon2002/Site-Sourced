@@ -1114,11 +1114,13 @@ a:hover { text-decoration-thickness: 2px; }
    rule that is not scoped to it. Those pages keep the paper surface and the hairline
    that gives the page-head band its top edge.
 
-   The wash below is the header's own, because the picture is unknown until it is
-   drawn: it must hold up over the lightest pixel a photograph can contain, which is
-   pure white. Its lightest stop is rgba(10, 12, 14, .63), and no part of the wash is
-   lighter than that, so white text on it is 5.77:1 whatever the picture turns out to
-   be. */
+   The surface under the type is the header's own, because the picture is unknown until
+   it is drawn: it has to hold up over the lightest pixel a photograph can contain, which
+   is pure white. It is a scrim mixed from the hero's own ink — the same rgba(10, 12, 14)
+   the hero's scrim is built from — and the band the type can land in holds it at .64, so
+   white text reaches 6.0:1 over pure white whatever the picture turns out to be (the
+   build measures exactly this and requires 5.6:1, its own standard for type over an
+   unknown photograph). */
 /* Every one of the four is placed in the one column explicitly: a row without a
    column lets auto-placement find the cell occupied and start a second, implicit
    column, which is sized by its content and leaves the real one nothing to give. */
@@ -1130,37 +1132,45 @@ a:hover { text-decoration-thickness: 2px; }
 .page--index .site-header {
   align-self: start;
   z-index: 1;
-  /* No wash (owner, 6 Oct): the header's box is bare and the photograph runs to its
-     top edge. What delimits it instead is one light hairline at each edge — above it
-     against the proposal banner, below it against the hero copy — so it reads as a
-     band that has been ruled off, not as a panel sitting on the picture. The base
-     .site-header rule paints --paper; this rule has to switch that off, and
-     headerOverlayProblems refuses a build where it is back. */
-  background: none;
-  border-top: 1px solid rgba(255, 255, 255, .55);
-  border-bottom: 1px solid rgba(255, 255, 255, .55);
+  /* A surface, not a line (owner, 6 Oct 2026, after rejecting the hairlines at each
+     edge). The header paints a scrim of the hero's own ink over the top of the
+     photograph and eases it to nothing by its own bottom edge. Its last stop is fully
+     transparent, so the header's last pixel IS the hero's pixel: the two read as one
+     continuous surface with no edge to see, and the picture "opens up" from under the
+     banner instead of being ruled off into a band. Nothing delimits the header now but
+     the light itself.
+
+     Two properties are load-bearing and headerOverlayProblems refuses a build without
+     either: the scrim above, held at .64 through the band the type lands in (the top 70%
+     of the box — the wordmark's row, the wide row's links and the action all sit there),
+     which is 6.0:1 for white text over pure white; and border: 0, because the base
+     .site-header rule ends in a border-bottom of var(--rule) (a 1px #E6E2DA hairline) and
+     would otherwise draw the rejected line straight back in under the picture. The base
+     rule also paints --paper, which the transparent background-color switches off —
+     without it the paper would show through the scrim's transparent tail as a white
+     band. */
+  background-color: transparent;
+  background-image: linear-gradient(180deg, rgba(10, 12, 14, .66) 0%, rgba(10, 12, 14, .64) 70%, rgba(10, 12, 14, 0) 100%);
+  border: 0;
   /* The wordmark inherits this, which is the only reason white reaches it: the
      wordmark's own rule is color: inherit, and it stays that way. */
   color: #fff;
 }
-/* With the wash gone, white glyphs sit on the picture itself, and a header on an
-   unknown photograph needs something between type and image. This is the minimal
-   glyph-level device (owner, 6 Oct: no background band): a soft ink halo under the
-   strokes only — 1px down, 2px of blur, the same ink the hero scrim is mixed from —
-   which measured 4.6:1 at its worst on the lightest header in the two demos. It is
-   not a surface: it paints behind the glyphs and nowhere else, and it cannot be read
-   as a band because it has no box. */
+/* The halo stays, but it is no longer what carries legibility: the scrim above is, and
+   it is measured. What the halo still does is soften the anti-aliased edge of a stroke
+   where it crosses a light patch of the picture, which is below the resolution of any
+   contrast measurement — a glyph-level device, not a surface and not a separator. */
 .page--index .site-header .wordmark { text-shadow: 0 1px 2px rgba(10, 12, 14, .55); }
-/* The action on the wash is a white pill with the ink label (17.8:1 inside it) and
-   5.77:1 against the wash — where the ink pill on the wash is 3.2:1, a control edge
-   that only just clears the 3:1 a non-text boundary needs. Every .call-button in the
-   header is the action: the slot is the page's primary action (render.ts
-   headerActionBlock) and nothing else in the header wears the treatment, so this rule
-   needs no exemption for a chip that is not a link. */
+/* The action on the scrim is a white pill with the ink label (about 17:1 inside it) and
+   about 6:1 against the scrim's lightest pixel in the band the type lands in — where the
+   ink pill on that scrim is about 2.5:1, under the 3:1 a control's own boundary needs.
+   Every .call-button in the header is the action: the slot is the page's primary action
+   (render.ts headerActionBlock) and nothing else in the header wears the treatment, so
+   this rule needs no exemption for a chip that is not a link. */
 .page--index .site-header .call-button { background: #fff; color: var(--ink); }
 .page--index .site-header .call-button:hover { background: #F1EEE8; color: var(--ink); }
-/* The accent focus ring is 1.3:1 on the wash — invisible, and an outright failure of
-   the 3:1 an indicator needs. Inside this header the ring is white (5.77:1 there). */
+/* The accent focus ring is 1.3:1 on the scrim — invisible, and an outright failure of
+   the 3:1 an indicator needs. Inside this header the ring is white (about 6:1 there). */
 .page--index .site-header :focus-visible { outline-color: #fff; }
 .page--index .header-inner { padding: var(--s-3) 0; }
 .wordmark {

@@ -5,9 +5,10 @@
  *
  *   bun test test/header-overlay.test.ts
  *
- * The owner's second revision the same day removed the dark wash from the header and put
- * a light rule at each edge instead, with an ink halo behind the white type. Every
- * refusal below is a way *that* change could quietly stop doing what it was asked for:
+ * The owner has now rejected two header shapes in one day: the flat dark wash, and then
+ * the bare box ruled off by a light hairline at each edge. Every refusal below is a way
+ * the *third* shape — a scrim of the hero's own ink that eases out of the picture, with
+ * no separator at either edge — could quietly stop being it:
  *
  *   1. the overlay class on a page that has no photograph, or missing from the one that
  *      has;
@@ -17,17 +18,21 @@
  *   3. a header and a body that are not in one definite grid cell — a row without a column
  *      starts a second, implicit column and the photograph runs beside the header (this was
  *      a real bug in the first cut of the change, and this is the assertion that catches it);
- *   4. **the header's box painted again** — the wash the owner had taken off, a tint, a
- *      filter, a blur or a shadow: the picture is meant to show through the box;
- *   5. **a separator missing or wrong at either edge** — the two light rules are the whole
- *      of the delimitation now, so one of them being absent, thick, dark, opaque or
- *      dashed is the header losing its edge;
- *   6. **the white type or the ink halo that keeps it legible** — a dark header colour,
- *      a missing `text-shadow`, a light halo, or a halo too weak (alpha, blur) to be the
- *      legibility device;
- *   7. the wordmark losing the inheritance the header's colour travels on;
- *   8. the action left as the ink pill, or the focus ring left on the accent colour;
- *   9. the phone menu's panel losing its own opaque surface, and the phone header's two
+ *   4. **no scrim on the header's box**, a scrim in a colour that is not the hero's ink, or
+ *      one too light in the band the type lands in — measured, not asserted, over the
+ *      lightest pixel a photograph can hold (pure white), at the 5.6:1 this build requires;
+ *   5. **a scrim that does not flow into the hero** — still painting at the header's bottom
+ *      edge, deepening again as it descends, or starting below its own top edge;
+ *   6. **a hairline back at any edge** — including the base rule's own
+ *      `border-bottom: var(--rule)`, which the scoped `border: 0` is the only thing
+ *      switching off, so removing that one declaration draws the rejected line back under
+ *      the photograph;
+ *   7. **a shadow, a blur or a filter standing in for an edge**;
+ *   8. **the white type or the ink halo behind it** — a dark header colour, a missing
+ *      `text-shadow`, a light halo, or a halo too weak (alpha, blur) to soften a stroke;
+ *   9. the wordmark losing the inheritance the header's colour travels on;
+ *  10. the action left as the ink pill, or the focus ring left on the accent colour;
+ *  11. the phone menu's panel losing its own opaque surface, and the phone header's two
  *      rows flattened, in the marking or in the stylesheet.
  *
  * No filesystem, no network. The fixture is fictional.
@@ -104,16 +109,23 @@ function wordmarkHalo(css: string, declaration: string | null): string {
   return css.replace(HALO, declaration === null ? "" : `.page--index .site-header .wordmark { ${declaration} }`);
 }
 
+/** The scrim the home header paints, as the stylesheet spells it. */
+const SCRIM =
+  "background-image: linear-gradient(180deg, rgba(10, 12, 14, .66) 0%, rgba(10, 12, 14, .64) 70%, rgba(10, 12, 14, 0) 100%);";
+
 /* --------------------------------------------------------------- the honest bundle */
 
 test("the home header on the photograph passes every clause of the check", () => {
   const { pages, css } = render();
   expect(headerOverlayProblems(pages, css)).toEqual([]);
-  // Positive controls for the clauses this file is about: bare box, two light 1px rules a
-  // shade under opaque white at each edge, white type, and the ink halo behind the name.
-  expect(headerRule(css)).toContain("background: none;");
-  expect(headerRule(css)).toContain("border-top: 1px solid rgba(255, 255, 255, .55);");
-  expect(headerRule(css)).toContain("border-bottom: 1px solid rgba(255, 255, 255, .55);");
+  // Positive controls for the clauses this file is about: a scrim of the hero's ink that
+  // eases to nothing by the bottom edge, nothing painted under its transparent tail, no
+  // rule at any edge, white type, and the ink halo behind the name.
+  expect(headerRule(css)).toContain(SCRIM);
+  expect(headerRule(css)).toContain("background-color: transparent;");
+  expect(headerRule(css)).toContain("border: 0;");
+  expect(headerRule(css)).not.toContain("border-top:");
+  expect(headerRule(css)).not.toContain("border-bottom:");
   expect(headerRule(css)).toContain("color: #fff;");
   expect(css).toContain(HALO);
   // …and for the two halves the brief names: the marking and the stylesheet.
@@ -180,94 +192,106 @@ test("a body that is not a grid, or a header that does not stack, fails the buil
   expect(problems(pages, css.replace("  align-self: start;", "  align-self: stretch;"))).toContain("not pushed to the top of its cell");
 });
 
-/* --------------------------------- 4. the header's box is bare — nothing painted on it */
+/* ------------------------------------ 4-6. the scrim, and the hairlines it replaced */
 
-test("the base paper fill coming back on the home header fails the build", () => {
-  // The real regression: with the scoped `background: none` gone, the base
-  // `.site-header { background: var(--paper) }` is what the header paints again, and the
-  // white band the owner asked to be rid of is back over the photograph.
+test("a home header with no scrim at all fails the build", () => {
+  // With the hairlines gone, the scrim is the only thing between white type and an
+  // unknown photograph: the picture alone reaches 4.2:1 over the lightest one this build
+  // has built, and 1.7:1 over a light patch of any of them.
   const { pages, css } = render();
-  const paper = inHeader(css, "  background: none;\n", "");
-  expect(problems(pages, paper)).toContain("carries a background again");
-  expect(problems(pages, paper)).toContain("background: var(--paper)");
+  const bare = inHeader(css, SCRIM, "background-image: none;");
+  const reported = problems(pages, bare);
+  expect(reported).toContain("has no surface of its own");
+  expect(reported).toContain("below AA");
 });
 
-test("a background at any strength on the home header fails the build", () => {
+test("the base paper surface showing through the scrim's transparent tail fails the build", () => {
+  // The real regression: the base .site-header rule paints --paper, and the scrim's last
+  // stop is transparent, so an opaque background colour under it is a white band along
+  // the header's bottom edge — the band the owner rejected, in the one place the scrim
+  // cannot cover.
   const { pages, css } = render();
-  const washed = inHeader(css, "  background: none;", "  background: linear-gradient(180deg, rgba(10, 12, 14, .72) 0%, rgba(10, 12, 14, .63) 100%);");
-  expect(problems(pages, washed)).toContain("carries a background again");
-  const tinted = inHeader(css, "  background: none;", "  background-color: rgba(10, 12, 14, .2);");
-  expect(problems(pages, tinted)).toContain("carries a background colour again");
-  const image = inHeader(css, "  background: none;", "  background-image: url(images/hero.jpg);");
-  expect(problems(pages, image)).toContain("carries a wash again");
+  const paper = inHeader(css, "background-color: transparent;", "background-color: var(--paper);");
+  expect(paper).not.toBe(css);
+  const reported = problems(pages, paper);
+  expect(reported).toContain("paints an opaque background colour under its scrim");
+  expect(reported).toContain("--paper");
 });
 
-test("a filter, a blur or a shadow standing in for the surface fails the build", () => {
-  // The wash is off the box, so the picture shows through it — and every other way of
-  // putting something between the type and the photograph has to be refused too, or the
-  // owner's "no background band" is undone one property at a time.
+test("a scrim that is not the hero's own ink fails the build", () => {
   const { pages, css } = render();
-  const shadowed = inHeader(css, "  background: none;", "  background: none;\n  box-shadow: 0 2px 6px rgba(10, 12, 14, .5);");
+  // A light veil, a mid grey, and a colour the build cannot read as ink at all.
+  const veil = inHeader(css, "rgba(10, 12, 14, .66) 0%", "rgba(255, 255, 255, .4) 0%");
+  expect(problems(pages, veil)).toContain("not mixed from the hero's own ink");
+  const grey = inHeader(css, "rgba(10, 12, 14, .64) 70%", "rgba(120, 120, 120, .64) 70%");
+  expect(problems(pages, grey)).toContain("not mixed from the hero's own ink");
+});
+
+test("a scrim too light where the type lands fails the build", () => {
+  // The clause the whole treatment exists for: measured over pure white, the lightest
+  // pixel a photograph can hold, at the band the wordmark, the wide row's links and the
+  // action sit in.
+  const { pages, css } = render();
+  const weak = inHeader(css, "rgba(10, 12, 14, .66) 0%", "rgba(10, 12, 14, .4) 0%");
+  const reported = problems(pages, weak);
+  expect(reported).toContain("too light where the type lands");
+  expect(reported).toContain("needs 5.6:1");
+  // …and in the band itself: .64 is what the shipped scrim holds there, and .5 would be
+  // the 4.1:1 the old halo treatment had to rescue.
+  const band = inHeader(css, "rgba(10, 12, 14, .64) 70%", "rgba(10, 12, 14, .5) 70%");
+  expect(problems(pages, band)).toContain("too light where the type lands");
+});
+
+test("a scrim that does not flow into the hero fails the build", () => {
+  const { pages, css } = render();
+  // Still painting at the bottom edge: the band the owner rejected, drawn by an alpha.
+  const band = inHeader(css, "rgba(10, 12, 14, 0) 100%", "rgba(10, 12, 14, .5) 100%");
+  const reported = problems(pages, band);
+  expect(reported).toContain("does not reach the picture");
+  expect(reported).toContain("draws that edge");
+  // Deepening again after easing out: two surfaces with a seam.
+  const rising = inHeader(css, "rgba(10, 12, 14, .64) 70%", "rgba(10, 12, 14, .8) 70%");
+  expect(problems(pages, rising)).toContain("deepens as it goes down");
+  // Starting below its own top edge: the top of the box painted by a stop nothing read.
+  const late = inHeader(css, "rgba(10, 12, 14, .66) 0%", "rgba(10, 12, 14, .66) 8%");
+  expect(problems(pages, late)).toContain("does not start at its top edge");
+});
+
+test("a hairline back at any edge fails the build", () => {
+  // The shape the owner rejected outright on 6 Oct 2026, at both edges and in the
+  // shorthand that would draw it on all four.
+  const { pages, css } = render();
+  const ruled = inHeader(css, "border: 0;", "border: 0;\n  border-bottom: 1px solid rgba(255, 255, 255, .55);");
+  const reported = problems(pages, ruled);
+  expect(reported).toContain("carries a hairline on its bottom edge");
+  expect(reported).toContain("no separator at the header/hero or header/disclaimer edge");
+  const topline = inHeader(css, "border: 0;", "border: 0;\n  border-top: 1px solid rgba(255, 255, 255, .55);");
+  expect(problems(pages, topline)).toContain("carries a hairline on its top edge");
+  const shorthand = inHeader(css, "border: 0;", "border: 1px solid rgba(255, 255, 255, .55);");
+  expect(problems(pages, shorthand)).toContain("through its border shorthand");
+});
+
+test("the base header's own rule coming back on the home header fails the build", () => {
+  // The regression this clause exists for, and the one the previous shape could not see:
+  // the base .site-header rule ends in border-bottom: var(--rule) — a 1px #E6E2DA hairline
+  // over the photograph — and only the scoped switch-off removes it. Delete the
+  // switch-off alone and the rejected line is back with nothing else changed.
+  const { pages, css } = render();
+  const leaked = inHeader(css, "border: 0;\n", "");
+  expect(leaked).not.toBe(css);
+  const reported = problems(pages, leaked);
+  expect(reported).toContain("not switched out of the base header's own rule");
+  expect(reported).toContain("var(--rule)");
+});
+
+test("a shadow, a blur or a filter standing in for an edge fails the build", () => {
+  const { pages, css } = render();
+  const shadowed = inHeader(css, "border: 0;", "border: 0;\n  box-shadow: 0 2px 6px rgba(10, 12, 14, .5);");
   expect(problems(pages, shadowed)).toContain("carries a shadow around its box again");
-  const blurred = inHeader(css, "  background: none;", "  background: none;\n  backdrop-filter: blur(4px);");
+  const blurred = inHeader(css, "border: 0;", "border: 0;\n  backdrop-filter: blur(4px);");
   expect(problems(pages, blurred)).toContain("carries a blur over the picture behind it again");
-  const filtered = inHeader(css, "  background: none;", "  background: none;\n  filter: brightness(0.6);");
+  const filtered = inHeader(css, "border: 0;", "border: 0;\n  filter: brightness(0.6);");
   expect(problems(pages, filtered)).toContain("carries a filter over the picture behind it again");
-});
-
-/* --------------------------- 5. one light rule at each edge — the whole delimitation now */
-
-test("a separator missing at either edge fails the build", () => {
-  const { pages, css } = render();
-  const noTop = inHeader(css, "  border-top: 1px solid rgba(255, 255, 255, .55);\n", "");
-  const top = problems(pages, noTop);
-  expect(top).toContain("has no separator at its top edge");
-  expect(top).toContain("between the header and the proposal banner");
-  const noBottom = inHeader(css, "  border-bottom: 1px solid rgba(255, 255, 255, .55);", "  border-bottom: 0;");
-  const bottom = problems(pages, noBottom);
-  expect(bottom).toContain("has no separator at its bottom edge");
-  expect(bottom).toContain("between the header and the hero content");
-});
-
-test("a separator thicker than a hairline fails the build", () => {
-  const { pages, css } = render();
-  const thick = inHeader(css, "  border-top: 1px solid", "  border-top: 3px solid");
-  expect(problems(pages, thick)).toContain("top separator is 3px thick");
-});
-
-test("a separator that is not a solid rule fails the build", () => {
-  const { pages, css } = render();
-  const dashed = inHeader(css, "  border-top: 1px solid", "  border-top: 1px dashed");
-  expect(problems(pages, dashed)).toContain("is not a solid rule");
-  // A width and a colour with no style at all is a border that does not paint in CSS.
-  const unstyled = inHeader(css, "  border-top: 1px solid rgba(255, 255, 255, .55);", "  border-top-width: 1px;");
-  expect(problems(pages, unstyled)).toContain("is not a solid rule");
-});
-
-test("a separator that is not a light, partly transparent white fails the build", () => {
-  const { pages, css } = render();
-  // A dark rule, an opaque one and one this build cannot read as a colour: each of the
-  // three ways the light hairline can stop being the light hairline.
-  const dark = inHeader(css, "border-top: 1px solid rgba(255, 255, 255, .55)", "border-top: 1px solid rgba(10, 12, 14, .55)");
-  expect(problems(pages, dark)).toContain("top separator is not a light rule this build can read as one");
-  const opaque = inHeader(css, "border-bottom: 1px solid rgba(255, 255, 255, .55)", "border-bottom: 1px solid #fff");
-  expect(problems(pages, opaque)).toContain("bottom separator is not a light rule this build can read as one");
-  const faded = inHeader(css, "border-bottom: 1px solid rgba(255, 255, 255, .55)", "border-bottom: 1px solid rgba(255, 255, 255, .1)");
-  expect(problems(pages, faded)).toContain("bottom separator is not a light rule this build can read as one");
-  const unreadable = inHeader(css, "border-top: 1px solid rgba(255, 255, 255, .55)", "border-top: 1px solid currentColor");
-  expect(problems(pages, unreadable)).toContain("top separator is not a light rule this build can read as one");
-});
-
-test("the edges the clause allows still pass: 2px, and a shade under opaque white", () => {
-  // The other side of the refusals above: the clause must not be so tight that the
-  // treatment it is protecting cannot exist. 1px is the rule the owner asked for; 2px is
-  // the top of the range, and .55 through .9 is the alpha range a light rule may use.
-  const { pages, css } = render();
-  const allowed = css
-    .replaceAll("border-top: 1px solid rgba(255, 255, 255, .55)", "border-top: 2px solid rgba(255, 255, 255, .9)")
-    .replaceAll("border-bottom: 1px solid rgba(255, 255, 255, .55)", "border-bottom: 2px solid rgba(230, 230, 230, .25)");
-  expect(allowed).not.toBe(css);
-  expect(headerOverlayProblems(pages, allowed)).toEqual([]);
 });
 
 /* -------------------------------------- 6. white type, and the ink halo behind the name */
@@ -354,18 +378,19 @@ test("the phone header's two rows flattened fail the build", () => {
 
 /* ------------------------------------- the manifest half: what a reviewer reads off it */
 
-test("the manifest records the two separators and the halo, and refuses a bundle without them", () => {
+test("the manifest records the scrim and the absence of rules, and refuses a bundle without them", () => {
   const { css } = render();
   const measured = headerOverlayMeasure(css);
   expect(measured).not.toBeNull();
-  expect(measured!.separators).toContain("border-top: 1px solid rgba(255, 255, 255, .55)");
-  expect(measured!.separators).toContain("border-bottom: 1px solid rgba(255, 255, 255, .55)");
-  expect(measured!.separators).toContain("none background");
+  expect(measured!.surface).toContain("rgba(10, 12, 14, .64) 70%");
+  expect(measured!.surface).toContain("alpha 0 at 100%");
+  expect(measured!.surface).toContain("the 5.6:1 this build requires");
+  expect(measured!.surface).toContain("No rule at either edge");
   expect(measured!.text_shadow).toBe("0 1px 2px rgba(10, 12, 14, .55)");
-  // A wash back on the box, or a header box the reader cannot make sense of, is not a
-  // bundle: the measure returns null and the manifest records no treatment at all.
-  const washed = inHeader(css, "  background: none;", "  background: rgba(10, 12, 14, .55);");
-  expect(headerOverlayMeasure(washed)).toBeNull();
+  // A box with no scrim on it is not a bundle: the measure returns null and the manifest
+  // records no treatment at all.
+  const bare = inHeader(css, SCRIM, "background-image: none;");
+  expect(headerOverlayMeasure(bare)).toBeNull();
 });
 
 /* ---------------------------------------- the check the read-only audit could not make */

@@ -207,7 +207,7 @@ export interface ManifestImage {
  */
 export interface ManifestHeaderOverlay {
   cell: string;
-  separators: string;
+  surface: string;
   text_shadow: string;
   measured: string;
   legibility: string;
