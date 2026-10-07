@@ -182,14 +182,13 @@ function hoursBlock(record: BusinessRecord, copy: DemoCopy): string {
  * The contact page a service card is its own link to, and the fragment that lands the
  * visitor on the form (owner revision #4, 6 Oct 2026).
  *
- * A card is **a panel with one action, carrying its own service**: tapping "Request Hot
- * shave"
- * opens a contact page whose select already says "Hot shave". That page is a real file
- * the build writes (`contact-hot-shave.html`), because the choice has to be in the HTML
- * the browser receives: a query string, a fragment or a script would all leave a
- * visitor with JavaScript off on a form that asks nothing. The option the card's
- * service selects is rendered with `selected` on that page, so the answer is there
- * before any script runs — and there is no script involved in it at all.
+ * A card is **one link covering the whole card, carrying its own service**: tapping
+ * anywhere on "Hot shave" opens a contact page whose select already says "Hot shave".
+ * That page is a real file the build writes (`contact-hot-shave.html`), because the
+ * choice has to be in the HTML the browser receives: a query string, a fragment or a
+ * script would all leave a visitor with JavaScript off on a form that asks nothing. The
+ * option the card's service selects is rendered with `selected` on that page, so the
+ * answer is there before any script runs — and there is no script involved in it at all.
  *
  * The name is `slugify`d from the recorded service: one page per recorded service, and
  * `serviceCardProblems` (family-render.ts) refuses a card whose destination does not
@@ -209,17 +208,25 @@ function servicesBlock(record: BusinessRecord, level: 2 | 3, copy: DemoCopy): st
   if (services.length === 0) {
     return `        <p class="muted">${esc(copy.servicesEmpty)}</p>`;
   }
-  // The action asks for the thing and names it, and it never promises a price — which is
-  // why Family B says "Ask about Hot shave" and never "Get a quote" (design spec §6).
-  // The words are the family's own, composed in `family.ts` (`serviceActionLabel`);
-  // nothing here types them. The card itself is a plain panel: heading and note as
-  // ordinary text, and this one link as its only control.
+  // A card is ONE link covering the whole card (owner text, 6 Oct 2026: "Make each entire
+  // service card one accessible keyboard/touch-safe interactive target, with no nested
+  // interactive elements"). The `<a>` *is* the card: it carries the surface, the heading,
+  // the note and the action line, and nothing interactive sits inside it — one tap
+  // anywhere on the card asks about that service, and one tab stop lands on it. The
+  // action asks for the thing and names it, and it never promises a price — which is why
+  // Family B says "Ask about Hot shave" and never "Get a quote" (design spec §6). The
+  // words are the family's own, composed in `family.ts` (`serviceActionLabel`); nothing
+  // here types them. `serviceCardProblems` refuses a second link, a nested control, or a
+  // card that leaves anything beside the link.
   return `        <ul class="services">\n${services
     .map(
       (s) =>
-        `          <li class="card"><${heading}>${esc(s.name)}</${heading}>${s.note ? `<p>${esc(s.note)}</p>` : ""}` +
-        `<p class="service-action"><a class="button" href="${esc(serviceActionHref(s.name))}">` +
-        `${esc(serviceActionLabel(copy.conversion.family, s.name))}</a></p></li>`,
+        `          <li>\n` +
+        `            <a class="card service-tile" href="${esc(serviceActionHref(s.name))}">` +
+        `<${heading}>${esc(s.name)}</${heading}>${s.note ? `<p>${esc(s.note)}</p>` : ""}` +
+        `<p class="service-action">${esc(serviceActionLabel(copy.conversion.family, s.name))}</p>` +
+        `</a>\n` +
+        `          </li>`,
     )
     .join("\n")}\n        </ul>`;
 }
@@ -1478,26 +1485,50 @@ a:hover { text-decoration-thickness: 2px; }
 }
 
 .services { list-style: none; margin: var(--s-5) 0 0; padding: 0; display: grid; gap: var(--s-3); }
-/* A service card is a plain panel with one action (owner text, 6 Oct 2026). The heading
-   and the note are ordinary text; the card's one control is a link wearing the site's
-   button treatment — 44px tall, named after its own service. Nothing else in the card is
-   clickable, so there is one tap target and one tab stop per card, and the card stops
-   being a single giant target a thumb can hit while it is scrolling. The column layout
-   and the action's auto top margin keep the button at the foot of every card, so a row
-   of cards with notes of different lengths still lines its buttons up. */
-.services li.card {
-  padding: var(--s-4) var(--s-5);
+/* A service card is ONE link covering the whole card (owner text, 6 Oct 2026: "Make each
+   entire service card one accessible keyboard/touch-safe interactive target, with no
+   nested interactive elements"). The <a> *is* the card — it carries the surface, the
+   heading, the note and the action line — so a thumb can land anywhere on it and a
+   keyboard finds one stop per card. Nothing interactive sits inside the link: that is
+   what the build's serviceCardProblems check refuses. The list item is only a grid cell,
+   and flexing it is what lets the link fill the cell in the two-column layout. */
+.services li { display: flex; }
+.services .service-tile {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  transition: border-color .15s ease;
+  min-height: 2.75rem;
+  padding: var(--s-4) var(--s-5);
+  color: inherit;
+  text-decoration: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
 }
-.services li.card:hover, .services li.card:focus-within { border-color: var(--accent); }
+.services .service-tile:hover, .services .service-tile:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 2px 10px rgba(16, 18, 20, .08);
+}
+/* The whole card is the focusable target, so the focus ring is drawn round the card
+   itself — the site's global :focus-visible ring, restated for the card so that the ring
+   belongs to the thing a keyboard visitor is actually on: one card in a grid of
+   identical cards. */
+.services .service-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .services p { margin: 0; max-width: none; color: var(--muted); font-size: 0.9375rem; }
-/* The card's one control. The wrapping paragraph carries the spacing, so the button's
-   own padding and its 44px min-height stay exactly what .button gives every other
-   action on the site; a top margin of auto is what puts it at the foot of a taller
-   card. */
-.services .service-action { margin: auto 0 0; padding-top: var(--s-4); }
+/* The card's action line. It is text inside the link, never a control of its own — the
+   whole card is the target and a nested <a>/<button> is refused by the build. The
+   underline is what tells a visitor the card is a link before they touch it, and the
+   family's own words for the service ("Request Hot shave") are what make the target
+   honest. A top margin of auto is what puts the line at the foot of every card, so a row
+   of cards with notes of different lengths still lines its action lines up. */
+.services .service-action {
+  margin: auto 0 0;
+  padding-top: var(--s-4);
+  color: var(--accent-ink);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+.services .service-tile:hover .service-action { text-decoration-thickness: 2px; }
 
 .hours { margin: var(--s-5) 0 0; max-width: 30rem; overflow: hidden; }
 .hours-row {

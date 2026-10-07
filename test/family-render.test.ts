@@ -12,9 +12,11 @@
  *      record cannot support does not appear — the omission and its reason are recorded;
  *   2. the preferred-days control offers only days a `hours` row states as open, a
  *      `"Closed"` row contributes none, and with no days at all the group does not exist;
- *   3. a service card is a plain panel whose one action is named after its recorded
- *      service, is at least 44px (read from the stylesheet), and points at the page
- *      built for that service — and every clause of that check can fail;
+ *   3. a service card is ONE link covering the whole card, with nothing interactive
+ *      nested inside it, whose visible action line is named after its recorded service,
+ *      which is at least 44px and given a focus ring of its own (both read from the
+ *      stylesheet), and which points at the page built for that service — and every
+ *      clause of that check can fail;
  *   4. Family B's three steps are derived from the delivery mode — on a demo page nobody
  *      at the business reads the message, so "they contact you" is not said — and
  *      Family A carries no such block;
@@ -203,11 +205,11 @@ test("with no day stated as open, the group does not exist — legend included",
 });
 
 /* --------------------------------------------------------- 3. the service-card action */
-/** The `<li class="card">` block for one service, exactly as the page renders it. */
+/** The `<li>` block holding one service card, exactly as the page renders it. */
 function card(rendered: Rendered, file: string, service: string): string {
   const list = /<ul class="services">([\s\S]*?)<\/ul>/.exec(page(rendered, file))?.[1] ?? "";
   const found = list
-    .split('<li class="card">')
+    .split(/<li\b[^>]*>/)
     .slice(1)
     .map((chunk) => chunk.slice(0, chunk.indexOf("</li>")))
     .find((html) => new RegExp(`<h[1-6]>${service}</h[1-6]>`).test(html) || html.includes(`>${service}</h`));
@@ -236,60 +238,85 @@ function doctoredMany(rendered: Rendered, file: string, swaps: [string, string][
   });
 }
 
-test("a service card is a plain panel with one action named after its own service", () => {
+test("a service card is ONE link covering the whole card, with nothing interactive inside it", () => {
   const barber = render(BARBER);
   const first = card(barber, "services.html", "Haircut");
-  // The panel: heading and note are ordinary text, and no link wraps them.
-  expect(page(barber, "services.html")).toContain('<li class="card"><h2>Haircut</h2>');
-  expect(page(barber, "services.html")).not.toContain("service-card");
-  // One link, wearing the site's own button treatment, labelled after this card's service.
+  const servicesPage = page(barber, "services.html");
+  // The card and the link are the same thing: the heading, the note and the action line
+  // all sit inside the one <a>, and the list item holds nothing beside it.
+  expect(servicesPage).toContain(
+    '<li>\n            <a class="card service-tile" href="contact-haircut.html#form"><h2>Haircut</h2>',
+  );
+  expect(first.trim()).toMatch(/^<a class="card service-tile" href="contact-haircut\.html#form">[\s\S]*<\/a>$/);
   expect((first.match(/<a\b/g) ?? []).length).toBe(1);
-  expect(first).toContain('<a class="button" href="contact-haircut.html#form">Request Haircut</a>');
-  expect(first).not.toContain("<button");
+  // No nested interactive element of any kind, so the tab stop is the card itself.
+  expect(first).not.toMatch(/<(button|input|select|textarea|details|summary|iframe|object|embed)\b/i);
+  expect(first).not.toContain("tabindex");
   expect(first).not.toContain("aria-label");
+  // The action line is text inside the link — the words the rejected nested button
+  // carried, kept because they are what makes the target honest.
+  expect(first).toContain('<p class="service-action">Request Haircut</p>');
+  expect(first).not.toContain('<a class="button"');
+  expect(first).not.toContain("service-card");
   // The words are the family's own (`family.ts`), applied to the recorded name — which is
   // how a visitor who taps "Request Hot shave" lands on a form that says "Hot shave".
   expect(serviceActionLabel("appointment", "Haircut")).toBe("Request Haircut");
   expect(serviceActionLabel("inquiry", "Haircut")).toBe("Ask about Haircut");
   const gardener = render(GARDENER);
-  expect(card(gardener, "services.html", "Spring cleanup")).toContain(">Ask about Spring cleanup</a>");
+  expect(card(gardener, "services.html", "Spring cleanup")).toContain(
+    '<p class="service-action">Ask about Spring cleanup</p>',
+  );
   // Family B may ask about the job; it may never promise a price.
   expect(page(gardener, "services.html")).not.toContain("Get a quote");
-  // The honest pages pass every clause, including the 44px one on the shipped stylesheet.
+  // The honest pages pass every clause, including 44px and the focus ring, on the
+  // stylesheet the bundle really ships.
   expect(checks(barber)).toEqual([]);
   expect(cardProblems(barber)).toEqual([]);
   expect(cardProblems(gardener)).toEqual([]);
+  // A keyboard visitor can see which card they are on: the ring is the card's own.
+  expect(REAL_CSS).toContain(".services .service-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }");
 });
 
 test("every clause of the service-card check can fail, and says what broke", () => {
   const barber = render(BARBER);
   const broken = (from: string, to: string) => cardProblems(barber, doctored(barber, "services.html", from, to)).join(" | ");
 
-  // 1. one link per card, and no second control.
-  expect(broken('<p class="service-action"><a class="button"', '<a href="#top">Back to top</a><p class="service-action"><a class="button"')).toContain(
-    "carries 2 links, not one",
+  const CARD = '<a class="card service-tile" href="contact-haircut.html#form">';
+  // 1. the card is exactly one link, and nothing interactive is nested inside it — the
+  //    clause the owner asked for in one sentence.
+  expect(broken(CARD, '<a href="#top">Back to top</a>' + CARD)).toContain("carries 2 links, not one");
+  expect(broken(CARD, CARD + '<a class="button" href="contact-beard-trim.html#form">Request Beard trim</a>')).toContain(
+    "nests an interactive element (<a>) inside its own link",
   );
-  expect(broken('<p class="service-action"><a class="button"', '<button class="button">Request Haircut</button><p class="service-action"><a class="button"')).toContain(
-    "carries a button or an input beside its action",
+  expect(broken(CARD, CARD + '<button class="button">Request Haircut</button>')).toContain(
+    "nests an interactive element (<button>) inside its own link",
   );
+  expect(broken(CARD, CARD + '<input type="text" name="x">')).toContain("nests an interactive element (<input>)");
+  expect(broken(CARD, CARD + '<select name="y"></select>')).toContain("nests an interactive element (<select>)");
+  expect(broken(CARD, CARD + '<details><summary>More</summary>ok</details>')).toContain(
+    "nests an interactive element (<details>, <summary>)",
+  );
+  expect(broken(CARD, CARD + '<span tabindex="0">More</span>')).toContain("puts a tabindex inside its own link");
+  // 2. the link is the whole card, so nothing of the card may sit beside it.
+  expect(broken(CARD + "<h2>Haircut</h2>", "<h2>Haircut</h2>" + CARD)).toContain(
+    "the card carries content outside its own link",
+  );
+  expect(broken(CARD + "<h2>Haircut</h2>", "<h2>Haircut</h2>" + CARD)).toContain("sits outside its link");
   // The hole the gate's script-only check left open: an inline handler on the card.
-  expect(broken('<a class="button" href="contact-haircut.html#form">', '<a class="button" onclick="book()" href="contact-haircut.html#form">')).toContain(
+  expect(broken(CARD, '<a class="card service-tile" onclick="book()" href="contact-haircut.html#form">')).toContain(
     "carries an inline event handler (onclick)",
   );
-  // 2. the shape the owner replaced: the whole card is one link wrapping the heading.
-  const oldShape = broken(
-    '<li class="card"><h2>Haircut</h2><p class="service-action"><a class="button" href="contact-haircut.html#form">Request Haircut</a></p></li>',
-    '<li class="card"><a class="service-card" href="contact-haircut.html#form"><h2>Haircut</h2><p class="service-action">Request Haircut</p></a></li>',
-  );
-  expect(oldShape).toContain("wraps its heading in a link");
   // 3. the heading is the record's own name, at the level its page uses.
   expect(broken("<h2>Haircut</h2>", "<h2>Haircut and beard</h2>")).toContain("which the record does not list as a service");
   expect(broken("<h2>Haircut</h2>", "<h3>Haircut</h3>")).toContain("this page's service names are <h2>");
-  // 4. the action's text is the family's label for that same recorded name.
-  expect(broken(">Request Haircut</a>", ">Request this</a>")).toContain(
-    'the card\'s action reads "Request this" while the appointment family\'s label for "Haircut" is "Request Haircut"',
+  // 4. the action line is the family's label for that same recorded name — as text.
+  expect(broken('<p class="service-action">Request Haircut</p>', '<p class="service-action">Request this</p>')).toContain(
+    'the card\'s action line reads "Request this" while the appointment family\'s label for "Haircut" is "Request Haircut"',
   );
-  expect(broken('<a class="button" href=', '<a class="button" aria-label="Request" href=')).toContain("carries an aria-label");
+  expect(broken('<p class="service-action">Request Haircut</p>', "")).toContain("carries no action line");
+  expect(broken(CARD, '<a class="card service-tile" aria-label="Request" href="contact-haircut.html#form">')).toContain(
+    "carries an aria-label",
+  );
   // 5. the destination is the page built for that service, carries #form, and has the
   //    service chosen there.
   expect(broken('href="contact-haircut.html#form"', 'href="contact-kids-cut.html#form"')).toContain(
@@ -309,18 +336,34 @@ test("every clause of the service-card check can fail, and says what broke", () 
       ]),
     ).join(" | "),
   ).toContain('chosen while the card that links here carries "Haircut"');
-  // 6. the action is 44px or more, per the stylesheet the bundle ships.
-  expect(cardProblems(barber, barber.pages, ".button { min-height: 1rem; }").join(" | ")).toContain("at most 16px tall");
+  // 6. the whole card is a target of 44px or more, per the stylesheet the bundle ships.
+  expect(cardProblems(barber, barber.pages, ".service-tile { min-height: 1rem; }").join(" | ")).toContain(
+    "the whole-card target (class=\"card service-tile\") is at most 16px tall",
+  );
   expect(cardProblems(barber, barber.pages, ".service-action { padding: 0; }").join(" | ")).toContain(
     "given no min-height by any rule naming its own classes",
   );
-  expect(cardProblems(barber, barber.pages, ".button, .call-button { min-height: 2.75rem; }")).toEqual([]);
-  // 7. a card that carries a booking word is refused by the family's own guard.
-  expect(broken(">Request Haircut</a>", ">Book now</a>")).toContain("a page in the appointment family");
+  // 7. the card, not the site at large, carries the focus ring of a keyboard visitor.
+  const RING = ".services .service-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }";
+  const SIZED = ".services .service-tile { min-height: 2.75rem; }\n";
+  expect(cardProblems(barber, barber.pages, SIZED + RING)).toEqual([]);
+  expect(cardProblems(barber, barber.pages, SIZED).join(" | ")).toContain(
+    "no rule naming the card's own classes (class=\"card service-tile\") matches :focus or :focus-visible",
+  );
+  expect(cardProblems(barber, barber.pages, SIZED + ".services .service-tile:focus-visible { outline: none; }").join(" | ")).toContain(
+    "is 0px, which is not a ring a visitor can see",
+  );
+  expect(cardProblems(barber, barber.pages, SIZED + ".services .service-tile:focus-visible { outline: 1px solid var(--accent); }").join(" | ")).toContain(
+    "is 1px, which is not a ring a visitor can see",
+  );
+  // 8. a card that carries a booking word is refused by the family's own guard.
+  expect(broken('<p class="service-action">Request Haircut</p>', '<p class="service-action">Book now</p>')).toContain(
+    "a page in the appointment family",
+  );
   // A per-service page nothing links to, and a card that links nowhere, both fail.
   const stripped = barber.pages.map((p) =>
     p.file === "services.html" || p.file === "index.html"
-      ? { ...p, html: p.html.replace('><a class="button" href="contact-haircut.html#form">Request Haircut</a>', ">") }
+      ? { ...p, html: p.html.replace(/<a class="card service-tile" href="contact-haircut\.html#form">[\s\S]*?<\/a>/, "") }
       : p,
   );
   const noCard = cardProblems(barber, stripped).join(" | ");

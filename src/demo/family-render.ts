@@ -370,7 +370,7 @@ export function familyRenderingProblems(vars: {
 const OPTIONAL_SECTIONS = new Set<SectionId>(["extras"]);
 
 /* ------------------------------------------------- the service card, as one action */
-/** One card as it is rendered: the `<li class="card">` block, and the page it is on. */
+/** One card as it is rendered: the `<li>` block that holds it, and the page it is on. */
 interface RenderedCard {
   page: string;
   html: string;
@@ -409,11 +409,40 @@ function actionMinHeightPx(css: string, classes: string[]): number {
 }
 
 /**
- * **A service card is a plain panel with one action named after its service** (owner
- * text, 6 October 2026: "make each service card a plain panel with one accessible,
- * keyboard/touch-safe action button of at least 44px named for that service, opening
- * its per-service Contact page with the service selected; keep the truthful no-JS
- * fallback"). Run from `complianceChecks` on every page.
+ * The width, in px, of the focus ring the stylesheet puts on an element carrying these
+ * classes: the **last** rule matching `:focus` or `:focus-visible` whose selector names
+ * one of the element's own classes sets it, and a rule that says `none` or `0` is a ring
+ * that is not there. `null` when no rule names the element at all.
+ *
+ * Read from the stylesheet, because the build has no browser. The whole card is one
+ * target now, so the site's global `:focus-visible` ring is not a statement about the
+ * card: the ring has to belong to the card itself for a keyboard visitor to see which of
+ * a grid of identical cards they are on.
+ */
+function focusRingPx(css: string, classes: string[]): number | null {
+  let px: number | null = null;
+  for (const match of css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const selector = match[1]!;
+    const body = match[2]!;
+    if (!/:focus(?:-visible)?\b/.test(selector)) continue;
+    const named = selector.split(",").some((part) => classes.some((name) => new RegExp(`\\.${name}\\b`).test(part)));
+    if (!named) continue;
+    const outline = /outline(?:-width)?\s*:\s*([^;]+)/i.exec(body)?.[1] ?? "";
+    const width = /(\d+(?:\.\d+)?)\s*px/.exec(outline);
+    if (width) px = Number(width[1]);
+    else if (/(^|[^a-z])(?:none|0)\b/i.test(outline)) px = 0;
+  }
+  return px;
+}
+
+/**
+ * **A service card is one link covering the whole card, and nothing interactive is
+ * nested inside it** (owner text, 6 October 2026: "Remove the nested service action
+ * button. Make each entire service card one accessible keyboard/touch-safe interactive
+ * target, with no nested interactive elements, navigating to the existing per-service
+ * contact page where that service is already selected; preserve the truthful
+ * no-JavaScript behavior and the nine-page structure"). Run from `complianceChecks` on
+ * every page.
  *
  * The owner's words: a visitor who taps "Hot shave" must land on the contact page with
  * "Hot shave" already chosen, not a blank form. The build's answer is a real page per
@@ -421,32 +450,41 @@ function actionMinHeightPx(css: string, classes: string[]): number {
  * option with `selected` in the HTML — so the choice survives JavaScript being off, a
  * static host that ignores query strings, and a browser that never runs our script.
  *
- * Seven clauses, each one a way this could stop being true:
+ * Nine clauses, each one a way this could stop being true:
  *
- *   1. **one link per card, and no second control** — the heading and the note are
- *      ordinary text; the one `<a>` is the action. A `<button>` beside it is refused:
- *      a button cannot navigate with JavaScript off, and it breaks open-in-new-tab and
- *      copy-link, so the action stays a link wearing the button treatment;
- *   2. **no link wraps the card's heading** — that is the shape the owner replaced, and
- *      `class="service-card"` is its fingerprint;
+ *   1. **the card is exactly one link, and nothing interactive is nested inside it** —
+ *      the `<a>` carries the heading, the note and the action line, and no second link,
+ *      no `<button>`, `<input>`, `<select>`, `<textarea>`, `<details>`, `<summary>`,
+ *      `<iframe>`, `<object>` or `<embed>` and no `tabindex` appears inside it. This is
+ *      the clause the owner asked for in one sentence: one target, one tab stop;
+ *   2. **nothing on the card sits outside the link** — the link is the whole card, so a
+ *      heading or a note left beside it is a dead zone a thumb can land on with nothing
+ *      happening;
  *   3. **the heading is a recorded service, escaped exactly, at the level its page
- *      uses** — the card carries the record's own name for the thing;
- *   4. **the action's text is the family's own label for that same recorded name**
- *      ("Request Hot shave" / "Ask about Hot shave"), composed by `serviceActionLabel`
- *      from `copy.ts`/`family.ts`, so the action and the heading cannot disagree — and
- *      four identical "Request this" labels could not pass as a list of links;
+ *      uses** — the card carries the record's own name for the thing, and the heading is
+ *      inside the link like everything else;
+ *   4. **the card carries the family's own label for that same recorded name as its
+ *      visible action line** ("Request Hot shave" / "Ask about Hot shave"), composed by
+ *      `serviceActionLabel` from `copy.ts`/`family.ts`, so the words on the card and the
+ *      heading cannot disagree — and four identical "Request this" lines could not pass
+ *      as a list of links. The words stay; the control that used to carry them is gone;
  *   5. **the destination is the page built for that service** — `contact-<slug>.html`,
  *      derived from the recorded name and present in this bundle, carrying `#form`, and
  *      its service select already showing exactly one `selected` option equal to the
  *      card's heading. This is the rule the owner asked for, and it is enforceable only
  *      while the pages are pre-rendered;
- *   6. **the action is at least 44px**, read from the stylesheet the bundle ships: some
- *      rule naming one of the action's own classes must set a `min-height` of 44px or
+ *   6. **the whole card is at least 44px**, read from the stylesheet the bundle ships:
+ *      some rule naming one of the link's own classes must set a `min-height` of 44px or
  *      more. The stylesheet is the honest half — the build cannot measure a browser box;
- *   7. **no card carries a booking word, a second action or an inline event handler** —
- *      the card's own markup goes through the family honesty guard, and an `onclick` in
- *      a card is a card that does nothing with JavaScript off, in a bundle whose only
- *      script is `site.js`.
+ *   7. **the stylesheet gives the card itself a focus ring** of at least 2px, on a rule
+ *      naming one of the card's own classes — the whole card is the tab stop, so the ring
+ *      has to be drawn on the card;
+ *   8. **no card carries a booking word or an inline event handler** — the card's own
+ *      markup goes through the family honesty guard, and an `onclick` in a card is a card
+ *      that does nothing with JavaScript off, in a bundle whose only script is `site.js`;
+ *   9. **the registry holds** — every recorded service is one card on each page that
+ *      lists them, every per-service page is some card's destination, and a page that
+ *      starts rendering the list declares its cards' heading level.
  */
 export function serviceCardProblems(vars: {
   pages: { file: string; html: string }[];
@@ -477,26 +515,57 @@ export function serviceCardProblems(vars: {
         `${page.file}: renders the service list at a heading level this check does not know. The level a card's heading takes is derived from the page's own structure (${Object.entries(CARD_HEADING).map(([file, tag]) => `${file} → ${tag}`).join(", ")}), so a page that starts rendering the list must declare its level here — otherwise its cards are checked for everything except their heading level.`,
       );
     }
-    for (const chunk of list[1]!.split('<li class="card">').slice(1)) {
+    // The list items, whatever they are called: a card's `<li>` is now just the grid
+    // cell — the card itself is the link inside it — so the split cannot key off a class
+    // the card no longer wears.
+    for (const chunk of list[1]!.split(/<li\b[^>]*>/).slice(1)) {
       const end = chunk.indexOf("</li>");
       cards.push({ page: page.file, html: end >= 0 ? chunk.slice(0, end) : chunk });
     }
   }
   const destinations = new Set<string>();
   for (const card of cards) {
-    /* 1. one link, no second control, no inline handler */
+    /* 1. the whole card is one link, and nothing interactive is nested inside it */
     const links = card.html.match(/<a\b/gi) ?? [];
     const anchor = /<a\b([^>]*)>([\s\S]*?)<\/a>/i.exec(card.html);
-    if (links.length !== 1 || !anchor) {
+    if (!anchor) {
       problems.push(
-        `${card.page}: a service card carries ${links.length} links, not one. A card is a plain panel with a single action — the button that asks about that service — so there is one thing to tap and one stop for a keyboard, and a second link is a second promise about what happens next.`,
+        `${card.page}: a service card carries ${links.length} links, not one. The owner's words, 6 October 2026: make each entire service card one interactive target. A card with no link does nothing when a thumb lands on it.`,
       );
       continue;
     }
     const [, attrs = "", inner = ""] = anchor;
-    if (/<button\b|<input\b[^>]*type="(?:submit|button)"/i.test(card.html)) {
+    if (links.length !== 1) {
       problems.push(
-        `${card.page}: a service card carries a button or an input beside its action. The action is a link wearing the button treatment: a real <button> cannot navigate with JavaScript off, and it breaks open-in-new-tab, copy-link and middle-click. One card, one action.`,
+        `${card.page}: a service card carries ${links.length} links, not one. The card and its link are the same thing — one thing to tap, one stop for a keyboard — so a second link on the card is a second promise about what happens next.`,
+      );
+    }
+    // A nested interactive element — anything a browser puts in the tab order or that
+    // does something on its own. The `<a>` that IS the card is the one exception, and it
+    // is the anchor we are already inside: everything the regex finds here is a second
+    // control, which is exactly what the owner asked to have removed.
+    const nestedTags = [
+      ...new Set(
+        (inner.match(/<\/?(a|button|input|select|textarea|details|summary|iframe|object|embed)\b/gi) ?? []).map((tag) =>
+          tag.replace(/[</]/g, "").toLowerCase(),
+        ),
+      ),
+    ];
+    if (nestedTags.length > 0) {
+      problems.push(
+        `${card.page}: a service card nests an interactive element (<${nestedTags.join(">, <")}>) inside its own link. The owner's words, 6 October 2026: "no nested interactive elements". The card is one target — a nested link or button is a second tab stop inside a single tap target, a nested control is a second promise about what happens next, and a real <button> cannot navigate at all with JavaScript off.`,
+      );
+    }
+    if (/\btabindex\s*=/i.test(inner)) {
+      problems.push(
+        `${card.page}: a service card puts a tabindex inside its own link, so something inside one target takes a second stop in the tab order. The card is the tab stop; nothing inside it may be one.`,
+      );
+    }
+    /* 2. the link is the whole card: nothing of the card is left outside it */
+    const outside = card.html.replace(anchor[0], "").trim();
+    if (outside !== "") {
+      problems.push(
+        `${card.page}: the card carries content outside its own link (${outside.slice(0, 80)}). The link is the whole card — a heading or a note left beside it is a dead zone a thumb can land on with nothing happening, which is the half of the card the owner's "entire card" rules out.`,
       );
     }
     const handlers = [
@@ -511,16 +580,16 @@ export function serviceCardProblems(vars: {
         `${card.page}: a service card carries an inline event handler (${handlers.join(", ")}). The bundle's only script is site.js and every page works unchanged with JavaScript off — a card that needs an ${handlers[0]} does nothing for a visitor whose browser does not run it, and nothing in the page says so.`,
       );
     }
-    /* 2. the heading is the panel's own text, not a link */
+    /* 3. the heading is inside the link — the whole card is the tap target — and is the
+          record's own name for the service at the level its page uses */
     const headingMatch = /<(h[1-6])\b[^>]*>([\s\S]*?)<\/\1>/i.exec(card.html);
     const headingTag = headingMatch?.[1]?.toLowerCase() ?? "";
     const heading = headingMatch?.[2]?.trim() ?? "";
-    if (/class="service-card"/.test(card.html) || (headingTag && /<h[1-6]\b/i.test(inner))) {
+    if (headingTag && !new RegExp(`<${headingTag}\\b`, "i").test(inner)) {
       problems.push(
-        `${card.page}: the card wraps its heading in a link (class="service-card"). That is the shape the owner replaced on 6 October: the heading and the note are ordinary text on the panel, and the one link is the action underneath, named after its own service.`,
+        `${card.page}: the card's heading (<${headingTag}>) sits outside its link. The link is the whole card, so the heading is part of what a thumb taps and part of what a screen reader reads out — a heading beside the link is a dead zone and a link whose name says nothing about which service it opens.`,
       );
     }
-    /* 3. the heading is the record's own name for the service */
     if (!heading) {
       problems.push(
         `${card.page}: a service card carries no heading naming the service it is for, so a visitor cannot tell which service the action underneath asks about.`,
@@ -536,19 +605,25 @@ export function serviceCardProblems(vars: {
         `${card.page}: a service card's heading is a <${headingTag}>; this page's service names are <${wantTag}>. A card heading at the wrong level is a page whose headings skip or repeat a level for a screen reader.`,
       );
     }
-    /* 4. the action is named after that same service, in the family's own words */
+    /* 4. the card's visible action line names that same service, in the family's own
+          words — the words the owner's rejected button used to carry, kept as text */
     const name = recorded.get(heading);
     const label = name ? serviceActionLabel(family, name) : "";
-    if (name && inner.trim() !== esc(label)) {
+    const actionEl = /<p class="service-action"[^>]*>([\s\S]*?)<\/p>/i.exec(inner);
+    if (!actionEl) {
       problems.push(
-        `${card.page}: the card's action reads "${visible(inner)}" while the ${family} family's label for "${name}" is "${label}". The action is named after the service it opens ("${
+        `${card.page}: the card's link carries no action line ("Request <service>" / "Ask about <service>"). The whole card is the target, so the words inside it are the only thing that says what tapping it does — a card with a heading and a note and no action is a target whose promise a visitor has to guess.`,
+      );
+    } else if (name && actionEl[1]!.trim() !== esc(label)) {
+      problems.push(
+        `${card.page}: the card's action line reads "${visible(actionEl[1]!)}" while the ${family} family's label for "${name}" is "${label}". The line is named after the service the card opens ("${
           family === "appointment" ? "Request <service>" : "Ask about <service>"
         }"), and the words come from copy.ts/family.ts — so four identical labels cannot stand in for a list of services.`,
       );
     }
     if (/\baria-label(?:ledby)?\s*=/.test(attrs)) {
       problems.push(
-        `${card.page}: the card's action carries an aria-label, so the name a screen reader announces and the words a visitor reads can drift apart. The visible label is the accessible name.`,
+        `${card.page}: the card's link carries an aria-label, so the name a screen reader announces and the words a visitor reads can drift apart. The visible text — the heading, the note and the action line — is the accessible name.`,
       );
     }
     /* 5. the destination: the page built for that service, with `#form` */
@@ -594,13 +669,24 @@ export function serviceCardProblems(vars: {
         );
       }
     }
-    /* 6. the action is a control of at least 44px, per the stylesheet the bundle ships */
+    /* 6. the whole card is a target of at least 44px, per the stylesheet the bundle
+          ships — and 7. the card itself, not the site at large, is given a focus ring */
+    const classes = (/\bclass="([^"]*)"/.exec(attrs)?.[1] ?? "").split(/\s+/).filter(Boolean);
+    const ring = focusRingPx(css ?? "", classes);
     if (css) {
-      const classes = (/\bclass="([^"]*)"/.exec(attrs)?.[1] ?? "").split(/\s+/).filter(Boolean);
       const minHeight = actionMinHeightPx(css, classes);
       if (minHeight < 44) {
         problems.push(
-          `${card.page}: the card's action (class="${classes.join(" ")}") is ${minHeight === 0 ? "given no min-height by any rule naming its own classes" : `at most ${minHeight}px tall`} in the stylesheet this bundle ships; the owner asked for at least 44px (2.75rem). The action wears the site's button treatment (.button/.call-button, min-height: 2.75rem) — a card whose action is a bare text line is a 24px touch target.`,
+          `${card.page}: the whole-card target (class="${classes.join(" ")}") is ${minHeight === 0 ? "given no min-height by any rule naming its own classes" : `at most ${minHeight}px tall`} in the stylesheet this bundle ships; the owner asked for at least 44px (2.75rem). The card is the target now, so the class it wears has to declare the size — a card whose target is a bare text line is a 24px touch target.`,
+        );
+      }
+      if (ring === null) {
+        problems.push(
+          `${card.page}: no rule naming the card's own classes (class="${classes.join(" ")}") matches :focus or :focus-visible. The whole card is the tab stop, so the ring the site draws for a link in running text says nothing about the card: a keyboard visitor moving through a grid of identical cards cannot see which one has focus.`,
+        );
+      } else if (ring < 2) {
+        problems.push(
+          `${card.page}: the focus ring the stylesheet gives the card (class="${classes.join(" ")}") is ${ring}px, which is not a ring a visitor can see. The owner asked for a visible keyboard focus state on the card that is now the target.`,
         );
       }
     }
