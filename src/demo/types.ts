@@ -7,6 +7,7 @@
 
 import type { RecordSourceKind } from "./provenance.ts";
 import type { ConversionFamily } from "./family.ts";
+import type { BookingMode } from "./booking.ts";
 
 /**
  * `business` — the form delivers to the business's own published address.
@@ -264,6 +265,32 @@ export interface DemoManifest {
   header: ManifestHeaderOverlay | null;
   /** The header's action slot and the touch controls beside it (owner, 6 Oct 2026). */
   header_action: ManifestHeaderAction;
+  /**
+   * The booking link, if this bundle has one: which of the three modes it resolved to and
+   * the rule that decided it (`booking.ts`), where the anchor points, the exact words it
+   * carries, which pages carry it and which deliberately do not, and the privacy
+   * paragraph that goes with it. In `none` mode every part is empty — which is what makes
+   * "nothing renders" a property of the build rather than a promise about it.
+   */
+  booking: {
+    mode: BookingMode;
+    basis: string;
+    url: string | null;
+    configured_demo_url: string | null;
+    label: string | null;
+    notice: string | null;
+    target: string | null;
+    rel: string | null;
+    /** Where the anchor sits on the pages that carry it. */
+    placement: string | null;
+    carries: string[];
+    omitted: { file: string; why: string }[];
+    /** The privacy page's booking paragraph, or null when there is no booking link. */
+    privacy_sentence: string | null;
+    /** The header slot's own words, recorded because they must **not** move in demo mode. */
+    header: { slot: string; label: string; href: string };
+    basis_note: string;
+  };
   /**
    * Which conversion family this bundle is for, how that was worked out, and the primary
    * contact label it carries with its own basis. Both are derived from the record — the

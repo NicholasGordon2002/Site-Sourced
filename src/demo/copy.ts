@@ -24,6 +24,7 @@ import {
   resolvePrimaryLabel,
   SERVICE_ACTION_LABELS,
   wholeWordPattern,
+  type ConversionFamily,
   type FamilyResolution,
   type PrimaryLabel,
 } from "./family.ts";
@@ -39,6 +40,7 @@ import { inquirySteps, type ExtraLabels } from "./family-render.ts";
 import type { ResolvedForm } from "./forms.ts";
 import { resolveProvenance, type Provenance } from "./provenance.ts";
 import { addressLine, resolvePhone, type ResolvedPhone } from "./addresses.ts";
+import { resolveBooking, type BookingMode } from "./booking.ts";
 import {
   currentRetentionPractice,
   practiceSentence,
@@ -452,6 +454,113 @@ export function privacyNoticeDigest(notices: PrivacyNotice[]): string {
  */
 export const PRIVACY_NOTICE_SEAL = "94cb76ec07ab3614";
 
+/* ------------------------------------------------------------------ booking copy */
+
+/**
+ * The booking link's own words — **one source each**, never typed into a template
+ * (lead ruling, 8 Oct 2026). The renderer draws `copy.booking.label` and
+ * `copy.booking.notice`; the build check reads the same object, so what a page says and
+ * what the gate requires cannot drift apart.
+ *
+ * **`Booking a demonstration time`** is permitted because the demonstration schedule
+ * really does take a booking (gbp §1 rule 5: "book" wording appears only when the link
+ * really books), and the word *demonstration* is inside the label itself, so the anchor
+ * is never silent about what it opens. It names **no service**: the demonstration
+ * schedule carries one generic appointment type, so "Book a hot shave" would promise
+ * something the link cannot honour.
+ */
+export const BOOKING_LABEL_DEMO = "Book a demonstration time";
+
+/**
+ * **`Book on {business}'s own booking page`** — `template-system.md:199`'s own wording.
+ * Permitted by the same rule: the client's page really books, and the record carries the
+ * URL, so the build can check the anchor points where the label says.
+ */
+export function bookingLabelBusiness(business: string): string {
+  return `Book on ${business}'s own booking page`;
+}
+
+/**
+ * **The demonstration notice — one string, stored once.** It is a **frozen string**
+ * (gbp §5.3 rule 3, `template-system.md` §1.4) and the exact wording sent to the owner
+ * for sign-off on 8 Oct 2026; it does not move without their word.
+ *
+ * Why each half is there: it opens with "This link opens …" because the notice sits
+ * beside a *link* and says what the tap does before it is taken; the denial precedes the
+ * word "booked"; it names no retention, price, timeline or service; and it speaks as
+ * Site Sourced, which is the demonstration phase's voice. Every fact in it is one the
+ * build can ground — the page it opens is ours (derived from the mode), `{business}` comes
+ * from the record, and the business has not seen a booking made there by construction.
+ *
+ * **Whether the demonstration page is really Google's** is not something a URL string can
+ * be checked for, so this sentence and the privacy paragraph below are built from the
+ * hand-off's own setup: gbp §5.2 step 3 creates the demonstration page as a **Google
+ * Calendar appointment schedule**. If the owner creates it on another platform, this
+ * constant and `DEMO_BOOKING_PROVIDER` move with it — one edit, in one place.
+ */
+export function bookingNoticeDemo(business: string): string {
+  return `This link opens a demonstration booking page run by Site Sourced — nothing booked there is an appointment with ${business}, and ${business} has not seen it.`;
+}
+
+/** The service behind the demonstration booking page, per gbp §5.2 step 3. */
+export const DEMO_BOOKING_PROVIDER = "Google Calendar";
+
+/**
+ * The privacy page's booking paragraph — a **booking is not a form submission**, and a
+ * visitor is entitled to know who handles it (gbp §6 item 4).
+ *
+ * Demonstration mode names the demonstration page's own service, because that page is
+ * ours and its setup is recorded. Business mode names no provider: we were never told
+ * which booking service a client uses, and naming one we cannot check would be a claim
+ * about their page rather than ours. Neither variant says where a booking is stored —
+ * we do not operate the service and cannot state its retention.
+ */
+export function bookingPrivacySentence(vars: { mode: BookingMode; business: string }): string {
+  return vars.mode === "business"
+    ? `A time booked from this site is handled by the booking service ${vars.business} uses, on that service's own page and under its own privacy policy. Site Sourced is not involved in a booking and receives no part of it.`
+    : `A time booked from this page is handled by ${DEMO_BOOKING_PROVIDER}, a service of Google, on Google's own page and under Google's own privacy policy. Nothing booked there is an appointment with ${vars.business}.`;
+}
+
+/**
+ * The booking block as the page and the manifest carry it: the mode, the link, the words
+ * and the reason. `href`, `label` and `notice` are empty in `none` mode, which is what
+ * makes "nothing renders" a property of the data rather than of the template.
+ */
+export interface BookingCopy {
+  mode: BookingMode;
+  /** The rule that decided the mode, in plain English (carried into the manifest). */
+  basis: string;
+  /** The URL the anchor points at, or `""`. */
+  href: string;
+  /** The anchor's visible text, without the arrow; `""` in `none` mode. */
+  label: string;
+  /** The notice printed under the anchor; `""` unless this is a demonstration link. */
+  notice: string;
+  /** True when the link leaves this site, so it opens in a new tab with `noopener`. */
+  external: boolean;
+  /** The privacy page's booking paragraph; `""` when there is no booking link. */
+  privacy: string;
+}
+
+/**
+ * Compose the block from the resolved mode. Everything here is derived from
+ * `resolveBooking` — the labels are chosen by the mode, never by a flag, and the notice
+ * only exists in `demo` mode, where it is true.
+ */
+export function composeBooking(record: BusinessRecord, family: ConversionFamily, demoUrl = ""): BookingCopy {
+  const resolved = resolveBooking(record, demoUrl, family);
+  const demo = resolved.mode === "demo";
+  return {
+    mode: resolved.mode,
+    basis: resolved.basis,
+    href: resolved.url,
+    label: demo ? BOOKING_LABEL_DEMO : resolved.mode === "business" ? bookingLabelBusiness(record.name) : "",
+    notice: demo ? bookingNoticeDemo(record.name) : "",
+    external: resolved.mode !== "none",
+    privacy: resolved.mode === "none" ? "" : bookingPrivacySentence({ mode: resolved.mode, business: record.name }),
+  };
+}
+
 /**
  * The provider's label as a visitor should read it. The relay preset's own label is
  * the internal phrase "self-hosted / test relay", which means nothing to a visitor and
@@ -572,6 +681,14 @@ export interface DemoCopy {
    * visitor to do (WORKFLOW.md rule 8, owner decision 4 October).
    */
   contactLabel: PrimaryLabel;
+  /**
+   * The booking link this build may carry, and the words that go with it. Derived from
+   * the record's `booking_url` against the configured demonstration page
+   * (`booking.ts`), so a page never decides for itself whether it may offer a time —
+   * and in `none` mode every field here is empty, which is exactly what keeps the
+   * approved pages byte-identical until the owner creates the demonstration page.
+   */
+  booking: BookingCopy;
   /**
    * Which conversion family this build is for, and how that was derived from the record.
    * Carried into the manifest, and the family whose honesty rules `complianceChecks`
@@ -706,7 +823,18 @@ export function familyFields(record: BusinessRecord): FamilyFields {
   });
 }
 
-export function composeCopy(record: BusinessRecord, slug: string, form: ResolvedForm, delivery: FormDelivery): DemoCopy {
+export function composeCopy(
+  record: BusinessRecord,
+  slug: string,
+  form: ResolvedForm,
+  delivery: FormDelivery,
+  /**
+   * The configured demonstration booking page (`DEMO_BOOKING_URL`), read once at the
+   * build boundary and passed in: the renderer never reads the environment, and a caller
+   * that passes nothing gets `none` mode — the fail-safe direction.
+   */
+  demoBookingUrl = "",
+): DemoCopy {
   const matched = profileMatch(record);
   const profile = matched.profile;
   // Which of the two families this page is for, from the category or the record's own
@@ -715,6 +843,12 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
   // The primary contact label: neutral on our own fictional fixture, the family's own on
   // anything derived from a real business's record (WORKFLOW.md rule 8).
   const contactLabel = resolvePrimaryLabel(record, conversion.family, profile.key);
+  // Whether this record may carry a booking link at all, and if so which page it points
+  // at: derived from the record's `booking_url` against the configured demonstration
+  // page, never from a flag (`booking.ts`). Family B never renders one — an inquiry page
+  // asks for a described need, not a time — so an inquiry record resolves to `none`
+  // whatever it carries.
+  const booking = composeBooking(record, conversion.family, demoBookingUrl);
   const cat = categoryLower(record);
   // Where the details came from, and every line that depends on it. Derived from the
   // record's `source_kind` — never typed here — so a page cannot credit a source the
@@ -973,6 +1107,7 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
     contactCtaHeading: businessPhase ? `Contact ${record.name}` : "Contact",
     contactCtaIntro,
     contactLabel,
+    booking,
     conversion,
     fallback: {
       heading: "Email and phone",
@@ -1074,6 +1209,13 @@ export function composePrivacy(
   form: ResolvedForm,
   delivery: FormDelivery,
   practice: RetentionPractice | null = currentRetentionPractice(),
+  /**
+   * The booking block this bundle carries (`booking.ts`). A booking is **not** a form
+   * submission, so when a page offers one the notice has to name the service that
+   * handles it (gbp §6 item 4). A caller that passes nothing gets no booking paragraph:
+   * the notice may only state what the build knows this page does.
+   */
+  booking: BookingCopy = composeBooking(record, resolveFamily(record, profileMatch(record)).family, ""),
 ): PrivacyNotice {
   const businessPhase = delivery.mode === "business";
   const label = providerLabel(form);
@@ -1200,7 +1342,9 @@ export function composePrivacy(
           paragraphs: [
             `The form is handled by ${label}, ${provider.service_descriptor}. ${provider.visitor_storage({ party: businessName })}`,
             `${label} operates internationally, so the message may be handled under the laws of the places where its servers sit.`,
-          ],
+            /* A booking is not a message, and it never reaches us (`booking.ts`). */
+            booking.privacy,
+          ].filter((p) => p.length > 0),
         },
         retentionSection,
         choices,
@@ -1235,7 +1379,9 @@ export function composePrivacy(
         paragraphs: [
           `The form is handled by ${label}, ${provider.service_descriptor}. ${provider.visitor_storage({ party: DEMO_OPERATOR })}`,
           `${label} operates internationally, so the message may be handled under the laws of the places where its servers sit. Our responsibility for it continues while ${label} holds it.`,
-        ],
+          /* A booking is not a message, and it never reaches us (`booking.ts`). */
+          booking.privacy,
+        ].filter((p) => p.length > 0),
       },
       retentionSection,
       choices,

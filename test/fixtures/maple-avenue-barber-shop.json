@@ -60,6 +60,7 @@
   "form_delivery": "demo",
   "form_provider": "formspark",
   "form_access_key": "env:SS_FORMSPARK_FORM_ID",
+  "booking_url": "env:DEMO_BOOKING_URL",
   "source": "test fixture (fictional business — not a real shop)",
   "images": [
     {

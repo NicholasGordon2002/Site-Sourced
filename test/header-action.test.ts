@@ -39,10 +39,12 @@ import { resolveDelivery } from "../src/demo/delivery.ts";
 import { resolveForm } from "../src/demo/forms.ts";
 import { resolvePrimaryLabel } from "../src/demo/family.ts";
 import {
+  esc,
   headerActionBelongs,
   PAGE_IDS,
   PAGE_SPECS,
   primaryActionHref,
+  primaryActionLabel,
   renderCss,
   renderPages,
   type RenderContext,
@@ -70,13 +72,25 @@ const SLUG = "example-barber-shop";
 interface Rendered {
   pages: RenderedPage[];
   css: string;
+  /** `copy.contactLabel.label` — the family-aware contact label (rule 8). */
   label: string;
   href: string;
+  /**
+   * What the header's action slot **actually** says and points at, from the same two
+   * derivations the renderer used: the family-aware label, and the booking mode that hands
+   * the slot to a client's own booking page (lead ruling, 8 Oct 2026). The two differ only
+   * in `business` booking mode — on a demonstration the slot is deliberately unchanged.
+   */
+  actionLabel: string;
+  actionHref: string;
 }
 function render(record: BusinessRecord = FICTIONAL): Rendered {
   const form = resolveForm(record);
   const delivery = resolveDelivery(record, form);
-  const copy = composeCopy(record, SLUG, form, delivery);
+  // The configured demonstration booking page, exactly as the build boundary reads it —
+  // the renderer never touches the environment, so a caller that passes nothing gets
+  // booking mode `none`.
+  const copy = composeCopy(record, SLUG, form, delivery, (process.env.DEMO_BOOKING_URL ?? "").trim());
   const ctx: RenderContext = {
     record,
     copy,
@@ -93,6 +107,8 @@ function render(record: BusinessRecord = FICTIONAL): Rendered {
     css: renderCss(profileFor(record), SLUG),
     label: copy.contactLabel.label,
     href: primaryActionHref(record),
+    actionLabel: primaryActionLabel(record, copy).label,
+    actionHref: primaryActionHref(record, copy.booking),
   };
 }
 
@@ -147,26 +163,62 @@ test("the label is the family's own on a build from a real record, never a templ
 
 test("a record with its own booking page hands the slot to it, without a template edit", () => {
   const booking = { ...FICTIONAL, booking_url: "https://booking.example.com/example-barber-shop" };
-  const { pages, css, label } = render(booking);
+  const { pages, css, label, actionLabel, actionHref } = render(booking);
   expect(primaryActionHref(booking)).toBe("https://booking.example.com/example-barber-shop");
-  expect(headerActionProblems({ pages, label, href: primaryActionHref(booking), css })).toEqual([]);
+  expect(headerActionProblems({ pages, label: actionLabel, href: actionHref, css })).toEqual([]);
   expect(pages[0]!.html).toContain(`href="https://booking.example.com/example-barber-shop"`);
+  // **The label moves with the destination** (lead ruling, 8 Oct 2026): a fictional
+  // fixture's slot would otherwise read the neutral `Contact Us` on an anchor that leaves
+  // our site for someone else's booking page — the defect class the honesty rule exists to
+  // prevent. The contact label is still `Contact Us`; the slot's words are not.
+  expect(label).toBe("Contact Us");
+  expect(actionLabel).toBe("Book on Example Barber Shop's own booking page");
+  expect(pages[0]!.html).toContain(`>${esc(actionLabel)}</a>`);
+  expect(headerActionProblems({ pages, label, href: actionHref, css }).join(" | ")).toContain("not \"Contact Us\"");
   // ...and the contact page there is not the slot's destination any more: a build that
   // still sent the header to contact.html fails.
-  expect(problems({ pages, label, href: "contact.html", css })).toContain("primaryActionHref");
+  expect(problems({ pages, label: actionLabel, href: "contact.html", css })).toContain("primaryActionHref");
+});
+
+test("a demonstration booking link leaves the header slot exactly as signed off", () => {
+  // The record names the demonstration page through the environment, and the mode is
+  // resolved by comparing it with the configured URL — so with the demonstration page
+  // configured this record is in `demo` mode, not `business`.
+  const url = "https://calendar.app.google/example-demonstration";
+  const demo = { ...FICTIONAL, booking_url: "env:DEMO_BOOKING_URL" };
+  const previous = process.env.DEMO_BOOKING_URL;
+  process.env.DEMO_BOOKING_URL = url;
+  try {
+    const { pages, css, label, href, actionLabel, actionHref } = render(demo);
+    // The slot: same label, same destination, byte for byte what the owner approved.
+    expect(actionLabel).toBe("Contact Us");
+    expect(actionHref).toBe("contact.html");
+    expect(href).toBe("contact.html");
+    expect(pages[0]!.html).toContain(ACTION("Contact Us"));
+    expect(headerActionProblems({ pages, label, href, css })).toEqual([]);
+    // The link itself is in the body, above the form, on the contact section only.
+    const contact = pages.find((page) => page.file === "contact.html")!.html;
+    expect(contact).toContain(`href="${url}"`);
+    expect(pages.find((page) => page.file === "index.html")!.html).not.toContain(url);
+  } finally {
+    if (previous === undefined) delete process.env.DEMO_BOOKING_URL;
+    else process.env.DEMO_BOOKING_URL = previous;
+  }
 });
 
 test("the manifest records what the slot says, where it points, and who omits it", () => {
   const booking = { ...FICTIONAL, booking_url: "https://booking.example.com/example" };
   const { pages, css, label } = render(booking);
   const record = headerActionMeasure({
-    pages,
-    label,
-    href: primaryActionHref(booking),
-    css,
-    fromBooking: true,
+    pages: render(booking).pages,
+    label: render(booking).actionLabel,
+    href: render(booking).actionHref,
+    css: render(booking).css,
+    bookingMode: "business",
   });
-  expect(record.label).toBe("Contact Us");
+  // The label the manifest records is the one the page prints — the booking label, because
+  // in `business` mode the slot points at the client's own booking page.
+  expect(record.label).toBe("Book on Example Barber Shop's own booking page");
   expect(record.href).toBe("https://booking.example.com/example");
   expect(record.class).toBe("call-button header-action");
   expect(record.min_height_px).toBe(44);
