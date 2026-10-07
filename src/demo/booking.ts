@@ -57,12 +57,33 @@ export const DEMO_BOOKING_URL_VAR = "DEMO_BOOKING_URL";
 export const BOOKING_ARROW = "↗";
 
 /**
+ * The class that gives the booking control its 44px box — and it is a class the 44px
+ * audit actually measures (`TAP_TARGET_CLASSES`, build.ts). Everything about this choice
+ * is a claim the build can check, which is why it lives here as data and not in the
+ * template:
+ *
+ *   - `.link-quiet` is `color: var(--muted)` — `#5E6672` — which is a **paper-surface**
+ *     colour. The control sits in the contact pages' `section--alt` (`--paper-2`,
+ *     `#FAF7F2`), so this composites to roughly 5.5:1 there: a measured number, not a
+ *     guess (see `design/booking-build-notes.md` §7 for the browser reading).
+ *   - `.button--ghost` was the first draft and it was **wrong**: it is the hero's
+ *     white-on-photograph treatment (`color:#fff` over `rgba(255,255,255,.1)`, over the
+ *     hero scrim it was built for). On paper that is white on near-white — about 1.05:1 —
+ *     and `button--ghost` is **not among the classes the tap-target audit sizes**, so the
+ *     audit would not have caught it either. Two independent reviews found this; it must
+ *     not come back, and `bookingAnchorSizeProblems` refuses it if it does.
+ */
+export const BOOKING_ANCHOR_SIZE_CLASS = "link-quiet";
+
+/**
  * The classes the booking anchor wears, in one place: the renderer draws them and the
  * build check reads them, so the shape the check refuses and the shape the page ships
- * cannot drift apart. `button` is what gives the control its 44px box (`min-height:
- * 2.75rem`), and it is the class the tap-target audit already sizes.
+ * cannot drift apart. `--inline` is the existing modifier that cancels `.link-quiet`'s
+ * left offset, which is what keeps the control **left-aligned with the form's 34rem
+ * measure** rather than indented from it (lead correction C2, 8 Oct 2026). No new CSS:
+ * both classes ship already.
  */
-export const BOOKING_ANCHOR_CLASS = "button button--ghost";
+export const BOOKING_ANCHOR_CLASS = `${BOOKING_ANCHOR_SIZE_CLASS} link-quiet--inline`;
 
 /**
  * The `env:NAME` indirection, read the way `forms.ts` reads `form_access_key`: the
