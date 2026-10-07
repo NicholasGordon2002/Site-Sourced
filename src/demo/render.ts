@@ -553,8 +553,7 @@ ${hero ? `        <!-- The hero is a real <img>, not a CSS background: it carrie
 ` : ""}        <div class="wrap hero-inner">
           <p class="eyebrow">${esc(copy.heroEyebrow)}</p>
           <h1>${esc(record.name)}</h1>
-          <p class="hero-lead">${esc(copy.heroLead)}</p>
-          <p class="hero-actions">
+${copy.heroLead ? `          <p class="hero-lead">${esc(copy.heroLead)}</p>\n` : ""}          <p class="hero-actions">
 ${record.phone ? `            <a class="button button--paper" href="${tel}">${esc(copy.ui.callLabel)} ${esc(record.phone)}</a>\n` : ""}            <a class="button button--ghost" href="${PAGE_SPECS.contact.file}">${esc(copy.contactLabel.label)}</a>
           </p>
         </div>

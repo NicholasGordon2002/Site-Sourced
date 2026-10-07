@@ -30,6 +30,7 @@ import {
   isIllustrativeImage,
   narrativeParagraphs,
   normaliseServices,
+  printedDetailClaimProblems,
   privacyNoticeProblems,
   profileFor,
   slugify,
@@ -1601,6 +1602,11 @@ export function complianceChecks(vars: {
     if (banned.length > 0) problems.push(`${on}: copy guard tripped: ${banned.join(", ")}`);
   }
 
+  // The class rule both sentences above belong to: a page may name only the details the
+  // record actually carries, read off the finished pages (`copy.ts`). The phone number in
+  // "printed with it" has its own owner in `phoneProblems` above, and this clause leaves it
+  // there — see the note on `DETAIL_CLAIM_SHAPES`.
+  problems.push(...printedDetailClaimProblems({ record, pages }));
   problems.push(...formDeliveryProblems({ record, form, noticeMode: copy.formNoticeDelivery, placeholder: KEY_PLACEHOLDER }));
   // Two rules that were each missing a half. Both are checked here, on the rendered
   // pages — what a visitor can actually read:
