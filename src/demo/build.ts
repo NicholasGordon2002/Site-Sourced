@@ -35,7 +35,14 @@ import {
   slugify,
 } from "./copy.ts";
 import { contactLabelProblems, familyHonestyProblems, familyProblems, submitLabelProblems } from "./family.ts";
-import { SECTION_ORDER, extrasLines, familyRenderingProblems, serviceCardProblems, type PageKey } from "./family-render.ts";
+import {
+  SECTION_ORDER,
+  extrasLines,
+  familyRenderingProblems,
+  serviceCardMeasure,
+  serviceCardProblems,
+  type PageKey,
+} from "./family-render.ts";
 import { SERVICE_ACTION_LABELS, SERVICE_NAME_SLOT, serviceActionLabel } from "./family.ts";
 import { currentRetentionPractice, PRACTICE_FILE, readRetentionPractice, type RetentionPractice } from "./retention.ts";
 import type { FormDelivery } from "./delivery.ts";
@@ -2082,16 +2089,30 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
         label_basis:
           `the label is the family's own template with the recorded service's name in it (\`family.ts\` ` +
           `SERVICE_ACTION_LABELS), so a card reads e.g. "${firstService ? serviceActionLabel(copy.conversion.family, firstService) : "(no recorded service)"}" — ` +
-          `never a generic "Request this", which would leave the action and the heading free to disagree.`,
+          `never a generic "Request this", which would leave the action line and the heading free to disagree.`,
         mechanism:
-          "each card is a plain panel — heading and note as ordinary text — with exactly " +
-          "one action: a link wearing the site's 44px button treatment (.button, " +
-          "min-height: 2.75rem) named after that recorded service, pointing at the page " +
-          "built for it (contact-<service-slug>.html#form), whose own service select " +
-          "carries that service's option with `selected` in the HTML — so the choice is " +
-          "there with JavaScript off, on a static host that ignores query strings. No " +
-          "script and no query string takes part, and no <button> is used: a button " +
-          "cannot navigate with JavaScript off.",
+          "each card IS one link (owner text, 6 Oct 2026: \"Make each entire service card " +
+          "one accessible keyboard/touch-safe interactive target, with no nested " +
+          "interactive elements\"): the <a> carries the card's surface, the heading, the " +
+          "note and the action line, which is text — the words the rejected nested button " +
+          "used to carry — never a control of its own. It points at the page built for " +
+          "that recorded service (contact-<service-slug>.html#form), whose own service " +
+          "select carries that service's option with `selected` in the HTML — so the " +
+          "choice is there with JavaScript off, on a static host that ignores query " +
+          "strings. No script and no query string takes part, and no <button> is used: a " +
+          "button cannot navigate with JavaScript off.",
+        nested_interactive:
+          "refused: serviceCardProblems rejects a second link on the card, any <a>, <button>, <input>, " +
+          "<select>, <textarea>, <details>, <summary>, <iframe>, <object> or <embed> inside the card's own " +
+          "link, and any tabindex inside it — one target, one tab stop per card. It also rejects content left " +
+          "beside the link (a heading or a note outside it is a dead zone on a card a thumb is meant to hit " +
+          "anywhere) and an inline on* handler anywhere in the card.",
+        target: serviceCardMeasure(
+          css,
+          classListOf(
+            /<ul class="services">[\s\S]*?<a\b([^>]*)>/.exec(pages.find((page) => page.file === "services.html")?.html ?? "")?.[1] ?? "",
+          ),
+        ),
         default_option: fields.fields.find((f) => f.name === "service")?.preselected ?? null,
         pages: normaliseServices(record).map((service) => ({ service: service.name, file: servicePageFile(service.name) })),
       },

@@ -393,8 +393,8 @@ const CARD_HEADING: Record<string, string> = { "index.html": "h3", "services.htm
  * no browser to measure: clause 6's job is to prove a rule exists, and the browser audit
  * measures the box at 360px.
  */
-function actionMinHeightPx(css: string, classes: string[]): number {
-  let px = 0;
+function actionMinHeightPx(css: string, classes: string[]): number | null {
+  let px: number | null = null;
   for (const declaration of css.matchAll(/min-height:\s*([\d.]+)(rem|px)/g)) {
     const at = declaration.index ?? 0;
     const open = css.lastIndexOf("{", at);
@@ -433,6 +433,26 @@ function focusRingPx(css: string, classes: string[]): number | null {
     else if (/(^|[^a-z])(?:none|0)\b/i.test(outline)) px = 0;
   }
   return px;
+}
+
+/**
+ * What the stylesheet the bundle ships says about the whole-card target, read **the same
+ * way `serviceCardProblems` reads it** (`actionMinHeightPx`, `focusRingPx`) so the
+ * manifest and the gate cannot describe two different bundles. `min_height_px` is `null`
+ * when no rule naming one of the card's own classes declares a `min-height` at all;
+ * `focus_ring_px` is `null` when no rule of the card's own matches `:focus` or
+ * `:focus-visible`.
+ */
+export function serviceCardMeasure(css: string, classes: string[]): {
+  class: string;
+  min_height_px: number | null;
+  focus_ring_px: number | null;
+} {
+  return {
+    class: classes.join(" "),
+    min_height_px: actionMinHeightPx(css, classes),
+    focus_ring_px: focusRingPx(css, classes),
+  };
 }
 
 /**
@@ -675,9 +695,9 @@ export function serviceCardProblems(vars: {
     const ring = focusRingPx(css ?? "", classes);
     if (css) {
       const minHeight = actionMinHeightPx(css, classes);
-      if (minHeight < 44) {
+      if (minHeight === null || minHeight < 44) {
         problems.push(
-          `${card.page}: the whole-card target (class="${classes.join(" ")}") is ${minHeight === 0 ? "given no min-height by any rule naming its own classes" : `at most ${minHeight}px tall`} in the stylesheet this bundle ships; the owner asked for at least 44px (2.75rem). The card is the target now, so the class it wears has to declare the size — a card whose target is a bare text line is a 24px touch target.`,
+          `${card.page}: the whole-card target (class="${classes.join(" ")}") is ${minHeight === null ? "given no min-height by any rule naming its own classes" : `at most ${minHeight}px tall`} in the stylesheet this bundle ships; the owner asked for at least 44px (2.75rem). The card is the target now, so the class it wears has to declare the size — a card whose target is a bare text line is a 24px touch target.`,
         );
       }
       if (ring === null) {

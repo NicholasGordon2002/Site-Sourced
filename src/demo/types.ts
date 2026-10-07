@@ -317,6 +317,18 @@ export interface DemoManifest {
       label_slot: string;
       label_basis: string;
       mechanism: string;
+      /**
+       * The clause that refuses the shape the owner rejected on 6 October — a control
+       * nested inside the card — recorded here so a reviewer reads what the gate
+       * rejects, not just what it requires.
+       */
+      nested_interactive: string;
+      /**
+       * The whole-card target as the stylesheet the bundle ships declares it, read the
+       * same way `serviceCardProblems` reads it: the classes the link wears, its
+       * `min-height` in px and the width of its own focus ring.
+       */
+      target: { class: string; min_height_px: number | null; focus_ring_px: number | null };
       default_option: string | null;
       pages: { service: string; file: string }[];
     };
