@@ -315,7 +315,13 @@ export function provenanceProblems(vars: {
         `${on}: says the business is a fictional example although the record's source_kind is ${JSON.stringify(provenance.kind)} — the caveat belongs to the source the record declares.`,
       );
     }
-    if (text.includes(listingsLine) && provenance.kind === "fictional") {
+    // `listingsLine` is `""` when the record prints no details at all (there is nothing
+    // for the caveat to qualify), and `includes("")` is true for every string — so the
+    // emptiness is tested first, not last. Without this guard the clause fires on every
+    // page of any record that prints no address, no phone and no email, which is a
+    // perfectly honest bundle: an absent caveat is not a false one, and no page can
+    // print it.
+    if (listingsLine !== "" && provenance.kind === "fictional" && text.includes(listingsLine)) {
       problems.push(
         `${on}: prints the "as published in public listings" caveat although this is a fictional example business (${provenance.basis}). ` +
           `Nothing about it was published in any listing, so the frozen caveat is false here; the fictional caveat is what belongs on the page.`,
