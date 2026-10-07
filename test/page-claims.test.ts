@@ -207,7 +207,7 @@ test("the details a demonstration points a visitor at carry the published-listin
   ).toEqual([]);
 
   // A page that prints the details without the caveat fails the build.
-  const stripped = html.replace(/as published in public listings[\s\S]*?relying on them\./g, "");
+  const stripped = html.replace(/as published in public listings[\s\S]*?relying on (?:them|it)\./g, "");
   expect(stripped).not.toContain("as published in public listings");
   const problems = complianceChecks({
     pages: swap(pages, stripped),
@@ -224,7 +224,7 @@ test("the details a demonstration points a visitor at carry the published-listin
 test("a delivered page leaves the caveat out", async () => {
   // The client's own address as the recipient: the delivery phase. Their details are
   // their own by then, so the page does not call them unconfirmed.
-  const delivered: BusinessRecord = { ...RECORD, form_recipient: RECORD.email!, form_delivery: "business" };
+  const delivered: BusinessRecord = { ...RECORD, phone: "+1 905-555-0188", form_recipient: RECORD.email!, form_delivery: "business" };
   const images = await manifestImages({ ...delivered, images: [CC0] });
   const { html, pages, ctx } = await page(delivered, images);
 

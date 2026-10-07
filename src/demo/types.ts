@@ -345,10 +345,37 @@ export interface DemoManifest {
       basis: string;
     };
   };
+  /**
+   * Which of the owner's three phone versions the pages print, the number and the label
+   * in front of it, and the reason — derived from the build's phase and the record's
+   * source, never set by hand (WORKFLOW.md rule 9). Beside `conversion` and `delivery`
+   * because it is derived from the same two things.
+   */
+  phone: {
+    mode: "client" | "published" | "example" | "none";
+    number: string | null;
+    label: string;
+    basis: string;
+  };
   compliance: {
+    /**
+     * What the pages tell search engines. `noindex, nofollow` while the bundle is an
+     * unsolicited proposal on our own domain, and `""` once it is a client's own site.
+     */
     robots_meta: string;
     banner_text: string;
     footer_disclaimer: string;
+    /**
+     * The phase this bundle was built in and what that decided about the proposal
+     * furniture: the lines the demonstration phase requires on every page, or the lines
+     * the business phase refuses, each named.
+     */
+    phase: {
+      mode: "demo" | "business";
+      basis: string;
+      required: string[];
+      refused: string[];
+    };
     banner_above_the_fold: boolean;
     business_own_assets_used: boolean;
     /** The caveat printed with the business's contact details, or null if none. */

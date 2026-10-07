@@ -35,7 +35,15 @@
  * derived lines applies, and each is asserted by the build and by tests.
  */
 
+import { printedDetails, type PrintedDetail } from "./addresses.ts";
 import type { BusinessRecord } from "./types.ts";
+
+/**
+ * The build phase, as far as provenance is concerned. The same two values
+ * `delivery.ts` derives, spelled out here so this module needs nothing from the form:
+ * `demo` is an unsolicited proposal on our own domain, `business` a delivered site.
+ */
+export type ProvenancePhase = "demo" | "business";
 
 /**
  * Where a record's business details came from. Explicit, because the attribution and
@@ -56,9 +64,32 @@ export function isRecordSourceKind(value: unknown): value is RecordSourceKind {
  */
 export const OSM_ONLY_FRAGMENTS = ["© OpenStreetMap contributors", "public mapping data"] as const;
 
-/** The frozen contact-details caveat, for sources whose details really are published. */
-export function listingsCaveat(businessName: string): string {
-  return `The contact details for ${businessName} on this page are as published in public listings — please confirm them with the business before relying on them.`;
+/**
+ * The contact-details caveat, for sources whose details really are published.
+ *
+ * The owner approved this wording on 4 Oct 2026 and, in the same breath, settled the one
+ * thing it has to get right: **the enumeration follows the page, never the deck.** The
+ * sentence names the details the page actually prints — the address when one is recorded,
+ * the phone number when the page shows one, the email address when it has one — and a
+ * detail the record does not carry is never named. So a record with no phone prints the
+ * owner's sentence exactly as approved ("The address and email address for … are as
+ * published in public listings — please confirm them …"), and a demo that keeps the
+ * business's publicly listed number prints the longer list instead. `printedDetails`
+ * decides the list; nothing here is typed per record, and a page whose caveat names a
+ * different set of details than it prints fails the build.
+ *
+ * An empty list (no details printed at all) produces `""`: a caveat qualifies printed
+ * details, and a page that prints none has none to qualify.
+ */
+export function listingsCaveat(businessName: string, details: PrintedDetail[]): string {
+  if (details.length === 0) return "";
+  const list =
+    details.length === 1 ? details[0]! : `${details.slice(0, -1).join(", ")} and ${details[details.length - 1]!}`;
+  const plural = details.length > 1;
+  return (
+    `The ${list} for ${businessName} on this page ${plural ? "are" : "is"} as published in public listings — ` +
+    `please confirm ${plural ? "them" : "it"} with the business before relying on ${plural ? "them" : "it"}.`
+  );
 }
 
 /**
@@ -102,7 +133,7 @@ export interface Provenance {
 }
 
 /** One page's worth of copy, derived from the record's declared source. */
-export function resolveProvenance(record: BusinessRecord): Provenance {
+export function resolveProvenance(record: BusinessRecord, phase: ProvenancePhase = "demo"): Provenance {
   const kind = isRecordSourceKind(record.source_kind) ? record.source_kind : null;
   const name = record.name;
 
@@ -111,8 +142,25 @@ export function resolveProvenance(record: BusinessRecord): Provenance {
   // (finding 10): a lead with no website must not be told the page competes with a site
   // it lacks. The business name no longer appears in this sentence, so the plain and
   // HTML forms are the same string — nothing in the tail needs escaping any more.
-  const TAIL =
-    "Copy, layout and imagery: Site Sourced. No logo, photograph or text was taken from any other website. This page is marked noindex, so it does not appear in search results.";
+  //
+  // The **noindex sentence is phase furniture** (WORKFLOW.md rule 9, cross-check finding
+  // 8): it is true of an unsolicited proposal on our own domain and false on a delivered
+  // site, whose client is not asked to hide from search engines. So it is derived from
+  // the phase rather than printed unconditionally. The phase defaults to `demo` — the
+  // direction that says *more* about who built the page — and the build passes the phase
+  // it resolved, while `phaseFurnitureProblems` refuses the sentence outright in
+  // `business` mode, so a build that forgot to pass it cannot ship either wording.
+  const TAIL_COMMON = "Copy, layout and imagery: Site Sourced. No logo, photograph or text was taken from any other website.";
+  const TAIL = phase === "demo" ? `${TAIL_COMMON} This page is marked noindex, so it does not appear in search results.` : TAIL_COMMON;
+
+  // The details the caveat may name: exactly the ones a printed-details page prints for
+  // this record (addresses.ts). Recomputed here rather than passed in, so the sentence
+  // and the enumeration cannot be composed from different things.
+  const details = printedDetails(record);
+
+  // The same phase fact in the fictional variant's own sentence, kept short because it
+  // closes a longer line.
+  const NOINDEX_SHORT = phase === "demo" ? " This page is marked noindex." : "";
 
   // The licence text travels as a link to the licence, not as bare words (ruling R12).
   const ODBL_LINK = `<a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener noreferrer">ODbL 1.0</a>`;
@@ -123,7 +171,7 @@ export function resolveProvenance(record: BusinessRecord): Provenance {
         kind,
         attribution: `Business details come from public mapping data (© OpenStreetMap contributors, ODbL 1.0). ${TAIL}`,
         attributionHtml: `Business details come from public mapping data (© OpenStreetMap contributors, ${ODBL_LINK}). ${TAIL}`,
-        caveat: listingsCaveat(name),
+        caveat: listingsCaveat(name, details),
         aboutLine: `Every detail here — hours, address, contact details — came from public listings. Nothing on this page was copied from another website, and anything wrong or missing can be corrected in minutes.`,
         published: true,
         basis: `the record's details came from OpenStreetMap (source_kind "openstreetmap"), so the page credits OpenStreetMap and the ODbL and pins the printed details to public listings`,
@@ -133,7 +181,7 @@ export function resolveProvenance(record: BusinessRecord): Provenance {
         kind,
         attribution: `Business details come from public listings about this business. ${TAIL}`,
         attributionHtml: `Business details come from public listings about this business. ${TAIL}`,
-        caveat: listingsCaveat(name),
+        caveat: listingsCaveat(name, details),
         aboutLine: `Every detail here — hours, address, contact details — came from public listings. Nothing on this page was copied from another website, and anything wrong or missing can be corrected in minutes.`,
         published: true,
         basis: `the record's details came from public listings (source_kind "public-listings"), so the page credits public listings and credits no mapping data`,
@@ -141,8 +189,8 @@ export function resolveProvenance(record: BusinessRecord): Provenance {
     case "fictional":
       return {
         kind,
-        attribution: `Fictional example business: the name, address, phone number, hours and services on this page were invented by Site Sourced to show the layout, and nothing here was taken from a real business, a public listing or a website. Copy, layout and imagery: Site Sourced. This page is marked noindex.`,
-        attributionHtml: `Fictional example business: the name, address, phone number, hours and services on this page were invented by Site Sourced to show the layout, and nothing here was taken from a real business, a public listing or a website. Copy, layout and imagery: Site Sourced. This page is marked noindex.`,
+        attribution: `Fictional example business: the name, address, phone number, hours and services on this page were invented by Site Sourced to show the layout, and nothing here was taken from a real business, a public listing or a website. Copy, layout and imagery: Site Sourced.${NOINDEX_SHORT}`,
+        attributionHtml: `Fictional example business: the name, address, phone number, hours and services on this page were invented by Site Sourced to show the layout, and nothing here was taken from a real business, a public listing or a website. Copy, layout and imagery: Site Sourced.${NOINDEX_SHORT}`,
         caveat: fictionalCaveat(name),
         aboutLine: `Every detail here — hours, address, contact details — is invented for this fictional example business. Nothing on this page was copied from another website, and anything wrong or missing can be corrected in minutes.`,
         published: false,
@@ -159,6 +207,28 @@ export function resolveProvenance(record: BusinessRecord): Provenance {
         basis: `the record declares no source_kind, so no attribution and no caveat can be derived for it`,
       };
   }
+}
+
+/** A literal string as a regular expression — the business name is not a pattern. */
+function escapePattern(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * The details a page's caveat names, or `null` when the page carries no such caveat.
+ *
+ * Read out of the page's own text rather than taken from the composer, because the point
+ * of the check is the sentence a visitor reads: it answers "which details did the page
+ * promise to be as published?", which is the half of the owner's rule (4 Oct) that a
+ * composer cannot be trusted with any more than a template can.
+ */
+export function caveatDetailsNamedIn(text: string, businessName: string): string[] | null {
+  const m = new RegExp(`The (.+?) for ${escapePattern(businessName)} on this page (?:is|are) as published in public listings`).exec(text);
+  if (!m) return null;
+  return m[1]!
+    .split(/,\s*|\s+and\s+/)
+    .map((d) => d.trim())
+    .filter(Boolean);
 }
 
 /**
@@ -238,7 +308,7 @@ export function provenanceProblems(vars: {
         }
       }
     }
-    const listingsLine = listingsCaveat(record.name);
+    const listingsLine = listingsCaveat(record.name, printedDetails(record));
     const fictionalLine = fictionalCaveat(record.name);
     if (text.includes(fictionalLine) && provenance.kind !== "fictional") {
       problems.push(
@@ -250,6 +320,22 @@ export function provenanceProblems(vars: {
         `${on}: prints the "as published in public listings" caveat although this is a fictional example business (${provenance.basis}). ` +
           `Nothing about it was published in any listing, so the frozen caveat is false here; the fictional caveat is what belongs on the page.`,
       );
+    }
+
+    // The enumeration half of the same rule (owner, 4 Oct): the caveat names the details
+    // the page prints, and nothing else. Read out of the page rather than trusted from the
+    // composer, so a hard-coded "address and email address" on a record that prints a
+    // phone number — or an address no page shows — is refused rather than shipped.
+    const named = caveatDetailsNamedIn(text, record.name);
+    if (named) {
+      const expected = printedDetails(record);
+      const sameSet = named.length === expected.length && named.every((detail, i) => detail === expected[i]);
+      if (!sameSet) {
+        problems.push(
+          `${on}: the caveat names ${named.map((d) => `"${d}"`).join(", ")} as published, but this page prints ${expected.length > 0 ? expected.map((d) => `"${d}"`).join(", ") : "none of the business's details"}. ` +
+            `The enumeration follows the page, never the deck: a detail the page does not print is never named, and every detail it does print is.`,
+        );
+      }
     }
   }
 

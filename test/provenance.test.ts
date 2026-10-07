@@ -32,6 +32,7 @@ import { complianceChecks } from "../src/demo/build.ts";
 import { composeCopy, composePrivacy, profileFor } from "../src/demo/copy.ts";
 import { resolveDelivery } from "../src/demo/delivery.ts";
 import { resolveForm } from "../src/demo/forms.ts";
+import { printedDetails } from "../src/demo/addresses.ts";
 import { OSM_ONLY_FRAGMENTS, fictionalCaveat, listingsCaveat, pageText, resolveProvenance } from "../src/demo/provenance.ts";
 import { esc, renderPages, type RenderContext } from "../src/demo/render.ts";
 import type { BusinessRecord } from "../src/demo/types.ts";
@@ -96,10 +97,11 @@ test("an OpenStreetMap-sourced record credits OpenStreetMap and the ODbL", () =>
   expect(copy.footer.provenance).toContain("© OpenStreetMap contributors");
   expect(copy.footer.provenance).toContain("ODbL 1.0");
   expect(copy.footer.provenance).toContain("public mapping data");
-  // The frozen caveat, byte-identical, because this record's details really were published.
-  expect(copy.contactCaveat).toBe(
-    `The contact details for ${rec.name} on this page are as published in public listings — please confirm them with the business before relying on them.`,
-  );
+  // The caveat that belongs to a record whose details really were published. Its
+  // enumeration follows the page (owner, 4 Oct): this record prints an email address and
+  // no phone number and no address, so the email is the only detail the sentence names.
+  expect(copy.contactCaveat).toBe(listingsCaveat(rec.name, printedDetails(rec)));
+  expect(copy.contactCaveat).toContain("as published in public listings — please confirm");
   const html = HOME(rec);
   expect(html).toContain("© OpenStreetMap contributors");
   // The ODbL credit travels as a link to the licence, not as bare words (ruling R12).
@@ -116,7 +118,7 @@ test("a public-listings record credits public listings and no mapping data", () 
   const { copy } = pages(rec);
   expect(copy.footer.provenance).toContain("public listings about this business");
   for (const fragment of OSM_ONLY_FRAGMENTS) expect(copy.footer.provenance).not.toContain(fragment);
-  expect(copy.contactCaveat).toBe(listingsCaveat(rec.name));
+  expect(copy.contactCaveat).toBe(listingsCaveat(rec.name, printedDetails(rec)));
   const html = HOME(rec);
   expect(pageText(html)).toContain(copy.footer.provenance);
   expect(html).not.toContain("opendatacommons.org/licenses/odbl");
@@ -183,7 +185,7 @@ test("a page keeping the OpenStreetMap credit for a non-OSM record fails the bui
 test("the public-listings caveat on a fictional record fails the build", () => {
   const rec = record({ source_kind: "fictional" });
   const { ctx, rendered } = pages(rec);
-  const tampered = rendered.map((p) => ({ ...p, html: p.html.replaceAll(esc(fictionalCaveat(rec.name)), esc(listingsCaveat(rec.name))) }));
+  const tampered = rendered.map((p) => ({ ...p, html: p.html.replaceAll(esc(fictionalCaveat(rec.name)), esc(listingsCaveat(rec.name, printedDetails(rec)))) }));
   const problems = complianceChecks({
     pages: tampered,
     record: rec,
@@ -255,7 +257,7 @@ for (const [file, kind] of FIXTURES) {
     }
     // The ODbL licence link only belongs to an OpenStreetMap-sourced record.
     expect(html.includes("opendatacommons.org/licenses/odbl")).toBe(kind === "openstreetmap");
-    expect(html.includes(esc(listingsCaveat(rec.name)))).toBe(kind !== "fictional");
+    expect(html.includes(esc(listingsCaveat(rec.name, printedDetails(rec))))).toBe(kind !== "fictional");
     expect(html.includes(esc(fictionalCaveat(rec.name)))).toBe(kind === "fictional");
 
     expect(checked(rec)).toEqual([]);

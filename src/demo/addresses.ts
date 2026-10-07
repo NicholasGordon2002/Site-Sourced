@@ -26,6 +26,7 @@
  * mailboxes.
  */
 
+import type { FormDeliveryMode } from "./delivery.ts";
 import type { ResolvedForm } from "./forms.ts";
 import type { BusinessRecord } from "./types.ts";
 
@@ -118,6 +119,318 @@ export function printedAddresses(pages: { file: string; html: string }[]): Addre
     }
   }
   return [...merged.values()];
+}
+
+/* ---------------------------------------------------------------- the address line */
+
+/**
+ * The street address as every page writes it: street, city, province and postcode, with
+ * an empty part dropped rather than left as a stray comma. `""` when the record records
+ * no address at all.
+ *
+ * It lives here, beside the other "what does this page actually print?" questions, so the
+ * footer that prints it (`render.ts`) and the caveat that enumerates it (`provenance.ts`)
+ * read one function and cannot drift apart — the same reason `normaliseAddress` is shared.
+ */
+export function addressLine(record: BusinessRecord): string {
+  const a = record.address ?? {};
+  const parts = [a.street, a.city, [a.province, a.postcode].filter(Boolean).join(" ")].filter((p) => p && p.trim());
+  return parts.join(", ");
+}
+
+/**
+ * Which of the business's details a printed-details page really prints for this record,
+ * in the order the owner's caveat names them.
+ *
+ * The distinction matters because the caveat that qualifies those details must name
+ * **exactly** the ones the page shows (owner ruling, 4 Oct): an address the record does
+ * not carry is never named, and a phone number the page does not print is not named
+ * either. Derived from the record, so nothing has to remember.
+ */
+export type PrintedDetail = "address" | "phone number" | "email address";
+
+export function printedDetails(record: BusinessRecord): PrintedDetail[] {
+  const out: PrintedDetail[] = [];
+  if (addressLine(record).trim()) out.push("address");
+  if ((record.phone ?? "").trim()) out.push("phone number");
+  if ((record.email ?? "").trim()) out.push("email address");
+  return out;
+}
+
+/* ------------------------------------------------------------- the phone number model */
+
+/**
+ * The reserved range a **fictional** fixture's phone number has to sit in
+ * (`555-0100…0199`, WORKFLOW.md rule 9). The range exists in every North American
+ * numbering plan for fiction and testing, so a number inside it cannot be a real
+ * business's line — which is exactly what a made-up business needs, and what makes the
+ * label "Phone (example):" true rather than a fig leaf.
+ */
+export const EXAMPLE_PHONE_RANGE = "555-0100…0199";
+
+/** Digits only — the shape a phone number is compared in. */
+function digitsOf(value: string): string {
+  return value.replace(/\D/g, "");
+}
+
+/** Ten digits of a North American number, with a leading country code dropped. */
+function nationalDigits(value: string): string {
+  const d = digitsOf(value);
+  return d.length === 11 && d.startsWith("1") ? d.slice(1) : d;
+}
+
+/** True when the value is a number inside the reserved fictional range. */
+export function isExamplePhoneNumber(value: string): boolean {
+  const d = nationalDigits(value);
+  if (d.length !== 10 || d.slice(3, 6) !== "555") return false;
+  const subscriber = Number(d.slice(6));
+  return subscriber >= 100 && subscriber <= 199;
+}
+
+/**
+ * Which of the owner's three phone versions a build is in, and on what basis.
+ *
+ *   `client`     a delivered site (`delivery.mode` `business`): the client's own recorded
+ *                number, confirmed at hand-off. A client build with none is broken, not
+ *                cautious, so the build refuses it.
+ *   `published`  a personalised demo built from a real business's record: the business's
+ *                **own** publicly listed number, labelled as such, with the page's caveat
+ *                asking the visitor to confirm it. Never any other real number.
+ *   `example`    a test demo with no business behind it (a fictional fixture): a number
+ *                inside the reserved range, labelled "Phone (example):". The word
+ *                "published" may never describe an invented number.
+ *   `none`       no number prints (a demonstration may show none; a client build may not).
+ */
+export type PhoneMode = "client" | "published" | "example" | "none";
+
+export interface ResolvedPhone {
+  mode: PhoneMode;
+  /** The number the record carries, as the record wrote it — `""` when it carries none. */
+  number: string;
+  /** The label printed in front of it on the page. */
+  label: string;
+  /** Plain-English reason for the determination, carried into the manifest. */
+  basis: string;
+}
+
+/**
+ * Resolve the phone version from the build's phase and the record's source.
+ *
+ * Never throws and never guesses a number: an odd input produces a mode the build then
+ * refuses, rather than a page that prints a number nobody recorded.
+ */
+export function resolvePhone(vars: {
+  record: BusinessRecord;
+  phase: FormDeliveryMode;
+  /** The record's `source_kind` is `fictional` — a made-up business with no listing. */
+  fictional: boolean;
+}): ResolvedPhone {
+  const { record, phase, fictional } = vars;
+  const number = (record.phone ?? "").trim();
+  const who = `the record for ${record.name}`;
+
+  if (phase === "business") {
+    return {
+      mode: number ? "client" : "none",
+      number,
+      label: "Phone:",
+      basis: number
+        ? `${who} is a delivered site (the form delivers to the business), so the page prints the client's own recorded number`
+        : `${who} is a delivered site but carries no phone number, so the client's page would have no way to be called`,
+    };
+  }
+  if (!number) {
+    return {
+      mode: "none",
+      number: "",
+      label: "Phone:",
+      basis: `${who} is a demonstration and carries no phone number, so no number is printed — no number is ever invented for a page`,
+    };
+  }
+  if (fictional) {
+    return {
+      mode: "example",
+      number,
+      label: "Phone (example):",
+      basis: `${who} is a fictional example business, so the only honest number is one inside the reserved range ${EXAMPLE_PHONE_RANGE}, labelled as an example and never as published`,
+    };
+  }
+  return {
+    mode: "published",
+    number,
+    label: "Phone:",
+    basis: `${who} is a real business's own published number on a demonstration page, so it prints with the caveat that asks the visitor to confirm it with the business`,
+  };
+}
+
+/**
+ * Every phone number a rendered page (or the delivered README) prints or dials.
+ *
+ * Read from the HTML on purpose, exactly like `addressesPrintedIn`: what matters is what
+ * a visitor can read or tap, and a number that never reaches the page cannot mislead
+ * anyone. Both shapes count — the `tel:` a number is dialled through, and the number as
+ * plain text — because a real number can leak in through the header's Call button, the
+ * hero's call-to-action pair, the contact-details block or the fallback block, and a
+ * number only one of those prints is still printed.
+ */
+export function phonesPrintedIn(page: { file: string; html: string }): { number: string; places: string[] }[] {
+  const found = new Map<string, { number: string; places: string[] }>();
+  const add = (raw: string, place: string) => {
+    const number = raw.trim();
+    const key = nationalDigits(number);
+    if (key.length < 10) return;
+    const existing = found.get(key);
+    if (existing) {
+      if (!existing.places.includes(place)) existing.places.push(place);
+      return;
+    }
+    found.set(key, { number, places: [place] });
+  };
+
+  for (const m of page.html.matchAll(/href="tel:([^"]*)"/gi)) add(m[1]!, `the call link on ${page.file}`);
+  // A run of digits and the punctuation a phone number is written with. The digit count
+  // is what decides: a postcode, a year or a font weight never reaches ten digits.
+  for (const m of page.html.matchAll(/\+?\d[\d\s().-]{7,}\d/g)) {
+    const raw = m[0]!;
+    const digits = digitsOf(raw);
+    if (digits.length !== 10 && !(digits.length === 11 && digits.startsWith("1"))) continue;
+    // A number written with no separators at all is almost always an id (a srcset width,
+    // a pixel size, a timestamp) rather than something a visitor reads as a phone number.
+    add(raw, `the text of ${page.file}`);
+  }
+  return [...found.values()];
+}
+
+/**
+ * Every phone number printed on any of the pages, deduplicated by its digits.
+ */
+export function printedPhones(pages: { file: string; html: string }[]): { number: string; places: string[] }[] {
+  const merged = new Map<string, { number: string; places: string[] }>();
+  for (const page of pages) {
+    for (const use of phonesPrintedIn(page)) {
+      const key = nationalDigits(use.number);
+      const existing = merged.get(key);
+      if (!existing) {
+        merged.set(key, { number: use.number, places: [...use.places] });
+        continue;
+      }
+      for (const place of use.places) if (!existing.places.includes(place)) existing.places.push(place);
+    }
+  }
+  return [...merged.values()];
+}
+
+/** The text a visitor reads immediately around one printed number, tags stripped. */
+function around(html: string, value: string): string {
+  const at = html.indexOf(value);
+  if (at < 0) return "";
+  return html
+    .slice(Math.max(0, at - 160), at + value.length + 160)
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ");
+}
+
+/**
+ * The one guard over every phone number a bundle would print or dial, as sentences a
+ * build can print.
+ *
+ * Called from the single compliance self-check in `build.ts`, and as deliberately narrow
+ * as `undeliverableAddressProblems` beside it: it reads the rendered pages, never the
+ * renderer's intent, because a number that reaches one of the five places a page can show
+ * one is a number a visitor can read. Every clause below is a case where the page would
+ * claim something about a phone that the record does not support:
+ *
+ *   - a number printed that is not the record's own (a leaked or invented number, in any
+ *     phase);
+ *   - a fictional example business whose number falls outside the reserved range
+ *     (`555-0100…0199`), so the "example" label would be false;
+ *   - the word "published" describing an invented number;
+ *   - a client's own site with no phone at all: broken, not cautious;
+ *   - a sentence pointing a visitor at "the phone number printed with it" when the page
+ *     prints no phone number.
+ */
+export function phoneProblems(vars: {
+  record: BusinessRecord;
+  phone: ResolvedPhone;
+  phase: FormDeliveryMode;
+  /** The record's source is `fictional` — nothing about it was ever published. */
+  fictional: boolean;
+  /** The rendered pages: what is actually printed, not what the record claims. */
+  pages: { file: string; html: string }[];
+  /** The delivered README, when the caller has it — it ships in the bundle too. */
+  readme?: string;
+}): string[] {
+  const { record, phone, phase, fictional, pages } = vars;
+  const problems: string[] = [];
+  const own = nationalDigits(phone.number);
+
+  if (phase === "business" && !phone.number) {
+    problems.push(
+      `${record.name} is a delivered site but the record carries no phone number, so the client's own pages would print none. ` +
+        `A client build with no phone is broken rather than cautious: add the number confirmed at hand-off to the record and rebuild.`,
+    );
+  }
+
+  if (fictional && phone.number && !isExamplePhoneNumber(phone.number)) {
+    problems.push(
+      `the record's phone number (${phone.number}) is outside the reserved range ${EXAMPLE_PHONE_RANGE}, and ${record.name} is a fictional example business. ` +
+        `An invented number may only come from the range reserved for fiction, because any other number could be a real business's line — and the label "Phone (example):" would then be false. ` +
+        `Move the number inside ${EXAMPLE_PHONE_RANGE} and rebuild.`,
+    );
+  }
+
+  const surfaces: { file: string; html: string }[] = [...pages];
+  if (vars.readme !== undefined) surfaces.push({ file: "README.txt", html: vars.readme });
+
+  for (const surface of surfaces) {
+    for (const use of phonesPrintedIn(surface)) {
+      const key = nationalDigits(use.number);
+      if (!own) {
+        problems.push(
+          `${use.places.join(" and ")} print the phone number ${use.number}, but the record carries no phone number for ${record.name}. ` +
+            `No page may print a number nobody recorded: a number that is not the record's own is either invented or someone else's.`,
+        );
+        continue;
+      }
+      if (key !== own) {
+        problems.push(
+          `${use.places.join(" and ")} print the phone number ${use.number}, which is not the number recorded for ${record.name} (${phone.number}). ` +
+            `A page may print only the business's own number (mode "${phone.mode}"): ${phone.basis}.`,
+        );
+      }
+    }
+  }
+
+  if (fictional) {
+    for (const surface of surfaces) {
+      for (const use of phonesPrintedIn(surface)) {
+        const context = around(surface.html, use.number);
+        if (/publish/i.test(context)) {
+          problems.push(
+            `${surface.file} prints the invented number ${use.number} as published ("${context.trim()}"). ` +
+              `The word "published" may never describe a number invented for a fictional example business: no listing anywhere carries it. ` +
+              `Label it as an example instead.`,
+          );
+        }
+      }
+    }
+  }
+
+  // The sentence that points a visitor at a printed number. It is derived in `copy.ts`
+  // (a record that prints no phone must not promise one), and this is the half that reads
+  // the page a visitor actually gets rather than the composer's intent.
+  if (!phone.number) {
+    for (const surface of surfaces) {
+      if (/phone number printed with/i.test(surface.html)) {
+        problems.push(
+          `${surface.file} tells a visitor to use "the phone number printed with it", but no phone number is recorded for ${record.name}, so no page prints one. ` +
+            `A page may not send a visitor to a detail it does not show: drop the clause, and say what the page does offer.`,
+        );
+      }
+    }
+  }
+
+  return problems;
 }
 
 /**

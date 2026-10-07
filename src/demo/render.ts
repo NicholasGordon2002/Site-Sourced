@@ -41,6 +41,7 @@
 import type { BusinessRecord, ManifestImage } from "./types.ts";
 import type { DemoCopy, PrivacyNotice } from "./copy.ts";
 import type { CategoryProfile } from "./copy.ts";
+import { addressLine } from "./addresses.ts";
 import { familyFields, normaliseHours, normaliseServices, slugify } from "./copy.ts";
 import { illustrationLabel, isIllustrativeImage } from "./copy.ts";
 import type { FormDelivery } from "./delivery.ts";
@@ -112,6 +113,24 @@ export interface PageVariant {
   preselectService?: string;
 }
 
+/**
+ * The page's `robots` meta, as the phase requires (WORKFLOW.md rule 9, cross-check
+ * finding 8).
+ *
+ * A demonstration is an unsolicited proposal sitting on our own domain: it may not be
+ * indexed, so every page carries `noindex, nofollow` and the build refuses a page that
+ * lost it. A delivered site is the client's own, and hiding it from search results is not
+ * ours to ask for — so nothing is printed there at all, and the build refuses a
+ * `noindex` marker on it. Two phases, two facts, one derivation.
+ */
+function robotsMeta(ctx: RenderContext): string {
+  return ctx.delivery.mode === "demo"
+    ? `  <!-- Compliance: this page must never appear in search results. Do not remove this line. -->
+  <meta name="robots" content="noindex, nofollow">
+`
+    : "";
+}
+
 export function esc(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -125,12 +144,6 @@ export function esc(s: string): string {
 export function telHref(phone: string): string {
   const plus = phone.trim().startsWith("+") ? "+" : "";
   return `tel:${plus}${phone.replace(/[^\d]/g, "")}`;
-}
-
-function addressLine(record: BusinessRecord): string {
-  const a = record.address ?? {};
-  const parts = [a.street, a.city, [a.province, a.postcode].filter(Boolean).join(" ")].filter((p) => p && p.trim());
-  return parts.join(", ");
 }
 
 function directionsLink(record: BusinessRecord): string {
@@ -282,29 +295,41 @@ function illustrationCaption(images: ManifestImage[], role: "hero" | "about", bu
 /* ----------------------------------------------------------------- page shell */
 
 function pageTitle(ctx: RenderContext, id: PageId, variant?: PageVariant): string {
-  const { record, copy } = ctx;
+  const { record, copy, delivery } = ctx;
   const city = record.address?.city;
+  // "(design proposal)" is phase furniture in a `<title>`: it is what a visitor sees in
+  // the tab and what a browser offers as a bookmark name, and a client's own site must
+  // not be introduced to them as our proposal. Same derivation as the banner.
+  const mark = delivery.mode === "demo" ? " (design proposal)" : "";
   switch (id) {
     case "services":
-      return `${copy.pages.services.title} — ${record.name}${city ? `, ${city}` : ""} (design proposal)`;
+      return `${copy.pages.services.title} — ${record.name}${city ? `, ${city}` : ""}${mark}`;
     case "about":
-      return `${copy.pages.about.title} — ${record.category}${city ? ` in ${city}` : ""} (design proposal)`;
+      return `${copy.pages.about.title} — ${record.category}${city ? ` in ${city}` : ""}${mark}`;
     case "contact":
       // A page built for one recorded service names it in its title, so the tab a
       // visitor opened says which service the form is already set to. The service name
       // is the record's own — nothing here composes copy.
       return variant?.preselectService
-        ? `${copy.pages.contact.title}: ${variant.preselectService} — ${record.name} (design proposal)`
-        : `${copy.pages.contact.title} — ${record.name} (design proposal)`;
+        ? `${copy.pages.contact.title}: ${variant.preselectService} — ${record.name}${mark}`
+        : `${copy.pages.contact.title} — ${record.name}${mark}`;
     case "privacy":
       return copy.pages.privacy.title;
     default:
-      return `${record.name} — ${record.category}${city ? `, ${city}` : ""} (design proposal)`;
+      return `${record.name} — ${record.category}${city ? `, ${city}` : ""}${mark}`;
   }
 }
 
 function pageDescription(ctx: RenderContext, id: PageId): string {
-  const { record, copy } = ctx;
+  const { record, copy, delivery } = ctx;
+  if (delivery.mode === "business") {
+    // The same furniture in the meta description, which is the sentence a search engine
+    // may show beside the page: a client's own site says what it is, not that it is
+    // someone else's unsolicited pitch.
+    return id === "index"
+      ? `${record.name}, ${record.category.toLowerCase()}${record.address?.city ? ` in ${record.address.city}` : ""}.`
+      : `${copy.pages[id].lead}`.trim();
+  }
   if (id === "index") {
     return `An unsolicited design proposal from Site Sourced for ${record.name}, ${record.category.toLowerCase()}${record.address?.city ? ` in ${record.address.city}` : ""}.`;
   }
@@ -466,10 +491,10 @@ function footerBlock(ctx: RenderContext, id: PageId): string {
     <div class="wrap footer-grid">
       <div>
         <h2 class="footer-biz">${esc(record.name)}</h2>
-${details ? `        <p class="footer-contact">\n          ${details}\n        </p>\n` : ""}        <!-- Compliance: the same disclaimer as the banner, next to the business's name
+${details ? `        <p class="footer-contact">\n          ${details}\n        </p>\n` : ""}${copy.footerDisclaimer ? `        <!-- Compliance: the same disclaimer as the banner, next to the business's name
              and contact details. Do not remove. -->
         <p class="disclaimer">${esc(copy.footerDisclaimer)}</p>
-      </div>
+` : ""}      </div>
       <div>
 ${copy.contactCaveat && spec.printsDetails ? `        <!-- Compliance: the caveat that belongs with the printed details, derived from the
              record's source. Do not remove. -->
@@ -876,9 +901,7 @@ export function renderPage(ctx: RenderContext, id: PageId, variant?: PageVariant
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <!-- Compliance: this page must never appear in search results. Do not remove this line. -->
-  <meta name="robots" content="noindex, nofollow">
-  <title>${esc(pageTitle(ctx, id, variant))}</title>
+${robotsMeta(ctx)}  <title>${esc(pageTitle(ctx, id, variant))}</title>
   <meta name="description" content="${esc(pageDescription(ctx, id))}">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
@@ -886,13 +909,13 @@ export function renderPage(ctx: RenderContext, id: PageId, variant?: PageVariant
 <body>
   <a class="skip-link" href="#main">${esc(copy.ui.skip)}</a>
 
-  <!-- Compliance: the proposal banner sits above everything, in normal flow, so it
+${copy.banner ? `  <!-- Compliance: the proposal banner sits above everything, in normal flow, so it
        is visible without scrolling on every screen size. Do not remove. -->
   <div class="proposal-banner" role="note">
     <p class="wrap">${esc(copy.banner)}</p>
   </div>
 
-${headerBlock(ctx, id)}
+` : ""}${headerBlock(ctx, id)}
 
   <main id="main">
 ${body}
@@ -2031,10 +2054,13 @@ ${businessPhase ? `Your domain name needs renewing once a year. Set it to auto-r
 can sit untouched indefinitely.
 ` : `The domain name is the one recurring item on a live site: it needs renewing once a
 year, set to auto-renew.`}
-Built by Site Sourced
+${businessPhase ? `Built by Site Sourced
+---------------------
+These files were built by Site Sourced and are yours outright: no content management
+system, no database and no account of ours holds anything they need.` : `Built by Site Sourced
 ---------------------
 This page is an unsolicited design proposal, not the business's official site, and
-it is marked noindex, so it does not appear in search results. Ask and it comes down.
+it is marked noindex, so it does not appear in search results. Ask and it comes down.`}
 ${businessPhase ? "" : `
 Where the details came from
 ---------------------------

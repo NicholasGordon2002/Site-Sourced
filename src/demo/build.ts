@@ -47,7 +47,7 @@ import { SERVICE_ACTION_LABELS, SERVICE_NAME_SLOT, serviceActionLabel } from "./
 import { currentRetentionPractice, PRACTICE_FILE, readRetentionPractice, type RetentionPractice } from "./retention.ts";
 import type { FormDelivery } from "./delivery.ts";
 import { formDeliveryProblems, resolveDelivery } from "./delivery.ts";
-import { undeliverableAddressProblems } from "./addresses.ts";
+import { phoneProblems, undeliverableAddressProblems, type ResolvedPhone } from "./addresses.ts";
 import { provenanceProblems } from "./provenance.ts";
 import { KEY_PLACEHOLDER, notificationSubject, resolveForm, type ResolvedForm } from "./forms.ts";
 import { sourceImages } from "./images.ts";
@@ -1328,6 +1328,147 @@ export function headerActionMeasure(vars: {
   };
 }
 
+/** The furniture that belongs to the demonstration phase, in the words a page writes it. */
+const PROPOSAL_FURNITURE: [string, RegExp][] = [
+  ["the proposal banner element", /<div class="proposal-banner"/i],
+  ["an unsolicited-proposal sentence", /unsolicited (?:design )?proposal/i],
+  ["the footer disclaimer", /not affiliated with, endorsed by, or operated by/i],
+  ["a noindex marker", /<meta\s+name="robots"[^>]*noindex/i],
+  ["the sentence about being marked noindex", /marked noindex/i],
+  ["the takedown promise", /ask and (?:we will take it down|it comes down)/i],
+];
+
+const DEMO_README_MARKER = "DEMONSTRATION — not the business's website";
+
+/** The furniture the demonstration phase requires, as the manifest lists it. */
+const MANIFEST_PHASE_REQUIRED = [
+  "the proposal banner, first content element in <body> and above the header",
+  "the same disclaimer in the footer, beside the business's name",
+  "the takedown line in the footer",
+  'the <meta name="robots" content="noindex, nofollow"> marker',
+  "the demonstration paragraph in the delivered README",
+];
+
+/** The furniture the business phase refuses, as the manifest lists it. */
+const MANIFEST_PHASE_REFUSED = PROPOSAL_FURNITURE.map(([what]) => what).concat([
+  "the demonstration paragraph in the delivered README",
+]);
+
+/**
+ * The unsolicited-proposal furniture: **required in the demonstration phase and refused
+ * in the business phase**, per page, and in the README that ships beside the pages.
+ *
+ * This is the phase half of the plan's honesty rule, and it is one function with two
+ * directions rather than two checks, because the two must never drift apart:
+ *
+ *   `demo`      every page carries the banner (first content element, above the header),
+ *               the same disclaimer in the footer beside the business's name, the
+ *               takedown line and `noindex, nofollow`; the README carries the
+ *               demonstration paragraph. A page that lost one of them is refused.
+ *   `business`  none of them appears anywhere. A client's own site is not a proposal: it
+ *               may not carry our banner, our disclaimer, our takedown line or our
+ *               `noindex` marker, and the README that ships with it may not tell its owner
+ *               their website was built as somebody else's pitch (WORKFLOW.md rule 9).
+ *
+ * The refusals are written as **furniture detection** rather than "is this string
+ * missing": in the business phase the banner and the disclaimer are empty strings, so a
+ * search for those would prove nothing. Each pattern names the thing itself, so this gate
+ * still refuses the furniture if a later change writes it in different words.
+ */
+export function phaseFurnitureProblems(vars: {
+  pages: RenderedPage[];
+  record: BusinessRecord;
+  copy: DemoCopy;
+  delivery: FormDelivery;
+  /** The delivered README, when the caller has it — it ships inside the bundle. */
+  readme?: string;
+}): string[] {
+  const { pages, copy, delivery, readme } = vars;
+  const problems: string[] = [];
+  const demo = delivery.mode === "demo";
+
+  for (const page of pages) {
+    const html = page.html;
+    const on = `on ${page.file}`;
+
+    if (demo) {
+      if (!/<meta\s+name="robots"\s+content="noindex,\s*nofollow">/.test(html)) {
+        problems.push(`${on}: missing or malformed <meta name="robots" content="noindex, nofollow">`);
+      }
+      if (!html.includes(copy.banner)) problems.push(`${on}: the proposal banner text is not present`);
+      if (html.indexOf(copy.banner) > html.indexOf("<header")) problems.push(`${on}: the banner is not above the header`);
+      // The banner has to be the first content element in the body. The skip link is
+      // allowed in front of it: it is a keyboard affordance, not content, and it is
+      // invisible until focused.
+      const inBody = html.slice(html.indexOf("<body>") + 6).replace(/<!--[\s\S]*?-->/g, " ").trim();
+      const afterSkip = inBody.startsWith('<a class="skip-link"')
+        ? inBody.slice(inBody.indexOf("</a>") + 4).trim()
+        : inBody;
+      if (!afterSkip.startsWith('<div class="proposal-banner"')) {
+        problems.push(`${on}: the proposal banner is not the first content element in <body>, so a visitor can meet the business's name before they learn the page is our proposal`);
+      }
+      if (!html.includes(copy.footerDisclaimer)) {
+        problems.push(`${on}: the footer disclaimer is not present next to the business's name`);
+      } else {
+        // Presence was never the whole rule: checklist #3 says the disclaimer sits **with
+        // the business's name and contact details**, in the footer. It was written there by
+        // the renderer and asserted by nothing, so a disclaimer once counted in the page
+        // body — or inside the footer but above the name — passed. Both are refused here.
+        const footerAt = html.indexOf("<footer");
+        const footerEnd = footerAt >= 0 ? html.indexOf("</footer>", footerAt) : -1;
+        const footer = footerAt >= 0 && footerEnd > footerAt ? html.slice(footerAt, footerEnd) : "";
+        if (!footer.includes(copy.footerDisclaimer)) {
+          problems.push(
+            `${on}: the footer disclaimer is outside <footer>. It is only somewhere on the page — the disclaimer belongs beside the business's name and its contact details, in the footer, where the visitor reading them also reads who the page is from.`,
+          );
+        } else if (footer.indexOf(copy.footerDisclaimer) < footer.indexOf('class="footer-biz"')) {
+          problems.push(
+            `${on}: the footer disclaimer sits inside <footer> but above the business's name rather than beside it. Checklist #3 puts the disclaimer with the name and contact details it qualifies.`,
+          );
+        }
+      }
+      if (!html.includes(esc(copy.footer.takedown))) {
+        problems.push(
+          `${on}: the takedown line is not present. Every demonstration page tells a visitor that it is an unsolicited proposal and that it comes down on request (WORKFLOW.md rule 9); a page without it reads as the business's own site.`,
+        );
+      }
+      continue;
+    }
+
+    // Business phase: the whole set is refused, and the refusal names what it found.
+    for (const [what, pattern] of PROPOSAL_FURNITURE) {
+      if (pattern.test(html)) {
+        problems.push(
+          `${on}: carries ${what}, but this bundle is a delivered site (${delivery.basis}). ` +
+            `The unsolicited-proposal furniture belongs to the demonstration phase and nowhere else: a client's own page must not introduce itself as somebody's proposal, hide the client from search engines, or promise a takedown that is not ours to offer.`,
+        );
+      }
+    }
+  }
+
+  if (readme !== undefined) {
+    if (demo) {
+      if (!readme.includes(DEMO_README_MARKER)) {
+        problems.push(
+          `the delivered README does not say the bundle is a demonstration ("${DEMO_README_MARKER}" is missing). ` +
+            `The README ships inside the folder and is the first thing anyone opening it reads, so it carries the demonstration paragraph for the same reason the pages carry the banner.`,
+        );
+      }
+    } else {
+      for (const [what, pattern] of PROPOSAL_FURNITURE) {
+        if (pattern.test(readme)) {
+          problems.push(
+            `the delivered README carries ${what}, but this bundle is a delivered site. ` +
+              `A paying client's own README may not tell them their website was built as an unsolicited proposal, that it is marked noindex, or that it comes down on request.`,
+          );
+        }
+      }
+    }
+  }
+
+  return problems;
+}
+
 /**
  * Everything that must be true for a bundle to be publishable at all — one list, one
  * throw — checked **on every page**, because the plan's compliance rules are per page
@@ -1362,6 +1503,13 @@ export function complianceChecks(vars: {
   css?: string;
   /** The bundle's only script, so the no-tracking sentence can be checked, not asserted. */
   js?: string;
+  /**
+   * The delivered README, when the caller has it. It ships inside the bundle and carries
+   * the same phase furniture as the pages, so `phaseFurnitureProblems` checks it too —
+   * `build.ts` always passes it. Left optional only so a caller that is checking a page
+   * fragment does not have to render a README it is not asking about.
+   */
+  readme?: string;
 }): string[] {
   const { pages, record, copy, form, delivery, images, privacy } = vars;
   const practice = vars.practice === undefined ? currentRetentionPractice() : vars.practice;
@@ -1369,47 +1517,16 @@ export function complianceChecks(vars: {
   const illustrative = images.filter(isIllustrativeImage);
   const label = illustrationLabel(record.name);
   const caveat = copy.contactCaveat;
+  // The phone version this build is in, resolved once in `composeCopy` — so the number
+  // the page prints, the label in front of it, the manifest line and the check below all
+  // read the same object (`addresses.ts`).
+  const phone: ResolvedPhone = copy.phone;
 
   for (const page of pages) {
     const spec = PAGE_SPECS[page.id];
     const html = page.html;
     const on = `on ${page.file}`;
 
-    if (!/<meta\s+name="robots"\s+content="noindex,\s*nofollow">/.test(html)) {
-      problems.push(`${on}: missing or malformed <meta name="robots" content="noindex, nofollow">`);
-    }
-    if (!html.includes(copy.banner)) problems.push(`${on}: the proposal banner text is not present`);
-    if (html.indexOf(copy.banner) > html.indexOf("<header")) problems.push(`${on}: the banner is not above the header`);
-    // The banner has to be the first content element in the body. The skip link is
-    // allowed in front of it: it is a keyboard affordance, not content, and it is
-    // invisible until focused.
-    const inBody = html.slice(html.indexOf("<body>") + 6).replace(/<!--[\s\S]*?-->/g, " ").trim();
-    const afterSkip = inBody.startsWith('<a class="skip-link"')
-      ? inBody.slice(inBody.indexOf("</a>") + 4).trim()
-      : inBody;
-    if (!afterSkip.startsWith('<div class="proposal-banner"')) {
-      problems.push(`${on}: the proposal banner is not the first content element in <body>, so a visitor can meet the business's name before they learn the page is our proposal`);
-    }
-    if (!html.includes(copy.footerDisclaimer)) {
-      problems.push(`${on}: the footer disclaimer is not present next to the business's name`);
-    } else {
-      // Presence was never the whole rule: checklist #3 says the disclaimer sits **with
-      // the business's name and contact details**, in the footer. It was written there by
-      // the renderer and asserted by nothing, so a disclaimer once counted in the page
-      // body — or inside the footer but above the name — passed. Both are refused here.
-      const footerAt = html.indexOf("<footer");
-      const footerEnd = footerAt >= 0 ? html.indexOf("</footer>", footerAt) : -1;
-      const footer = footerAt >= 0 && footerEnd > footerAt ? html.slice(footerAt, footerEnd) : "";
-      if (!footer.includes(copy.footerDisclaimer)) {
-        problems.push(
-          `${on}: the footer disclaimer is outside <footer>. It is only somewhere on the page — the disclaimer belongs beside the business's name and its contact details, in the footer, where the visitor reading them also reads who the page is from.`,
-        );
-      } else if (footer.indexOf(copy.footerDisclaimer) < footer.indexOf('class="footer-biz"')) {
-        problems.push(
-          `${on}: the footer disclaimer sits inside <footer> but above the business's name rather than beside it. Checklist #3 puts the disclaimer with the name and contact details it qualifies.`,
-        );
-      }
-    }
     if (/©\s*<strong>?/.test(html) || html.includes(`© ${record.name}`)) {
       problems.push(`${on}: a copyright line naming the business is present`);
     }
@@ -1495,7 +1612,23 @@ export function complianceChecks(vars: {
   //     record's declared source, and a page carrying a credit the record does not
   //     support fails here (provenance.ts).
   problems.push(...undeliverableAddressProblems({ record, form, pages }));
+  // Every number a page prints or dials, against the owner's three-version phone model
+  // (WORKFLOW.md rule 9): the client's own number, the business's own published number on
+  // a demonstration, or a reserved "example" number — and never anything else.
+  problems.push(
+    ...phoneProblems({
+      record,
+      phone,
+      phase: delivery.mode,
+      fictional: copy.provenance.kind === "fictional",
+      pages,
+      readme: vars.readme,
+    }),
+  );
   problems.push(...provenanceProblems({ record, provenance: copy.provenance, pages, deliveryMode: delivery.mode }));
+  // The phase furniture: required in the demonstration phase, refused in the business
+  // phase, per page and in the README (WORKFLOW.md rule 9).
+  problems.push(...phaseFurnitureProblems({ pages, record, copy, delivery, readme: vars.readme }));
   // The privacy notice, both halves of it: the phase checks that already existed, plus
   // the owner's rule that every sentence about collection, storage or deletion is backed
   // by a recorded fact — a provider fact from `docs/formspark.md`, or the one declared
@@ -1907,7 +2040,7 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   const problems = [
     ...problemsBeforeWrite,
     ...practiceRead.problems,
-    ...complianceChecks({ pages, record, copy, form, delivery, images, privacy, practice, css, js }),
+    ...complianceChecks({ pages, record, copy, form, delivery, images, privacy, practice, css, js, readme }),
   ];
   if (problems.length > 0) await fail(`compliance self-check failed for ${slug}:\n  - ${problems.join("\n  - ")}`);
 
@@ -2024,7 +2157,7 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
       name: record.name,
       category: record.category,
       city: record.address?.city ?? "",
-      phone_printed: Boolean(record.phone),
+      phone_printed: Boolean(copy.phone.number),
       email_printed: Boolean(record.email),
       source: record.source ?? "test fixture (fictional business)",
       /* The declared source, and the exact lines derived from it — so a reviewer (or a
@@ -2126,10 +2259,40 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
             : "the record carries no `about_paragraphs`, so the About section is the identity line, the services sentence and the provenance line",
       },
     },
+    /**
+     * Which of the owner's three phone versions this bundle is in, the number it prints and
+     * the label in front of it — beside `conversion` and `delivery`, because it is derived
+     * from the same two things (the phase and the record) and a reviewer should read the
+     * decision next to the others (WORKFLOW.md rule 9).
+     */
+    phone: {
+      mode: copy.phone.mode,
+      number: copy.phone.number || null,
+      label: copy.phone.label,
+      basis: copy.phone.basis,
+    },
     compliance: {
-      robots_meta: "noindex, nofollow",
+      /**
+       * What the pages tell search engines, derived from the phase (WORKFLOW.md rule 9):
+       * `noindex, nofollow` while this is an unsolicited proposal on our own domain, and
+       * nothing at all once it is a client's own site — hiding a client from search
+       * results is not ours to ask for. `phase` below records which one this build is.
+       */
+      robots_meta: delivery.mode === "demo" ? "noindex, nofollow" : "",
       banner_text: copy.banner,
       footer_disclaimer: copy.footerDisclaimer,
+      /**
+       * The proposal furniture, and the two directions the gate checks it in: every line
+       * the demonstration phase requires on every page, and every line the business phase
+       * refuses. Recorded so a reviewer reads which phase this bundle is in and what that
+       * decided, instead of inferring it from the absence of a sentence.
+       */
+      phase: {
+        mode: delivery.mode,
+        basis: delivery.basis,
+        required: delivery.mode === "demo" ? MANIFEST_PHASE_REQUIRED : [],
+        refused: delivery.mode === "demo" ? [] : MANIFEST_PHASE_REFUSED,
+      },
       banner_above_the_fold: true,
       business_own_assets_used: false,
       /* Printed with the phone number and email address; null on a delivered site. */

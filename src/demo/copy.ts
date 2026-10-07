@@ -38,6 +38,7 @@ import {
 import { inquirySteps, type ExtraLabels } from "./family-render.ts";
 import type { ResolvedForm } from "./forms.ts";
 import { resolveProvenance, type Provenance } from "./provenance.ts";
+import { resolvePhone, type ResolvedPhone } from "./addresses.ts";
 import {
   currentRetentionPractice,
   practiceSentence,
@@ -469,6 +470,14 @@ export interface DemoCopy {
    */
   contactCaveat: string;
   /**
+   * Which of the owner's three phone versions this build is in, the number it prints and
+   * the label in front of it (WORKFLOW.md rule 9, `addresses.ts`). Composed once here so
+   * the page, the manifest and the build check read the same object — a client's own
+   * number, a real business's published number on a demonstration page, or a clearly
+   * fictional one inside the reserved range, and never anything else.
+   */
+  phone: ResolvedPhone;
+  /**
    * Where the record says its details came from, and the lines derived from it. The
    * footer's provenance sentence is `provenance.attribution`; the manifest carries the
    * same object so a bundle records what it claimed and why.
@@ -669,7 +678,12 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
   // Where the details came from, and every line that depends on it. Derived from the
   // record's `source_kind` — never typed here — so a page cannot credit a source the
   // record does not name, or pin unconfirmed details to a listing they never appeared in.
-  const provenance = resolveProvenance(record);
+  const provenance = resolveProvenance(record, delivery.mode);
+  // The phone version: the same phase and source the page's other claims are derived
+  // from, never a flag. A delivered site prints the client's own number, a demonstration
+  // prints the record's own published one, and a fictional fixture prints a reserved
+  // "example" number or none at all.
+  const phone = resolvePhone({ record, phase: delivery.mode, fictional: provenance.kind === "fictional" });
   const city = (record.address?.city || "").trim();
   const province = (record.address?.province || "ON").trim();
   const place = city ? `${city}, ${province}` : province;
@@ -782,8 +796,20 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
         `${DEMO_OPERATOR} uses it only to reply to you; there is no mailing list, and it is not passed on to ${record.name}.`,
       ].join(" ");
 
-  const banner = `This is an unsolicited design proposal from Site Sourced. It is not affiliated with, endorsed by, or operated by ${record.name}.`;
-  const footerDisclaimer = `This page is an unsolicited design proposal from Site Sourced. It is not affiliated with, endorsed by, or operated by ${record.name}.`;
+  // The proposal furniture — the banner and the matching footer line — belongs to the
+  // demonstration phase alone. On a delivered site there is nothing to propose and nobody
+  // to disclaim: the client's own pages must not introduce themselves as somebody's
+  // unsolicited proposal, so both lines are empty in the business phase and the build
+  // refuses either one appearing there (WORKFLOW.md rule 9, `phaseFurnitureProblems`).
+  // Two frozen strings, byte-identical to what they have always been: the banner opens
+  // "This is an unsolicited design proposal…" and the footer line begins "This page is
+  // …". Only their presence in the phase is derived here — never their wording.
+  const banner = businessPhase
+    ? ""
+    : `This is an unsolicited design proposal from Site Sourced. It is not affiliated with, endorsed by, or operated by ${record.name}.`;
+  const footerDisclaimer = businessPhase
+    ? ""
+    : `This page is an unsolicited design proposal from Site Sourced. It is not affiliated with, endorsed by, or operated by ${record.name}.`;
 
   // The printed phone number and email address came from a public source and were
   // never confirmed with the business — while this page is a demonstration the notice
@@ -843,6 +869,7 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
     steps,
     formNoticeDelivery: delivery.mode,
     contactCaveat,
+    phone,
     provenance,
     formSuccess,
     formFailure,
@@ -886,7 +913,7 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
       // invented number is an example and is never described as published, while a real
       // business's own number (on a personalised demo or a client's own site) carries the
       // plain label. The three-way split is decided by the record's source, not typed here.
-      phoneIntro: provenance.kind === "fictional" ? "Phone (example):" : "Phone:",
+      phoneIntro: phone.label,
       noEmail: "No email address is recorded for this business.",
       noPhone: "No phone number is recorded for this business.",
     },
