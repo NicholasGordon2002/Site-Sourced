@@ -43,6 +43,7 @@ import type { DemoCopy, PrivacyNotice } from "./copy.ts";
 import type { CategoryProfile } from "./copy.ts";
 import { addressLine } from "./addresses.ts";
 import { familyFields, normaliseHours, normaliseServices, slugify } from "./copy.ts";
+import { BOOKING_ANCHOR_CLASS, BOOKING_ARROW, type BookingMode } from "./booking.ts";
 import { illustrationLabel, isIllustrativeImage } from "./copy.ts";
 import type { FormDelivery } from "./delivery.ts";
 import type { FieldGroup, FieldSpec } from "./fields.ts";
@@ -389,12 +390,50 @@ export function headerActionBelongs(id: PageId): boolean {
 /**
  * Where a record's **primary action** leads: the business's own booking page when the
  * record carries one (the owner's 4 Oct ruling — a booking link is primary where one
- * exists), otherwise the demo's contact page. Derived here, once, so the header slot, the
- * build check and the manifest cannot disagree about the destination.
+ * exists), otherwise the demo's contact page.
+ *
+ * With `booking` supplied — which is what the build always does — the derived mode
+ * decides, and the two non-business modes both land on the contact page:
+ *
+ *   `business`  the client's own booking page. A client's site has nothing to hide from
+ *               the tap, and the owner's ruling stands.
+ *   `demo`      **the contact page, unchanged.** On a fictional fixture the slot's label
+ *               is the rule-8 neutral `Contact Us`, and a link that leaves our site must
+ *               never stand under that label; the notice that makes a demonstration link
+ *               honest has to be readable *before* the tap, and the header has no room
+ *               for a paragraph. The demonstration link therefore lives in the page body
+ *               only, above the form (lead ruling, 8 Oct 2026).
+ *   `none`      the contact page, as it always has.
+ *
+ * Called with no `booking` at all — as the older tests and callers do — the record's own
+ * `booking_url` is the only source there is, so a literal URL takes the slot and an
+ * unresolved `env:` reference falls back to the contact page.
  */
-export function primaryActionHref(record: BusinessRecord): string {
-  const booking = (record.booking_url ?? "").trim();
-  return booking === "" ? PAGE_SPECS.contact.file : booking;
+export function primaryActionHref(
+  record: BusinessRecord,
+  booking?: { mode: BookingMode; href: string },
+): string {
+  if (booking) return booking.mode === "business" && booking.href !== "" ? booking.href : PAGE_SPECS.contact.file;
+  const url = (record.booking_url ?? "").trim();
+  return url === "" || url.startsWith("env:") ? PAGE_SPECS.contact.file : url;
+}
+
+/**
+ * What the header's action slot **says**, derived from the same two things its
+ * destination is: the family-aware label (rule 8) and the booking mode.
+ *
+ * In `demo` mode the slot is untouched — the same class, the same `Contact Us` on a
+ * fictional fixture, the same `contact.html` — so a demonstration can never put a link
+ * that leaves our site under a label that does not say where it goes. In `business` mode
+ * the client's booking page takes the slot and says so in the label. Both the renderer and
+ * `headerActionProblems` read this one function, so the check cannot require a label the
+ * page does not print.
+ */
+export function primaryActionLabel(record: BusinessRecord, copy: DemoCopy): { label: string; external: boolean } {
+  if (copy.booking.mode === "business" && copy.booking.label !== "") {
+    return { label: copy.booking.label, external: true };
+  }
+  return { label: copy.contactLabel.label, external: false };
 }
 
 /**
@@ -403,11 +442,13 @@ export function primaryActionHref(record: BusinessRecord): string {
  * It is a slot, never a hardcoded Call link (owner-approved 6 Oct 2026). Both halves come
  * from the record rather than from this template:
  *
- *   - the label is `copy.contactLabel.label` — the neutral `Contact Us` on a fictional
- *     fixture and the family's own words on a build from a real record (rule 8) — so the
- *     header cannot say something the page's own action does not;
- *   - the destination is `primaryActionHref` — the record's booking page when it has one,
- *     the contact page otherwise.
+ *   - the label is `primaryActionLabel` — the neutral `Contact Us` on a fictional fixture
+ *     and the family's own words on a build from a real record (rule 8), and the booking
+ *     label only where the slot really points at a business's own booking page;
+ *   - the destination is `primaryActionHref` — a client's booking page when the build is
+ *     in `business` mode, the contact page otherwise. On a **demonstration** the slot is
+ *     deliberately unchanged: the notice that keeps a demonstration link honest must be
+ *     readable before the tap, and the header has no room for it (lead ruling, 8 Oct).
  *
  * The home page's **Call** button is a different thing and stays: it is the hero's own
  * action, not the header's. What this replaced was a Call link on every page — and, on a
@@ -421,7 +462,7 @@ export function primaryActionHref(record: BusinessRecord): string {
 function headerActionBlock(ctx: RenderContext, id: PageId): string {
   const { record, copy } = ctx;
   if (!headerActionBelongs(id)) return "";
-  return `          <a class="call-button ${HEADER_ACTION_CLASS}" href="${esc(primaryActionHref(record))}">${esc(copy.contactLabel.label)}</a>`;
+  return `          <a class="call-button ${HEADER_ACTION_CLASS}" href="${esc(primaryActionHref(record, copy.booking))}">${esc(primaryActionLabel(record, copy).label)}</a>`;
 }
 
 function headerBlock(ctx: RenderContext, id: PageId): string {
@@ -709,8 +750,46 @@ ${group.fields.map((field) => fieldHtml(copy, field, preselectService)).join("\n
           </fieldset>`;
 }
 
+/**
+ * The booking link, and the notice that keeps it honest — the page body, directly above
+ * the form on `contact.html` and on every `contact-<service>.html` (lead ruling, 8 Oct
+ * 2026; the spec's §2.1 rows 3 and 4).
+ *
+ * This is the **only** place a demonstration link appears. Nothing here is script, an
+ * iframe, an embed or a stylesheet rule: it is a plain anchor in the HTML the browser
+ * receives, so it works with JavaScript off and asks for no file on load, and the arrow
+ * is a text glyph rather than an icon. `target`/`rel` match the directions link, the one
+ * other link on these pages that leaves the site, so a visitor keeps the page they were
+ * judging.
+ *
+ * The notice sits **immediately below** the anchor and is never revealed by the tap: a
+ * demonstration link must say whose page it opens before the visitor commits. In `none`
+ * mode this function returns nothing at all — which is what keeps the approved pages
+ * byte-identical until the owner creates the demonstration page.
+ */
+function bookingBlock(ctx: RenderContext): string {
+  const { copy } = ctx;
+  const booking = copy.booking;
+  if (booking.mode === "none" || booking.href === "") return "";
+  const external = booking.external ? ` target="_blank" rel="noopener noreferrer"` : "";
+  const notice = booking.notice
+    ? `        <!-- Compliance: the demonstration notice, derived from the booking mode
+             (booking.ts). It must stay directly under the link it describes and be
+             readable before the tap. Do not reword without the owner. -->
+        <p class="notice">${esc(booking.notice)}</p>\n`
+    : "";
+  return `        <p class="booking">
+          <a class="${BOOKING_ANCHOR_CLASS}" href="${esc(booking.href)}"${external}>${esc(booking.label)}&nbsp;${BOOKING_ARROW}</a>
+        </p>
+${notice}`;
+}
+
 function contactFormSection(ctx: RenderContext, preselectService?: string): string {
   const { copy, form } = ctx;
+  // Rendered before the template literal so the empty case adds **nothing** — not even a
+  // blank line. With booking mode `none` the contact pages must be byte-identical to the
+  // approved ones, and a stray newline is a difference like any other.
+  const bookingMarkup = bookingBlock(ctx);
   const fields = familyFields(ctx.record);
   const honeypot = form.provider.key === "web3forms" ? "botcheck" : "_gotcha";
   const hidden = Object.entries(form.hiddenFields)
@@ -727,7 +806,7 @@ function contactFormSection(ctx: RenderContext, preselectService?: string): stri
              the delivery the record describes, never written by hand. -->
         <p class="form-notice">${esc(copy.formNotice)}</p>
 
-        <form class="contact-form" id="contact-form" method="POST" action="${esc(form.endpoint)}"
+${bookingMarkup ? `${bookingMarkup}\n\n` : ""}        <form class="contact-form" id="contact-form" method="POST" action="${esc(form.endpoint)}"
               data-encode="${esc(form.provider.encode)}" data-success="${esc(copy.formSuccess)}"
               data-failure="${esc(copy.formFailure)}">
 ${fields.groups.map((group, index) => fieldGroupHtml(copy, group, index, preselectService)).join("\n")}

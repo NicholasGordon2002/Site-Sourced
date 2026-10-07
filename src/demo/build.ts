@@ -18,7 +18,8 @@ import { copyFile, mkdir, readdir, rm, rmdir, stat } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 
 import type { BundleResult, BusinessRecord, DemoManifest, ManifestHeaderAction, ManifestImage } from "./types.ts";
-import type { DemoCopy, PrivacyNotice } from "./copy.ts";
+import type { BookingCopy, DemoCopy, PrivacyNotice } from "./copy.ts";
+import { BOOKING_ANCHOR_CLASS, BOOKING_ARROW, bookingBelongs, DEMO_BOOKING_URL_VAR } from "./booking.ts";
 import {
   collectionProblems,
   composeCopy,
@@ -47,7 +48,7 @@ import {
 import { SERVICE_ACTION_LABELS, SERVICE_NAME_SLOT, serviceActionLabel } from "./family.ts";
 import { currentRetentionPractice, PRACTICE_FILE, readRetentionPractice, type RetentionPractice } from "./retention.ts";
 import type { FormDelivery } from "./delivery.ts";
-import { formDeliveryProblems, resolveDelivery } from "./delivery.ts";
+import { formDeliveryProblems, resolveDelivery, type FormDeliveryMode } from "./delivery.ts";
 import { phoneProblems, undeliverableAddressProblems, type ResolvedPhone } from "./addresses.ts";
 import { provenanceProblems } from "./provenance.ts";
 import { KEY_PLACEHOLDER, notificationSubject, resolveForm, type ResolvedForm } from "./forms.ts";
@@ -60,6 +61,7 @@ import {
   PAGE_IDS,
   PAGE_SPECS,
   primaryActionHref,
+  primaryActionLabel,
   renderCss,
   renderEditingReadme,
   renderFavicon,
@@ -1289,8 +1291,12 @@ export function headerActionMeasure(vars: {
   label: string;
   href: string;
   css: string;
-  /** True when the record carries its own booking page — the slot's other source. */
-  fromBooking: boolean;
+  /**
+   * The booking mode this build resolved (`copy.booking.mode`). The slot takes a booking
+   * page in `business` mode only: in `demo` mode it keeps pointing at the contact page,
+   * because the notice has to be readable before the tap.
+   */
+  bookingMode: BookingMode;
 }): ManifestHeaderAction {
   const carries: string[] = [];
   const omitted: { file: string; why: string }[] = [];
@@ -1312,9 +1318,12 @@ export function headerActionMeasure(vars: {
   return {
     label: vars.label,
     href: vars.href,
-    href_source: vars.fromBooking
-      ? "the record's own booking_url — a booking link is primary where one exists (owner ruling, 4 Oct 2026)"
-      : "the demo's contact page (contact.html) — the record carries no booking_url",
+    href_source:
+      vars.bookingMode === "business"
+        ? "the record's own booking_url — a booking link is primary where one exists (owner ruling, 4 Oct 2026)"
+        : vars.bookingMode === "demo"
+          ? `the demo's contact page (${PAGE_SPECS.contact.file}) — the record's booking_url IS the demonstration page, and on a demonstration the header slot stays the contact action (lead ruling, 8 Oct 2026)`
+          : `the demo's contact page (${PAGE_SPECS.contact.file}) — the record carries no booking_url`,
     class: classes.join(" "),
     min_height_px: action ? tallestDeclaredPx(vars.css, classes) : null,
     carries,
@@ -1325,8 +1334,232 @@ export function headerActionMeasure(vars: {
       pages: vars.pages.filter((page) => new RegExp(`class="[^"]*\\b${name}\\b`).test(page.html)).map((page) => page.file),
     })),
     basis:
-      "The header's second row is the page's primary-action slot (owner-approved 6 Oct 2026): the label is copy.contactLabel.label and the destination is primaryActionHref(record), so a real record shows its family's own words and a record with a booking page links there without a template edit. headerActionProblems enforces exactly one action, that label, that destination, a 44px class and no inline handler; tapTargetProblems enforces the two controls the 44px audit (backlog 273f40d1) found short. The header's height and every control's box at 320/360/390/420px are measured in a browser and reported with the change — no stylesheet assertion measures a box.",
+      "The header's second row is the page's primary-action slot (owner-approved 6 Oct 2026): the label is primaryActionLabel(record, copy) and the destination is primaryActionHref(record, copy.booking), so a real record shows its family's own words, a client's booking page takes the slot and says so, and a demonstration leaves the slot exactly as signed off on 7 Oct (contact.html, the neutral contact label) because the notice has to be readable before the tap (lead ruling, 8 Oct 2026). headerActionProblems enforces exactly one action, that label, that destination, a 44px class and no inline handler; tapTargetProblems enforces the two controls the 44px audit (backlog 273f40d1) found short. The header's height and every control's box at 320/360/390/420px are measured in a browser and reported with the change — no stylesheet assertion measures a box.",
   };
+}
+
+/** One `<a>` in a page: its attributes, its inner markup, and where it ends. */
+function anchorsIn(html: string): { attrs: string; inner: string; end: number }[] {
+  return [...html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/g)].map((match) => ({
+    attrs: match[1] ?? "",
+    inner: match[2] ?? "",
+    end: (match.index ?? 0) + match[0].length,
+  }));
+}
+
+/** One attribute's value, or "" when the tag does not carry it. */
+function attrOf(attrs: string, name: string): string {
+  return new RegExp(`\\b${name}="([^"]*)"`).exec(attrs)?.[1] ?? "";
+}
+
+/** What separates a booking anchor from every other anchor on a page. */
+function isBookingAnchor(anchor: { attrs: string }): boolean {
+  const classes = classListOf(anchor.attrs);
+  return BOOKING_ANCHOR_CLASS.split(" ").every((one) => classes.includes(one)) && /\starget="_blank"/.test(anchor.attrs);
+}
+
+/**
+ * The booking link, as a rule the build enforces (spec `design/booking-link-spec.md`,
+ * lead rulings 8 Oct 2026).
+ *
+ * A booking link is the one control on a page that **leaves our site and takes a time
+ * from a visitor**, so every claim it makes is checked here rather than trusted — the
+ * same way the form's delivery notice is (`formDeliveryProblems`). What this refuses:
+ *
+ *   1. **a mode the phase cannot carry** — a demonstration build must never point at a
+ *      business's own booking page (a prospect's calendar is used only after they sign),
+ *      and a demonstration page must never ship inside a client's site;
+ *   2. **anything but `https`** — no `http`, no relative path, no empty href;
+ *   3. **nothing at all in `none` mode** — no anchor, and not even the arrow glyph, so a
+ *      record with no booking page renders the approved pages byte for byte;
+ *   4. **a link on the wrong page** — exactly the contact section carries it
+ *      (`bookingBelongs`): on a demonstration the header slot stays the contact action,
+ *      because the notice has to be readable before the tap;
+ *   5. **the wrong words** — the anchor's text must be the derived label plus the arrow,
+ *      and never a service's name;
+ *   6. **a new tab that does not carry `noopener noreferrer`**, or an inline handler;
+ *   7. **the demonstration notice missing, doubled, moved away from the link, or naming
+ *      someone other than the record's business** — the notice is the whole reason a
+ *      demonstration link is honest;
+ *   8. **a notice on a business link**, where there is nothing to disclaim;
+ *   9. **the header slot changing on a demonstration** — its label and destination are
+ *      checked against `copy.contactLabel.label` and `contact.html`, the two things the
+ *      owner signed off on 7 Oct, so a link that leaves our site can never appear under
+ *      the neutral `Contact Us`;
+ *  10. **an `iframe`, `embed` or `object`** — the link is a plain anchor, and nothing
+ *      about it may load a third party into the page.
+ *
+ * The stylesheet and the script are not consulted: this check is about markup, and
+ * `externalReferenceProblems` already owns what a page loads.
+ */
+export function bookingProblems(vars: {
+  pages: RenderedPage[];
+  record: BusinessRecord;
+  /** The booking block this bundle composed (`copy.booking`). */
+  booking: BookingCopy;
+  /** The phase this bundle is built in — `delivery.mode`. */
+  phase: FormDeliveryMode;
+  /** `copy.contactLabel.label`: the label the header slot must keep in `demo` mode. */
+  contactLabel: string;
+  /** The configured demonstration booking page, when the build has one. */
+  demoUrl?: string;
+}): string[] {
+  const problems: string[] = [];
+  const { pages, record, booking, phase } = vars;
+  const mode = booking.mode;
+  const url = booking.href;
+  const contactFile = PAGE_SPECS.contact.file;
+  const demoUrl = vars.demoUrl ?? "";
+  const expectedInner = `${esc(booking.label)}&nbsp;${BOOKING_ARROW}`;
+
+  /* 1. the mode a phase cannot carry (gbp §5.3 rules 1 and 2). */
+  if (phase === "demo" && mode === "business") {
+    problems.push(
+      `this bundle is in the demonstration phase but its booking link points at a business's own booking page (${url || "no URL"}). A prospect's booking page is never used before they sign, and a demonstration must never book into a real calendar — only the demonstration page may be linked while the page is a proposal (gbp §5.3 rule 1).`,
+    );
+  }
+  if (phase === "business" && mode === "demo") {
+    problems.push(
+      `this bundle is a client's own site but its booking link points at our demonstration page (${url || "no URL"}). The demonstration link may never ship to a client (gbp §5.3 rule 2): the record must carry the client's own booking_url, or none.`,
+    );
+  }
+
+  /* 2. https only. */
+  if (mode !== "none" && !/^https:\/\/[^\s"'<>]+$/.test(url)) {
+    problems.push(
+      `the booking link points at ${url === "" ? "nothing" : `"${url}"`}, which is not an https URL. The link leaves the site and takes a booking on someone else's page, so it must be a plain https address — no http, no relative path, no empty href (gbp §5.3 rule 4).`,
+    );
+  }
+  if (mode === "demo" && demoUrl !== "" && url !== demoUrl) {
+    problems.push(
+      `this bundle is in demonstration booking mode but its link points at ${url || "nothing"}, not at the configured demonstration page (${demoUrl}). Demonstration mode is derived by comparing the record's booking_url with ${DEMO_BOOKING_URL_VAR} — if they differ, the mode is not demo.`,
+    );
+  }
+
+  /* 3. `none` mode renders nothing at all. */
+  if (mode === "none") {
+    if (booking.label !== "" || booking.notice !== "") {
+      problems.push(
+        `booking mode is none but the build composed a label or a notice for it (${JSON.stringify({ label: booking.label, notice: booking.notice })}). In none mode the booking block is empty data, which is what keeps the approved pages byte-identical.`,
+      );
+    }
+    for (const page of pages) {
+      for (const anchor of anchorsIn(page.html)) {
+        if (isBookingAnchor(anchor)) {
+          problems.push(`${page.file}: carries a booking link although booking mode is none (${booking.basis}). Nothing about a bundle in none mode may change.`);
+          break;
+        }
+      }
+      if (page.html.includes(BOOKING_ARROW)) {
+        problems.push(`${page.file}: carries the booking arrow ${BOOKING_ARROW} although booking mode is none. The glyph is part of the booking block and nothing else.`);
+      }
+    }
+  }
+
+  /* 4–8. what each page carries, and what it says. */
+  if (mode !== "none") {
+    for (const page of pages) {
+      const on = anchorsIn(page.html).filter(isBookingAnchor);
+      const belongs = bookingBelongs(page.file, contactFile);
+
+      if (belongs && on.length !== 1) {
+        problems.push(
+          `${page.file}: carries ${on.length} booking links, not one. Every page where a visitor is already asking for a time — ${contactFile} and each contact-<service>.html — carries exactly one, directly above the form (render.ts bookingBlock).`,
+        );
+      }
+      if (!belongs && on.length > 0) {
+        problems.push(
+          `${page.file}: carries a booking link, but the link belongs on the contact pages only. On a demonstration the header slot stays the contact action and no other page carries an anchor, because the notice that keeps the link honest has to be readable before the tap (bookingBelongs).`,
+        );
+      }
+
+      for (const anchor of on) {
+        const href = attrOf(anchor.attrs, "href");
+        if (href !== esc(url)) {
+          problems.push(`${page.file}: the booking link points at "${href}", not at ${url || "nothing"} — the URL this build resolved from the record's booking_url (${booking.basis}).`);
+        }
+        if (anchor.inner.trim() !== expectedInner) {
+          problems.push(
+            `${page.file}: the booking link reads "${anchor.inner.trim()}", not "${expectedInner}" — the label ${JSON.stringify(booking.label)} for booking mode ${mode} plus the ${BOOKING_ARROW} glyph (copy.ts, one source). A label typed into the template is how a page comes to promise something the link does not do.`,
+          );
+        }
+        if (booking.external) {
+          if (!/\starget="_blank"/.test(anchor.attrs)) {
+            problems.push(`${page.file}: the booking link carries no target="_blank", so it would navigate the visitor away from the page they were judging. It matches the directions link, the other link that leaves the site.`);
+          }
+          if (!/rel="[^"]*\bnoopener\b/.test(anchor.attrs) || !/rel="[^"]*\bnoreferrer\b/.test(anchor.attrs)) {
+            problems.push(`${page.file}: the booking link opens a new tab without rel="noopener noreferrer" (rel=${JSON.stringify(attrOf(anchor.attrs, "rel"))}). A page we do not control must not be able to reach back into this one through window.opener.`);
+          }
+        }
+        const handler = /\son[a-z]+\s*=/i.exec(anchor.attrs);
+        if (handler) {
+          problems.push(`${page.file}: the booking link carries an inline handler (${handler[0].trim()}). The demos work without JavaScript, and an inline handler is script the self-containment check cannot see — it reads <script> tags.`);
+        }
+
+        /* 7. the demonstration notice: once, adjacent, naming the business. */
+        if (mode === "demo" && belongs) {
+          if (booking.notice === "") {
+            problems.push(`${page.file}: carries a demonstration booking link with no notice. A demonstration link must say whose page it opens, in words a visitor reads before the tap (gbp §5.3 rule 3).`);
+          } else {
+            const printed = esc(booking.notice);
+            const count = page.html.split(printed).length - 1;
+            if (count !== 1) {
+              problems.push(`${page.file}: the demonstration notice appears ${count} time(s), not once. It belongs under the link it describes, once per page — a notice repeated around the page, or shown on a page with no booking link, stops reading as a notice about that link.`);
+            }
+            if (!booking.notice.includes(record.name)) {
+              problems.push(`the demonstration notice does not name the business this page is about (${record.name}). "Nothing booked there is an appointment with …" is only honest when it says whose appointment it is not.`);
+            }
+            // Immediately below the anchor's own paragraph — the visitor reads it
+            // before the tap, not after it.
+            const tail = page.html
+              .slice(anchor.end)
+              .replace(/^\s*<\/p>\s*/, "")
+              .replace(/^\s*(?:<!--[\s\S]*?-->\s*)*/, "");
+            if (!tail.startsWith(`<p class="notice">${printed}</p>`)) {
+              problems.push(`${page.file}: the demonstration notice is not directly below the booking link. It must be the next thing a visitor reads after the anchor that opens the page it describes — never revealed by the tap, never elsewhere on the page.`);
+            }
+          }
+        }
+      }
+
+      /* 8. a business link carries no notice. */
+      if (mode === "business" && booking.notice !== "") {
+        problems.push(`booking mode is business but the build composed a demonstration notice. A client's own booking page has nothing to disclaim, and the demonstration notice on a client's site tells a visitor the booking is ours.`);
+      }
+    }
+
+    /* 9. the header slot on a demonstration: unchanged, label and destination. */
+    if (mode === "demo") {
+      for (const page of pages) {
+        if (!headerActionBelongs(page.id)) continue;
+        const slice = headerSlice(page.html);
+        for (const action of headerLinks(slice).filter((link) => classListOf(link.attrs).includes(HEADER_ACTION_CLASS))) {
+          const href = attrOf(action.attrs, "href");
+          if (action.inner.trim() !== esc(vars.contactLabel)) {
+            problems.push(
+              `${page.file}: in demonstration booking mode the header action reads "${action.inner.trim()}", not "${vars.contactLabel}". On a demonstration the slot is deliberately unchanged (owner sign-off, 7 Oct): a link that leaves our site must never stand under the neutral contact label, and the notice it would need cannot fit in a header.`,
+            );
+          }
+          if (href !== esc(contactFile)) {
+            problems.push(`${page.file}: in demonstration booking mode the header action points at ${href || "nothing"}, not ${contactFile}. The demonstration link lives in the page body only — the header cannot carry a notice, and a visitor must be able to read one before the tap.`);
+          }
+        }
+        if (url !== "" && slice.includes(esc(url))) {
+          problems.push(`${page.file}: the demonstration booking URL appears in the header. A demonstration link may never take the header slot (lead ruling, 8 Oct 2026).`);
+        }
+      }
+    }
+  }
+
+  /* 10. nothing loads a third party into the page. */
+  for (const page of pages) {
+    const embedded = /<(iframe|embed|object)\b/i.exec(page.html);
+    if (embedded) {
+      problems.push(`${page.file}: carries a <${embedded[1]!.toLowerCase()}>. A booking link is always a plain anchor — never an embed, a frame or a script — or the page stops being a page we can say loads nothing (gbp §5.3 rule 4).`);
+    }
+  }
+
+  return problems;
 }
 
 /** The furniture that belongs to the demonstration phase, in the words a page writes it. */
@@ -1511,6 +1744,12 @@ export function complianceChecks(vars: {
    * fragment does not have to render a README it is not asking about.
    */
   readme?: string;
+  /**
+   * The configured demonstration booking page, as the build read it at the boundary. Passed
+   * in rather than read here, so this self-check stays a pure function of what it is given
+   * and a caller with no demonstration page makes no demonstration-mode claim.
+   */
+  demoBookingUrl?: string;
 }): string[] {
   const { pages, record, copy, form, delivery, images, privacy } = vars;
   const practice = vars.practice === undefined ? currentRetentionPractice() : vars.practice;
@@ -1704,9 +1943,26 @@ export function complianceChecks(vars: {
   problems.push(
     ...headerActionProblems({
       pages,
-      label: copy.contactLabel.label,
-      href: primaryActionHref(record),
+      /* The slot's label is **derived**, not the contact label unconditionally: in
+         `business` booking mode the slot points at the client's own booking page and says
+         so (lead ruling, 8 Oct 2026). In `demo` mode this is `copy.contactLabel.label`
+         unchanged, which is the property the owner signed off on 7 Oct. */
+      label: primaryActionLabel(record, copy).label,
+      href: primaryActionHref(record, copy.booking),
       css: vars.css ?? "",
+    }),
+  );
+  // The booking link, if this build has one: https only, on the right pages, saying the
+  // derived words, with the demonstration notice beside it and the header slot untouched
+  // while the bundle is a proposal (booking.ts, `design/booking-link-spec.md`).
+  problems.push(
+    ...bookingProblems({
+      pages,
+      record,
+      booking: copy.booking,
+      phase: delivery.mode,
+      contactLabel: copy.contactLabel.label,
+      demoUrl: vars.demoBookingUrl ?? "",
     }),
   );
   // The two controls the 44px audit found short (backlog 273f40d1), read from the
@@ -1930,7 +2186,13 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   // message actually reaches the business.
   const form = resolveForm(record);
   const delivery = resolveDelivery(record, form);
-  const copy = composeCopy(record, slug, form, delivery);
+  // The demonstration booking page, read **once, here at the boundary**: the renderer never
+  // reads the environment, and a record names the variable (`env:DEMO_BOOKING_URL`) rather
+  // than carrying a URL, so no per-client booking address is ever committed. Unset — which
+  // is the state of this repository until the owner creates the page — every record
+  // resolves to booking mode `none` and the pages are the approved ones, byte for byte.
+  const demoBookingUrl = (process.env[DEMO_BOOKING_URL_VAR] ?? "").trim();
+  const copy = composeCopy(record, slug, form, delivery, demoBookingUrl);
   // The notification email's title is family- and phase-derived, and the key it sits
   // under is provider-specific — so it is set here, after both are known, against the
   // key the provider reads (forms.ts `notificationSubject`). `resolveForm` runs earlier
@@ -1952,7 +2214,7 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   // same derivation — never a flag someone set. Anything the owner has not supplied
   // (today: our legal name and mailing address) is recorded as an open item rather
   // than printed as a placeholder.
-  const privacy = composePrivacy(record, form, delivery, practice);
+  const privacy = composePrivacy(record, form, delivery, practice, copy.booking);
   const warnings: string[] = [];
   if (form.warning) warnings.push(form.warning);
   if (!record.phone) warnings.push("record has no phone number — the header call button and the contact fallback are weaker without one.");
@@ -1964,6 +2226,9 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   warnings.push(`preferred days: ${fields.preferredDays.basis}`);
   if (delivery.mode === "demo") {
     warnings.push(`demonstration phase: ${delivery.basis} — so the page carries the demonstration notice and no message reaches ${record.name}.`);
+  }
+  if (copy.booking.mode !== "none") {
+    warnings.push(`booking mode ${copy.booking.mode}: ${copy.booking.basis}. The link and its notice sit above the form on the contact pages; the header slot is unchanged on a demonstration.`);
   }
   warnings.push(`provenance: ${copy.provenance.basis}.`);
   warnings.push(
@@ -2046,7 +2311,7 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   const problems = [
     ...problemsBeforeWrite,
     ...practiceRead.problems,
-    ...complianceChecks({ pages, record, copy, form, delivery, images, privacy, practice, css, js, readme }),
+    ...complianceChecks({ pages, record, copy, form, delivery, images, privacy, practice, css, js, readme, demoBookingUrl }),
   ];
   if (problems.length > 0) await fail(`compliance self-check failed for ${slug}:\n  - ${problems.join("\n  - ")}`);
 
@@ -2183,11 +2448,43 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
        where it points and why, which pages omit it, and how big every thumb target is. */
     header_action: headerActionMeasure({
       pages,
-      label: copy.contactLabel.label,
-      href: primaryActionHref(record),
+      label: primaryActionLabel(record, copy).label,
+      href: primaryActionHref(record, copy.booking),
       css,
-      fromBooking: (record.booking_url ?? "").trim() !== "",
+      bookingMode: copy.booking.mode,
     }),
+    /* The booking link: which of the three modes this build is in and why, where the link
+       points, the words it carries, and which pages carry it — recorded so a reviewer reads
+       the result rather than inferring it from the absence of a button (WORKFLOW.md rule 6). */
+    booking: {
+      mode: copy.booking.mode,
+      basis: copy.booking.basis,
+      url: copy.booking.href || null,
+      configured_demo_url: demoBookingUrl || null,
+      label: copy.booking.label || null,
+      notice: copy.booking.notice || null,
+      target: copy.booking.external ? "_blank" : null,
+      rel: copy.booking.external ? "noopener noreferrer" : null,
+      placement: copy.booking.mode === "none"
+        ? null
+        : "in the page body, directly above <form class=\"contact-form\">, with the notice immediately below it",
+      carries: pages.filter((page) => bookingBelongs(page.file, PAGE_SPECS.contact.file)).filter((page) => copy.booking.external).map((page) => page.file),
+      omitted: pages.filter((page) => !bookingBelongs(page.file, PAGE_SPECS.contact.file)).map((page) => ({
+        file: page.file,
+        why:
+          page.id === "privacy"
+            ? "a privacy notice prints none of the business's details and offers no booking"
+            : "the header slot stays the contact action on a demonstration, and the notice that keeps a demonstration link honest has to be readable before the tap — so no other page carries an anchor",
+      })),
+      privacy_sentence: copy.booking.privacy || null,
+      header: {
+        slot: "unchanged while booking mode is demo",
+        label: copy.contactLabel.label,
+        href: PAGE_SPECS.contact.file,
+      },
+      basis_note:
+        "A booking link is a plain anchor that leaves the site: https only, target=\"_blank\" with rel=\"noopener noreferrer\", no iframe, embed, script or stylesheet rule, and the arrow is a text glyph. bookingProblems refuses a business's booking page in the demonstration phase, our demonstration page in a delivered site, anything but https, a link on a page that should not carry it, a label that is not the derived one, a demonstration notice that is missing, doubled, moved away from the link or naming another business, a changed header slot while the bundle is a proposal, and any iframe/embed/object.",
+    },
     /* Which family the page converts for, the rule that decided it, and the primary
        contact label with its own basis — derived in family.ts, recorded here so a
        reviewer reads the result and the reason together. */
