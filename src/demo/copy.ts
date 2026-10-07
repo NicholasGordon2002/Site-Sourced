@@ -757,13 +757,21 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
   // record that prints neither a phone number nor an email address must not promise a
   // detail the page does not show (lead ruling R4).
   const printedDetails = [record.phone?.trim() ? "phone number" : "", record.email?.trim() ? "email address" : ""].filter(Boolean);
+  // The phrase that names the details this record prints — "the phone number", "the email
+  // address", or both — and nothing when it prints neither. **Two** sentences point a
+  // visitor at a printed detail (the contact page's lead and the contact call to action on
+  // the other three pages), so both read this one phrase: the call to action used to name
+  // "the phone number or email address" from the phase alone, and was therefore wrong on
+  // every page that printed only one of the two — a page claiming a detail it does not
+  // show, which is the rule the build exists to keep.
+  const printedDetailPhrase = printedDetails.length === 0 ? "" : `the ${printedDetails.join(" or ")}`;
   const contactIntro = businessPhase
-    ? `Send a message to ${record.name} using the form below, or use the phone number or email address printed with it.`
-    : printedDetails.length === 2
-      ? `To reach ${record.name} itself, use the phone number or email address printed with it.`
-      : printedDetails.length === 1
-        ? `To reach ${record.name} itself, use the ${printedDetails[0]} printed with it.`
-        : "";
+    ? printedDetailPhrase
+      ? `Send a message to ${record.name} using the form below, or use ${printedDetailPhrase} printed with it.`
+      : `Send a message to ${record.name} using the form below.`
+    : printedDetailPhrase
+      ? `To reach ${record.name} itself, use ${printedDetailPhrase} printed with it.`
+      : "";
 
   const formSuccess = businessPhase
     ? `Thanks — your message is on its way to ${record.name}.`
@@ -830,8 +838,8 @@ export function composeCopy(record: BusinessRecord, slug: string, form: Resolved
   // reaches the business decides the sentence. Its closing clause is the same one
   // `contactIntro` ends with — the route a visitor takes to the business itself.
   const contactCtaIntro = businessPhase
-    ? `Send a message to ${record.name} using the contact page, or use the phone number or email address printed with it.`
-    : `This is a demonstration site, so the message form comes to ${DEMO_OPERATOR} rather than to ${record.name}. To reach ${record.name} itself, use the phone number or email address printed with it.`;
+    ? `Send a message to ${record.name} using the contact page${printedDetailPhrase ? `, or use ${printedDetailPhrase} printed with it` : ""}.`
+    : `This is a demonstration site, so the message form comes to ${DEMO_OPERATOR} rather than to ${record.name}.${printedDetailPhrase ? ` To reach ${record.name} itself, use ${printedDetailPhrase} printed with it.` : ""}`;
 
   // The sentence under the submit button. Derived from the delivery the record
   // describes and the family it is for — never typed into the template — because it is

@@ -419,11 +419,19 @@ export function phoneProblems(vars: {
   // The sentence that points a visitor at a printed number. It is derived in `copy.ts`
   // (a record that prints no phone must not promise one), and this is the half that reads
   // the page a visitor actually gets rather than the composer's intent.
+  // The pattern is deliberately loose **between** "phone number" and "printed with": the
+  // sentence that shipped read "use the phone number **or email address** printed with
+  // it", and the previous, narrower pattern (`/phone number printed with/i`) could not see
+  // it — the clause was blind to exactly the claim it exists to catch. Nothing may sit
+  // between the two halves but words: a tag or a full stop ends the clause, so two
+  // unrelated mentions of a phone and of printing cannot be welded into one problem.
+  const printedPhoneClaim = /phone number[^<>.]{0,64}?printed with(?: it| this form)?/i;
   if (!phone.number) {
     for (const surface of surfaces) {
-      if (/phone number printed with/i.test(surface.html)) {
+      const claim = surface.html.match(printedPhoneClaim);
+      if (claim) {
         problems.push(
-          `${surface.file} tells a visitor to use "the phone number printed with it", but no phone number is recorded for ${record.name}, so no page prints one. ` +
+          `${surface.file} tells a visitor to use "the ${claim[0]}", but no phone number is recorded for ${record.name}, so no page prints one. ` +
             `A page may not send a visitor to a detail it does not show: drop the clause, and say what the page does offer.`,
         );
       }
