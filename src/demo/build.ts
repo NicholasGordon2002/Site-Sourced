@@ -1359,6 +1359,27 @@ function isBookingAnchor(anchor: { attrs: string }): boolean {
 }
 
 /**
+ * The booking control's **44px box**, as a rule rather than a comment (lead correction C1,
+ * 8 Oct 2026).
+ *
+ * `button button--ghost` — the class the first draft shipped — is the hero's
+ * white-on-photograph treatment, and it is **not** one of the classes the 44px audit
+ * measures (`TAP_TARGET_CLASSES`). On the contact pages' `section--alt` paper surface that
+ * is white text on near-white paper, and not one check in this file would have said so.
+ * The class is data (`BOOKING_ANCHOR_CLASS`, `booking.ts`); this refuses a class list in
+ * which **no** class is one the audit sizes, so the defect cannot come back with a green
+ * build, and `tapTargetProblems` then reads the winning class's declared `min-height` out
+ * of the shipped stylesheet and refuses a bundle that gives it less than 44px.
+ */
+export function bookingAnchorSizeProblems(className: string): string[] {
+  const classes = className.split(/\s+/).filter(Boolean);
+  if (classes.some((one) => TAP_TARGET_CLASSES.includes(one))) return [];
+  return [
+    `the booking control wears ${JSON.stringify(className)}, and none of those classes is measured by the 44px audit (${TAP_TARGET_CLASSES.join(", ")}). A booking link is the one control on these pages that leaves the site and takes a time from a visitor: a class the audit does not read is a control nothing sizes, and a near-invisible one — the hero's white-on-photograph treatment over the contact pages' paper — passes every other check in this file (lead correction C1).`,
+  ];
+}
+
+/**
  * The booking link, as a rule the build enforces (spec `design/booking-link-spec.md`,
  * lead rulings 8 Oct 2026).
  *
@@ -1377,6 +1398,10 @@ function isBookingAnchor(anchor: { attrs: string }): boolean {
  *      because the notice has to be readable before the tap;
  *   5. **the wrong words** — the anchor's text must be the derived label plus the arrow,
  *      and never a service's name;
+ *  5b. **a class the 44px audit does not measure** (`bookingAnchorSizeProblems`) — the
+ *      first draft shipped `button button--ghost`, the hero's white-on-photograph
+ *      treatment, on the contact pages' near-white paper: about 1.05:1, and invisible to
+ *      an audit that does not read that class name (lead correction C1, 8 Oct 2026);
  *   6. **a new tab that does not carry `noopener noreferrer`**, or an inline handler;
  *   7. **the demonstration notice missing, doubled, moved away from the link, or naming
  *      someone other than the record's business** — the notice is the whole reason a
@@ -1435,6 +1460,9 @@ export function bookingProblems(vars: {
       `this bundle is in demonstration booking mode but its link points at ${url || "nothing"}, not at the configured demonstration page (${demoUrl}). Demonstration mode is derived by comparing the record's booking_url with ${DEMO_BOOKING_URL_VAR} — if they differ, the mode is not demo.`,
     );
   }
+
+  /* 2b. the control's own box: a class the 44px audit actually measures. */
+  if (mode !== "none") problems.push(...bookingAnchorSizeProblems(BOOKING_ANCHOR_CLASS));
 
   /* 3. `none` mode renders nothing at all. */
   if (mode === "none") {
@@ -1515,7 +1543,7 @@ export function bookingProblems(vars: {
               .slice(anchor.end)
               .replace(/^\s*<\/p>\s*/, "")
               .replace(/^\s*(?:<!--[\s\S]*?-->\s*)*/, "");
-            if (!tail.startsWith(`<p class="notice">${printed}</p>`)) {
+            if (!tail.startsWith(`<p class="form-note">${printed}</p>`)) {
               problems.push(`${page.file}: the demonstration notice is not directly below the booking link. It must be the next thing a visitor reads after the anchor that opens the page it describes — never revealed by the tap, never elsewhere on the page.`);
             }
           }
@@ -2467,7 +2495,7 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
       rel: copy.booking.external ? "noopener noreferrer" : null,
       placement: copy.booking.mode === "none"
         ? null
-        : "in the page body, directly above <form class=\"contact-form\">, with the notice immediately below it",
+        : "in the page body, directly above <form class=\"contact-form\">, with the demonstration notice immediately below it as .form-note small print at the form's 34rem measure — not a second .notice box, because the delivery notice above the form is the page's single boxed compliance notice (lead correction C2)",
       carries: pages.filter((page) => bookingBelongs(page.file, PAGE_SPECS.contact.file)).filter((page) => copy.booking.external).map((page) => page.file),
       omitted: pages.filter((page) => !bookingBelongs(page.file, PAGE_SPECS.contact.file)).map((page) => ({
         file: page.file,
@@ -2483,7 +2511,7 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
         href: PAGE_SPECS.contact.file,
       },
       basis_note:
-        "A booking link is a plain anchor that leaves the site: https only, target=\"_blank\" with rel=\"noopener noreferrer\", no iframe, embed, script or stylesheet rule, and the arrow is a text glyph. bookingProblems refuses a business's booking page in the demonstration phase, our demonstration page in a delivered site, anything but https, a link on a page that should not carry it, a label that is not the derived one, a demonstration notice that is missing, doubled, moved away from the link or naming another business, a changed header slot while the bundle is a proposal, and any iframe/embed/object.",
+        "A booking link is a plain anchor that leaves the site: https only, target=\"_blank\" with rel=\"noopener noreferrer\", no iframe, embed, script or stylesheet rule, and the arrow is a text glyph. bookingProblems refuses a business's booking page in the demonstration phase, our demonstration page in a delivered site, anything but https, a link on a page that should not carry it, a label that is not the derived one, a demonstration notice that is missing, doubled, moved away from the link or naming another business, a changed header slot while the bundle is a proposal, and any iframe/embed/object. The control's class must also be one the 44px audit measures (bookingAnchorSizeProblems): the first draft's button--ghost was neither measured nor visible on paper.",
     },
     /* Which family the page converts for, the rule that decided it, and the primary
        contact label with its own basis — derived in family.ts, recorded here so a

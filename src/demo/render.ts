@@ -639,14 +639,23 @@ ${hasStreet ? `          <p class="address-links">
     </section>`;
 }
 
-/** The link to the contact page, with the printed details beside it. */
+/**
+ * The link to the contact page, with the printed details beside it.
+ *
+ * **One loud action per page** (lead correction C3, 8 Oct 2026): in `business` booking mode
+ * the header's action slot has already taken the client's own booking link as an ink pill
+ * (`call-button header-action`), so this band's request control steps down to the quiet
+ * link — the two would otherwise be two ink pills on one page with different destinations,
+ * which is the defect `template-system.md:57` and `docs/design-system.md:36` name. In
+ * `none` and `demo` mode nothing changes: the band keeps its `.button`.
+ */
 function contactCtaSection(ctx: RenderContext, alt: boolean): string {
   const { copy } = ctx;
   return `    <section class="section${alt ? " section--alt" : ""}" id="contact">
       <div class="wrap">
         <h2>${esc(copy.contactCtaHeading)}</h2>
         <p class="muted">${esc(copy.contactCtaIntro)}</p>
-        <p class="cta-actions"><a class="button" href="${PAGE_SPECS.contact.file}">${esc(copy.contactLabel.label)}</a></p>
+        <p class="cta-actions"><a class="${copy.booking.mode === "business" ? "link-quiet link-quiet--inline" : "button"}" href="${PAGE_SPECS.contact.file}">${esc(copy.contactLabel.label)}</a></p>
 ${fallbackBlock(ctx)}
       </div>
     </section>`;
@@ -766,6 +775,16 @@ ${group.fields.map((field) => fieldHtml(copy, field, preselectService)).join("\n
  * demonstration link must say whose page it opens before the visitor commits. In `none`
  * mode this function returns nothing at all — which is what keeps the approved pages
  * byte-identical until the owner creates the demonstration page.
+ *
+ * **The control's class is `BOOKING_ANCHOR_CLASS`** (`link-quiet link-quiet--inline`), never
+ * written here — see `booking.ts` for why `button button--ghost` was wrong on paper and how
+ * the build refuses it coming back.
+ *
+ * **The notice is small print, not a second box** (lead correction C2, 8 Oct 2026): it is
+ * rendered in the form's own `.form-note` treatment, at the form's 34rem measure, so the
+ * contact page still opens with **exactly one** boxed compliance notice — the frozen
+ * delivery notice above the form — and the demonstration notice reads as a footnote to the
+ * link rather than a competing promise.
  */
 function bookingBlock(ctx: RenderContext): string {
   const { copy } = ctx;
@@ -775,8 +794,10 @@ function bookingBlock(ctx: RenderContext): string {
   const notice = booking.notice
     ? `        <!-- Compliance: the demonstration notice, derived from the booking mode
              (booking.ts). It must stay directly under the link it describes and be
-             readable before the tap. Do not reword without the owner. -->
-        <p class="notice">${esc(booking.notice)}</p>\n`
+             readable before the tap. It is .form-note small print, NOT a second .notice
+             box: the delivery notice above the form is this page's single boxed
+             compliance notice (lead correction C2). Do not reword without the owner. -->
+        <p class="form-note">${esc(booking.notice)}</p>\n`
     : "";
   return `        <p class="booking">
           <a class="${BOOKING_ANCHOR_CLASS}" href="${esc(booking.href)}"${external}>${esc(booking.label)}&nbsp;${BOOKING_ARROW}</a>
