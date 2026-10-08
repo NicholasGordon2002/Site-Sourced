@@ -1915,7 +1915,9 @@ export function complianceChecks(vars: {
       readme: vars.readme,
     }),
   );
-  problems.push(...provenanceProblems({ record, provenance: copy.provenance, pages, deliveryMode: delivery.mode }));
+  // The README is passed too: the same sourcing sentences are refused on it, because it
+  // ships inside the bundle and is the first thing anyone opening the folder reads.
+  problems.push(...provenanceProblems({ record, provenance: copy.provenance, pages, deliveryMode: delivery.mode, readme: vars.readme }));
   // The phase furniture: required in the demonstration phase, refused in the business
   // phase, per page and in the README (WORKFLOW.md rule 9).
   problems.push(...phaseFurnitureProblems({ pages, record, copy, delivery, readme: vars.readme }));

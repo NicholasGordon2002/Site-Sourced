@@ -132,6 +132,39 @@ export interface Provenance {
   basis: string;
 }
 
+/**
+ * The sentence a **delivered** site may carry about where its details came from, per
+ * source — the business-phase half of the same derivation.
+ *
+ * The demonstration's sentence ("Business details come from public listings about this
+ * business." / "…from public mapping data…") is a claim about *our* sourcing: it is true
+ * of a proposal built from what we could find, and it is exactly what a client's own
+ * site must not say about itself. A delivered site's details are the client's own,
+ * confirmed at hand-off — the contact-details caveat that qualifies unconfirmed details
+ * is gone for the same reason (`copy.ts`) — so the sourcing clause goes with it.
+ *
+ * Two things survive, and only two:
+ *
+ *   - the **authorship line** (`TAIL_COMMON`, below) — who wrote and drew the page;
+ *   - the **OpenStreetMap credit**, where the data really is OpenStreetMap's. That one
+ *     is a licence obligation of the ODbL, which travels with the data onto a client's
+ *     own site, so it is reworded as a plain credit rather than dropped: what a
+ *     delivered page states is whose data it contains, not where our copy came from.
+ *
+ * A **fictional** record has no business-phase variant at all: a made-up business cannot
+ * own a website, and `provenanceProblems` refuses that combination outright.
+ */
+const BUSINESS_SOURCING: Record<"openstreetmap" | "public-listings", { attribution: string; aboutLine: string }> = {
+  openstreetmap: {
+    attribution: "Map data © OpenStreetMap contributors, available under the ODbL 1.0.",
+    aboutLine: "",
+  },
+  "public-listings": {
+    attribution: "",
+    aboutLine: "",
+  },
+};
+
 /** One page's worth of copy, derived from the record's declared source. */
 export function resolveProvenance(record: BusinessRecord, phase: ProvenancePhase = "demo"): Provenance {
   const kind = isRecordSourceKind(record.source_kind) ? record.source_kind : null;
@@ -151,7 +184,8 @@ export function resolveProvenance(record: BusinessRecord, phase: ProvenancePhase
   // it resolved, while `phaseFurnitureProblems` refuses the sentence outright in
   // `business` mode, so a build that forgot to pass it cannot ship either wording.
   const TAIL_COMMON = "Copy, layout and imagery: Site Sourced. No logo, photograph or text was taken from any other website.";
-  const TAIL = phase === "demo" ? `${TAIL_COMMON} This page is marked noindex, so it does not appear in search results.` : TAIL_COMMON;
+  const business = phase === "business";
+  const TAIL = business ? TAIL_COMMON : `${TAIL_COMMON} This page is marked noindex, so it does not appear in search results.`;
 
   // The details the caveat may name: exactly the ones a printed-details page prints for
   // this record (addresses.ts). Recomputed here rather than passed in, so the sentence
@@ -160,32 +194,57 @@ export function resolveProvenance(record: BusinessRecord, phase: ProvenancePhase
 
   // The same phase fact in the fictional variant's own sentence, kept short because it
   // closes a longer line.
-  const NOINDEX_SHORT = phase === "demo" ? " This page is marked noindex." : "";
+  const NOINDEX_SHORT = business ? "" : " This page is marked noindex.";
 
   // The licence text travels as a link to the licence, not as bare words (ruling R12).
   const ODBL_LINK = `<a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener noreferrer">ODbL 1.0</a>`;
 
+  // What a delivered site says instead: nothing about our sourcing, plus the licence
+  // credit where the data is OpenStreetMap's (`BUSINESS_SOURCING`).
+  const delivered = (k: "openstreetmap" | "public-listings") =>
+    [BUSINESS_SOURCING[k].attribution, TAIL].filter(Boolean).join(" ");
+
   switch (kind) {
     case "openstreetmap":
-      return {
-        kind,
-        attribution: `Business details come from public mapping data (© OpenStreetMap contributors, ODbL 1.0). ${TAIL}`,
-        attributionHtml: `Business details come from public mapping data (© OpenStreetMap contributors, ${ODBL_LINK}). ${TAIL}`,
-        caveat: listingsCaveat(name, details),
-        aboutLine: `Every detail here — hours, address, contact details — came from public listings. Nothing on this page was copied from another website, and anything wrong or missing can be corrected in minutes.`,
-        published: true,
-        basis: `the record's details came from OpenStreetMap (source_kind "openstreetmap"), so the page credits OpenStreetMap and the ODbL and pins the printed details to public listings`,
-      };
+      return business
+        ? {
+            kind,
+            attribution: delivered(kind),
+            attributionHtml: `Map data © OpenStreetMap contributors, available under the ${ODBL_LINK}. ${TAIL}`,
+            caveat: "",
+            aboutLine: BUSINESS_SOURCING[kind].aboutLine,
+            published: true,
+            basis: `the record's details came from OpenStreetMap (source_kind "openstreetmap") and this bundle is a delivered site, so the page carries the ODbL credit the data requires ("© OpenStreetMap contributors", linked licence) and states nothing about our sourcing: on a delivered site the details are the client's own, confirmed at hand-off, so neither the "public mapping data" clause nor the printed-details caveat is printed`,
+          }
+        : {
+            kind,
+            attribution: `Business details come from public mapping data (© OpenStreetMap contributors, ODbL 1.0). ${TAIL}`,
+            attributionHtml: `Business details come from public mapping data (© OpenStreetMap contributors, ${ODBL_LINK}). ${TAIL}`,
+            caveat: listingsCaveat(name, details),
+            aboutLine: `Every detail here — hours, address, contact details — came from public listings. Nothing on this page was copied from another website, and anything wrong or missing can be corrected in minutes.`,
+            published: true,
+            basis: `the record's details came from OpenStreetMap (source_kind "openstreetmap"), so the page credits OpenStreetMap and the ODbL and pins the printed details to public listings`,
+          };
     case "public-listings":
-      return {
-        kind,
-        attribution: `Business details come from public listings about this business. ${TAIL}`,
-        attributionHtml: `Business details come from public listings about this business. ${TAIL}`,
-        caveat: listingsCaveat(name, details),
-        aboutLine: `Every detail here — hours, address, contact details — came from public listings. Nothing on this page was copied from another website, and anything wrong or missing can be corrected in minutes.`,
-        published: true,
-        basis: `the record's details came from public listings (source_kind "public-listings"), so the page credits public listings and credits no mapping data`,
-      };
+      return business
+        ? {
+            kind,
+            attribution: delivered(kind),
+            attributionHtml: delivered(kind),
+            caveat: "",
+            aboutLine: BUSINESS_SOURCING[kind].aboutLine,
+            published: true,
+            basis: `the record's details came from public listings (source_kind "public-listings") and this bundle is a delivered site, so the page carries the authorship line only: the "come from public listings" sentence and the printed-details caveat describe an unconfirmed proposal whose details we had to find, and a client's own site is neither`,
+          }
+        : {
+            kind,
+            attribution: `Business details come from public listings about this business. ${TAIL}`,
+            attributionHtml: `Business details come from public listings about this business. ${TAIL}`,
+            caveat: listingsCaveat(name, details),
+            aboutLine: `Every detail here — hours, address, contact details — came from public listings. Nothing on this page was copied from another website, and anything wrong or missing can be corrected in minutes.`,
+            published: true,
+            basis: `the record's details came from public listings (source_kind "public-listings"), so the page credits public listings and credits no mapping data`,
+          };
     case "fictional":
       return {
         kind,
@@ -250,11 +309,29 @@ export function pageText(html: string): string {
 }
 
 /**
+ * The sentences that may only appear while a bundle is a **demonstration**, as the words
+ * a visitor would read. They are the sourcing half of the phase gate (WORKFLOW.md rule 9):
+ * each of them describes an unsolicited proposal built from details we had to go and find
+ * — "come from public listings", "as published in public listings … please confirm them",
+ * "public mapping data". A client's own site is none of those things, so on a delivered
+ * bundle they are refused rather than rewritten, and the composition that keeps them off
+ * the page in the first place is `resolveProvenance`'s business-phase branch.
+ *
+ * Detection is by the words, not by "is this string missing": the business-phase strings
+ * are shorter versions of the demonstration ones, so an equality test would prove nothing.
+ */
+const DEMO_SOURCING_CLAIMS: [string, RegExp][] = [
+  ["the sentence that says the details came from public listings", /\b(?:came|come|sourced|taken) from public listings\b/i],
+  ["the \"as published in public listings\" caveat", /\bas published in public listings\b/i],
+  ["the \"public mapping data\" credit", /\bpublic mapping data\b/i],
+];
+
+/**
  * The provenance guard, as sentences a build can print.
  *
  * Called from the single compliance self-check in `build.ts`. Every case below is a
  * bundle that would print something about where its details came from that the record
- * does not support:
+ * does not support, **or that only a demonstration may say**:
  *
  *   - a record that declares no source at all, so no honest attribution can be chosen,
  *   - a `source_kind` that is not one of the three kinds,
@@ -263,7 +340,14 @@ export function pageText(html: string): string {
  *     source (the "public listings" line on a fictional business, or the fictional line
  *     on a record whose details really were published),
  *   - a page that has lost the attribution line altogether,
- *   - a fictional example business presented as anyone's own website.
+ *   - a fictional example business presented as anyone's own website,
+ *   - **a delivered site that still introduces its details as somebody else's published
+ *     listing** — the demonstration's sourcing sentence, its "as published … please
+ *     confirm" caveat, or the "public mapping data" clause, on any page or in the
+ *     README that ships beside them. This is the rule-9 half of the gate that the plan
+ *     states as "a demo may never print a client's claim, and a client's page may never
+ *     print a demo's": the business-phase wording is composed without those sentences,
+ *     and this clause is what refuses them if a later edit types one back in.
  */
 export function provenanceProblems(vars: {
   record: BusinessRecord;
@@ -272,6 +356,11 @@ export function provenanceProblems(vars: {
   pages: { file: string; html: string }[];
   /** The delivery phase — a fictional business can never be anyone's own site. */
   deliveryMode: "business" | "demo";
+  /**
+   * The delivered README, when the caller has it. It ships inside the bundle and is the
+   * first thing anyone opening the folder reads, so the same refusal covers it.
+   */
+  readme?: string;
 }): string[] {
   const { record, provenance, pages, deliveryMode } = vars;
   const problems: string[] = [];
@@ -287,6 +376,29 @@ export function provenanceProblems(vars: {
     problems.push(
       `the record is a fictional example business (source_kind "fictional") but the form delivers to it as a client's own site. A made-up business cannot own a website: fix source_kind, or fix form_recipient.`,
     );
+  }
+
+  // The business phase refuses the demonstration's own sourcing sentences. Read on the
+  // pages a visitor gets and on the README that ships beside them, because both are
+  // read by someone, and a sentence about "public listings" is false on a site whose
+  // owner handed us their own confirmed details.
+  if (deliveryMode === "business") {
+    const surfaces: { file: string; text: string }[] = pages.map((p) => ({
+      file: p.file,
+      text: pageText(p.html),
+    }));
+    if (vars.readme !== undefined) surfaces.push({ file: "README.txt", text: vars.readme });
+    for (const surface of surfaces) {
+      for (const [what, pattern] of DEMO_SOURCING_CLAIMS) {
+        const found = pattern.exec(surface.text);
+        if (!found) continue;
+        const shown = found[0].length > 80 ? `${found[0].slice(0, 79).trimEnd()}…` : found[0];
+        problems.push(
+          `${surface.file}: carries ${what} ("${shown}") although this bundle is a delivered site (delivery.mode "business"). ` +
+            `The demonstration's sourcing lines describe an unsolicited proposal whose details we had to find in a public listing — a client's own site shows the client's own confirmed details instead, so these sentences are composed away by provenance.ts's business phase and refused here if one is typed back in.`,
+        );
+      }
+    }
   }
 
   for (const page of pages) {
