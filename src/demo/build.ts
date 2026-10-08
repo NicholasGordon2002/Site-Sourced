@@ -1403,9 +1403,9 @@ export function bookingAnchorSizeProblems(className: string): string[] {
  *      treatment, on the contact pages' near-white paper: about 1.05:1, and invisible to
  *      an audit that does not read that class name (lead correction C1, 8 Oct 2026);
  *   6. **a new tab that does not carry `noopener noreferrer`**, or an inline handler;
- *   7. **the demonstration notice missing, doubled, moved away from the link, or naming
- *      someone other than the record's business** — the notice is the whole reason a
- *      demonstration link is honest;
+ *   7. **the demonstration notice missing, doubled, moved away from the link, naming
+ *      someone other than the record's business, or sitting on a page that carries no
+ *      booking link** — the notice is the whole reason a demonstration link is honest;
  *   8. **a notice on a business link**, where there is nothing to disclaim;
  *   9. **the header slot changing on a demonstration** — its label and destination are
  *      checked against `copy.contactLabel.label` and `contact.html`, the two things the
@@ -1512,9 +1512,12 @@ export function bookingProblems(vars: {
           );
         }
         if (booking.external) {
-          if (!/\starget="_blank"/.test(anchor.attrs)) {
-            problems.push(`${page.file}: the booking link carries no target="_blank", so it would navigate the visitor away from the page they were judging. It matches the directions link, the other link that leaves the site.`);
-          }
+          /* There is deliberately no "carries no target=_blank" clause here: `isBookingAnchor`
+             identifies a booking anchor as one wearing this bundle's class AND opening in a
+             new tab (the class list alone is not enough — the home page's "More about" link
+             wears the same two classes), so such a clause can never fire. The case it named
+             is still refused: an anchor that loses target is no longer the one this page
+             must carry, and clause 4 above fails it as "carries 0 booking links, not one". */
           if (!/rel="[^"]*\bnoopener\b/.test(anchor.attrs) || !/rel="[^"]*\bnoreferrer\b/.test(anchor.attrs)) {
             problems.push(`${page.file}: the booking link opens a new tab without rel="noopener noreferrer" (rel=${JSON.stringify(attrOf(anchor.attrs, "rel"))}). A page we do not control must not be able to reach back into this one through window.opener.`);
           }
@@ -1547,6 +1550,20 @@ export function bookingProblems(vars: {
               problems.push(`${page.file}: the demonstration notice is not directly below the booking link. It must be the next thing a visitor reads after the anchor that opens the page it describes — never revealed by the tap, never elsewhere on the page.`);
             }
           }
+        }
+      }
+
+      /* 7b. the notice belongs on a page that carries the link it describes. The clause
+         above only reaches pages that carry the anchor, so a notice copied onto a page
+         with no booking link passed unrefused while the refusal's own sentence promised
+         it would not ("or shown on a page with no booking link"). */
+      if (mode === "demo" && booking.notice !== "" && !belongs && on.length === 0) {
+        const printed = esc(booking.notice);
+        const count = page.html.split(printed).length - 1;
+        if (count > 0) {
+          problems.push(
+            `${page.file}: carries the demonstration notice ${count} time(s) but no booking link. A notice about a link has to sit beside that link: elsewhere it reads as a claim about the page it is on (bookingProblems clause 7).`,
+          );
         }
       }
 
