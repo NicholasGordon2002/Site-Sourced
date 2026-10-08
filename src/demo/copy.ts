@@ -918,7 +918,11 @@ export function composeCopy(
       ? `The ${profile.offeringPlural} recorded for ${record.name} are on the ${offeringTitle} page: ${serviceSentence}.`
       : `This is a starting point for a page of the business's own.`,
     provenance.aboutLine,
-  ];
+    // A delivered site has no "where the details came from" sentence to print (the
+    // client's own details are simply their own), so the empty one is dropped rather
+    // than rendered as an empty paragraph. Absent fact, absent sentence — never a gap
+    // filled with generic copy (WORKFLOW.md, modular development).
+  ].filter((paragraph) => paragraph.trim() !== "");
 
   // The intro names the list the page actually shows, and stops short of claiming it is
   // complete. With no services recorded there is no intro at all (P4): the list's own
