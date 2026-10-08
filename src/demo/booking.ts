@@ -64,8 +64,9 @@ export const BOOKING_ARROW = "↗";
  *
  *   - `.link-quiet` is `color: var(--muted)` — `#5E6672` — which is a **paper-surface**
  *     colour. The control sits in the contact pages' `section--alt` (`--paper-2`,
- *     `#FAF7F2`), so this composites to roughly 5.5:1 there: a measured number, not a
- *     guess (see `design/booking-build-notes.md` §7 for the browser reading).
+ *     `#FAF7F2`), and the browser-measured contrast there is **5.43:1** (6.96:1 for the
+ *     focus ring); the reading and the method are in
+ *     `design/booking-measurements-E2.log`.
  *   - `.button--ghost` was the first draft and it was **wrong**: it is the hero's
  *     white-on-photograph treatment (`color:#fff` over `rgba(255,255,255,.1)`, over the
  *     hero scrim it was built for). On paper that is white on near-white — about 1.05:1 —
