@@ -213,6 +213,21 @@ export function serviceCardActionCss(): string {
 `;
 }
 
+/**
+ * What a visitor reads, out of the markup the page carries: the five entities `esc`
+ * (`render.ts`) writes, read back — the recorded service `Kids' cut` is on the page as
+ * `Kids&#39; cut`, and the check compares the words, not the encoding.
+ */
+function unescapeText(html: string): string {
+  return html
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&#x27;/g, "'")
+    .replace(/&nbsp;/g, "\u00A0")
+    .replace(/&amp;/g, "&");
+}
+
 /** The `border-top` a rule naming the bar's own class declares, or `null` when none does. */
 function barHairline(css: string): string | null {
   for (const match of css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
@@ -381,7 +396,7 @@ export function serviceCardActionProblems(vars: {
       );
       continue;
     }
-    const heading = /<h[1-6]\b[^>]*>([\s\S]*?)<\/h[1-6]>/i.exec(inner)?.[1]?.trim() ?? "";
+    const heading = unescapeText(/<h[1-6]\b[^>]*>([\s\S]*?)<\/h[1-6]>/i.exec(inner)?.[1]?.trim() ?? "");
     const name = services.get(heading);
     if (!name) {
       problems.push(
@@ -390,15 +405,16 @@ export function serviceCardActionProblems(vars: {
       continue;
     }
     const label = serviceActionLabel(family, name);
-    if (line.trim() !== label) {
+    const lineText = unescapeText(line).trim();
+    if (lineText !== label) {
       problems.push(
-        `${decision.page}: the card for "${name}" carries the action line "${line.trim()}" while the ${family} family's derived label for that service is "${label}". The bar's words come from copy.ts/family.ts, never from the template — a typed "Book now" or a generic "Request this" is exactly what this clause refuses.`,
+        `${decision.page}: the card for "${name}" carries the action line "${lineText}" while the ${family} family's derived label for that service is "${label}". The bar's words come from copy.ts/family.ts, never from the template — a typed "Book now" or a generic "Request this" is exactly what this clause refuses.`,
       );
       continue;
     }
-    // The glyph is written as the `&nbsp;›` entity (the grammar `BOOKING_ARROW` uses); a
-    // reader sees a non-breaking space, and `&nbsp;` is what the page's own text holds.
-    const barText = visible(content.replace(/&nbsp;/g, " ")).replace(/\s+/g, " ").trim();
+    // The glyph is written as the `&nbsp;›` entity (the grammar `BOOKING_ARROW` uses), so the
+    // bar's text is read back the way a visitor reads it: the entity decoded, tags stripped.
+    const barText = visible(unescapeText(content));
     if (barText !== `${label} ${SERVICE_CARD_ACTION_GLYPH}`) {
       problems.push(
         `${decision.page}: the bar's visible text for "${name}" is "${barText}" — not "${label} ${SERVICE_CARD_ACTION_GLYPH}". The bar adds no words of its own: no price, no duration, no booking promise and no urgency, on a card that asks a visitor to describe what they need.`,
@@ -406,8 +422,10 @@ export function serviceCardActionProblems(vars: {
     }
   }
 
-  /* 5. the numbers, read off the stylesheet the bundle ships the way the gate reads them. */
-  if (css) {
+  /* 5. the numbers, read off the stylesheet the bundle ships the way the gate reads them.
+        Only when the variant is on: with the opt-in unset the stylesheet rightly carries no
+        bar rules at all, and clause 1 is the clause that says so. */
+  if (css && decision.enabled) {
     const bar = serviceCardMeasure(css, [SERVICE_CARD_ACTION_BAR_CLASS]);
     if (bar.min_height_px === null || bar.min_height_px < 44) {
       problems.push(
