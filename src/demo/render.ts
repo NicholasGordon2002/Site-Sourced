@@ -2045,8 +2045,100 @@ export function renderJs(): string {
 `;
 }
 
-/** Plain-language hand-over notes that ship inside the bundle. */
-export function renderEditingReadme(ctx: RenderContext): string {
+/**
+ * What one page is, in the README's own words.
+ *
+ * The roles are a lookup on the page's own identity, never a list typed beside the README:
+ * a page the build ships has a role here, and the README's page list is built from the
+ * pages `buildBundle` actually writes.
+ */
+function pageRole(page: RenderedPage, record: BusinessRecord): string {
+  const service = normaliseServices(record).find((s) => servicePageFile(s.name) === page.file);
+  if (service) return `the contact form with "${service.name}" already chosen`;
+  switch (page.id) {
+    case "index":
+      return "the front page";
+    case "services":
+      return "everything recorded for the business";
+    case "about":
+      return "about the business, its hours and where it is";
+    case "contact":
+      return "the contact form";
+    default:
+      return "how a message sent from these pages is handled";
+  }
+}
+
+/** The pages of a rendered bundle that load `site.js`, in bundle order. */
+export function scriptedPages(pages: RenderedPage[]): RenderedPage[] {
+  return pages.filter((page) => page.html.includes("site.js"));
+}
+
+/**
+ * The README's sentence about which pages load `site.js`, derived from the pages that
+ * really do.
+ *
+ * This is the half that was wrong for as long as per-service contact pages have existed:
+ * the README called `contact.html` "the only page that uses site.js" while five of the
+ * bundle's nine pages loaded it. A typed sentence cannot stay true by hand, so the README
+ * states the derived one — the file list itself — and `readmePageListProblems` refuses a
+ * README that says anything else.
+ */
+export function readmeScriptClaim(pages: RenderedPage[]): string {
+  const scripted = scriptedPages(pages);
+  if (scripted.length === 0) {
+    return "No page here loads a script: every page works unchanged with JavaScript switched off.";
+  }
+  const files = scripted.map((page) => page.file);
+  const list =
+    files.length === 1 ? files[0]! : `${files.slice(0, -1).join(", ")} and ${files[files.length - 1]!}`;
+  const claim =
+    files.length === 1
+      ? `The only page that loads site.js is the one that carries the contact form: ${list}.`
+      : `The only pages that load site.js are the ones that carry the contact form: ${list}.`;
+  return `${claim} Every other page works unchanged with JavaScript switched off.`;
+}
+
+/** The bundle's pages as the README lists them: every page the build writes, in order. */
+function pageListBlock(pages: RenderedPage[], record: BusinessRecord): string {
+  const width = Math.max(...pages.map((page) => page.file.length)) + 2;
+  return pages.map((page) => `  ${page.file.padEnd(width)}${pageRole(page, record)}`).join("\n");
+}
+
+/**
+ * The provider facts the README prints about the form service, each against the question
+ * it answers.
+ *
+ * `forms.ts`'s presets are written as **answers** — "yes — a free account (email
+ * magic-link sign-in) creates the form id" — because a preset cannot know which question a
+ * caller will ask it. Interpolating one into a sentence therefore produced the
+ * non-sentence "The form posts to Formspark. yes — a free account …". Each fact is
+ * printed as the answer it already is, under the question it answers, so the README reads
+ * as English whichever provider the record picks and a new preset cannot be written in a
+ * shape that breaks a sentence it lands in. The labels below are the questions, and they
+ * live here rather than in `forms.ts` because they are the README's, not the provider's.
+ */
+function providerFactsBlock(form: ResolvedForm): string {
+  return [
+    `  Does it need an account? ${form.provider.needs_account}`,
+    `  Whose account is it? ${form.provider.who_owns_the_account}`,
+    `  Does the form service keep a copy? ${form.provider.stores_submissions}`,
+    `  What does it cost? ${form.provider.free_tier}`,
+    `  If it stops working: ${form.provider.if_it_lapses}`,
+    `  Documentation: ${form.provider.url || "(self-hosted endpoint)"}`,
+  ].join("\n");
+}
+
+/**
+ * Plain-language hand-over notes that ship inside the bundle.
+ *
+ * `pages` is the bundle's own page list, exactly as `buildBundle` writes it — passed in
+ * rather than re-rendered here, so the list a client reads and the files they received
+ * cannot be two different things. They were: the README listed five pages and called one
+ * of them the only one that uses `site.js`, while the folder held nine files and five
+ * script pages.
+ */
+export function renderEditingReadme(ctx: RenderContext, pages: RenderedPage[]): string {
   const { record, copy, form, delivery, images, privacy } = ctx;
   const provenance = copy.provenance;
   const businessPhase = delivery.mode === "business";
@@ -2058,8 +2150,26 @@ export function renderEditingReadme(ctx: RenderContext): string {
   // What the page says about its own imagery has to match the licences actually
   // recorded for it: an AI-generated placeholder is never a stock photograph.
   const aiHero = images.some((i) => /^AI-generated/i.test(i.license ?? ""));
+  // What the page says about its own imagery has to match the licences actually
+  // recorded for it: an AI-generated placeholder is never a stock photograph.
+  //
+  // The *deadline* in that sentence is the phase, so it follows the phase. A
+  // demonstration is not yet anyone's site, so its note says the picture must be
+  // replaced before the page goes live as anyone's own. A **delivered** bundle is the
+  // client's own site as it stands: "must be replaced … before this page goes live"
+  // tells the client to do a thing that has already happened, and is false about the
+  // page they are holding. What survives in both phases is the part that is true of
+  // both — the picture is not a photograph of the business, and the page labels it.
   const imageNote = aiHero
-    ? `The hero picture on this page is an AI-generated illustration (a labelled fallback used
+    ? businessPhase
+      ? `The hero picture on this page is an AI-generated illustration (a labelled fallback used
+because no suitable free-to-use photograph existed). It is not a photograph of your
+business, and the page labels it as an illustration, so the site is honest with visitors
+as it stands — nothing here waits on a photograph before it can go live. When you have a
+photograph of your own, swap it in and the layout follows automatically: the file is
+inside the bundle, so keep the same file name, or update the name in styles.css and
+index.html.`
+      : `The hero picture on this page is an AI-generated illustration (a labelled fallback used
 because no suitable free-to-use photograph existed). It is not a photograph of the
 business and must be replaced with a real photograph before this page goes live as
 anyone's own site. The file is inside the bundle; swap it for one of your own and the
@@ -2079,14 +2189,10 @@ and rebuild.\n`
   const formSection = businessPhase
     ? `The contact form
 ----------------
-The form posts to ${form.provider.label}. ${form.provider.needs_account}.
-${form.provider.who_owns_the_account}. Notifications go to ${form.recipient};
+The form posts to ${form.provider.label}. Notifications go to ${form.recipient};
 nobody at Site Sourced receives a copy and no list of names is gathered.
 
-  Where the message is kept: ${form.provider.stores_submissions}
-  Free tier: ${form.provider.free_tier}
-  If it stops working: ${form.provider.if_it_lapses}
-  Documentation: ${form.provider.url || "(self-hosted endpoint)"}
+${providerFactsBlock(form)}
 
 The page says the same thing to your visitors, in the line just above the form.
 If you change form provider, that line changes with it — do not edit it by hand
@@ -2098,16 +2204,13 @@ reach you even if the form service is ever down.
     : `The contact form
 ----------------
 This is a demonstration bundle, not a delivered site. The form posts to
-${form.provider.label} (${form.provider.needs_account}), and submissions go to
-${form.recipient} — Site Sourced's own test inbox, not the business's. ${record.name}
-is not notified, and nothing is forwarded on to them. The line above the form on the
-page tells the visitor exactly that, in their own words, because a form that goes to
-the demo operator must never read as the business's own.
+${form.provider.label}; submissions go to ${form.recipient} — Site Sourced's own test
+inbox, not the business's. ${record.name} is not notified, and nothing is forwarded on
+to them. The line above the form on the page tells the visitor exactly that, in their
+own words, because a form that goes to the demo operator must never read as the
+business's own.
 
-  Where the message is kept: ${form.provider.stores_submissions}
-  Free tier: ${form.provider.free_tier}
-  If it stops working: ${form.provider.if_it_lapses}
-  Documentation: ${form.provider.url || "(self-hosted endpoint)"}
+${providerFactsBlock(form)}
 
 Before this bundle could be handed to a client, the record's form_recipient must be
 the client's own published address in an account the client owns. The page's notice
@@ -2127,15 +2230,12 @@ The contact form's submissions come to Site Sourced. See "The contact form" belo
 
 `}This folder is a complete website. The pages are:
 
-  index.html      the front page
-  services.html   everything recorded for the business
-  about.html      about the business, its hours and where it is
-  contact.html    the contact form (the only page that uses site.js)
-  privacy.html    how a message sent from these pages is handled
+${pageListBlock(pages, record)}
 
-They all share styles.css (the colours and spacing), site.js (the contact form) and
-the fonts/ folder. Every link between them is an ordinary link to a file, so the site
-works with JavaScript switched off. There is no database, no content management
+${readmeScriptClaim(pages)}
+
+They all share styles.css (the colours and spacing) and the fonts/ folder. Every link
+between them is an ordinary link to a file. There is no database, no content management
 system and no server software to keep patched, so nothing here goes stale or needs a
 monthly update.
 ${privacyOpen}
@@ -2155,7 +2255,7 @@ the tags themselves. For example:
 The business name appears in several places (the headers, the footers, the page
 titles), so use Find and Replace across all the files to change them at once. The
 navigation at the top of every page names the pages — if you rename a file, update the
-links in all five.
+links on every page that points at it.
 
 The photograph
 --------------

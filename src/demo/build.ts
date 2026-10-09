@@ -63,7 +63,9 @@ import {
   primaryActionHref,
   primaryActionLabel,
   renderCss,
+  readmeScriptClaim,
   renderEditingReadme,
+  scriptedPages,
   renderFavicon,
   renderJs,
   renderPages,
@@ -73,6 +75,66 @@ import {
   type RenderedPage,
 } from "./render.ts";
 
+/**
+ * The README's page list and its `site.js` claim, read against the pages this bundle
+ * really ships.
+ *
+ * The defect this clause exists for reached a **delivered** README: it listed five pages
+ * and called `contact.html` "the only page that uses site.js", while the folder held nine
+ * HTML files and five of them loaded the script (`contact.html` plus one
+ * `contact-<service>.html` per recorded service). Nothing was wrong with either sentence
+ * when it was typed — the bundle grew and the sentence did not, which is why the list and
+ * the claim are now **derived** (`renderEditingReadme`) and checked here rather than read
+ * by a client and noticed.
+ *
+ * Both halves are read off the README as text, not trusted from the composer, because the
+ * point is the file a reader opens:
+ *
+ *   - every page the folder holds is named in the list, and the list names no page the
+ *     folder does not hold (a README that sends its reader looking for a file that is not
+ *     there is worse than one that lists five of nine);
+ *   - the sentence about `site.js` is the one the pages themselves produce — the file list
+ *     of the pages that load it — so "the only page that uses site.js" cannot come back on
+ *     a bundle where five pages do.
+ */
+export function readmePageListProblems(vars: { pages: RenderedPage[]; readme: string }): string[] {
+  const { pages, readme } = vars;
+  const problems: string[] = [];
+  const files = pages.map((page) => page.file);
+
+  const unlisted = files.filter((file) => !readme.includes(file));
+  if (unlisted.length > 0) {
+    problems.push(
+      `the README does not name ${unlisted.map((f) => `"${f}"`).join(", ")}, which this bundle ships. ` +
+        `The list of pages a client reads has to be the folder they received (${files.length} page(s) here): ` +
+        `build it from the pages the build writes, as render.ts's renderEditingReadme does, rather than typing it.`,
+    );
+  }
+
+  // The other direction: a name the README presents as a page that the bundle does not
+  // contain. Read as `.html` names, which is how the list and the "Changing the words"
+  // section both write them.
+  const named = new Set(readme.match(/\b[a-z0-9][a-z0-9-]*\.html\b/g) ?? []);
+  const absent = [...named].filter((file) => !files.includes(file));
+  if (absent.length > 0) {
+    problems.push(
+      `the README names ${absent.map((f) => `"${f}"`).join(", ")} but this bundle ships no such page (its pages are ${files.join(", ")}). ` +
+        `A README that sends the person who received the folder looking for a file that is not in it is the same defect as one that leaves a page out.`,
+    );
+  }
+
+  const claim = readmeScriptClaim(pages);
+  if (!readme.includes(claim)) {
+    const scripted = scriptedPages(pages).map((page) => page.file);
+    problems.push(
+      `the README does not state which pages load site.js as this bundle's pages do — expected it to carry: "${claim}" ` +
+        `(${scripted.length} of its ${files.length} pages load the script: ${scripted.join(", ") || "none"}). ` +
+        `The sentence is derived from the pages (render.ts's readmeScriptClaim), so a typed one cannot outlive the bundle it was written for.`,
+    );
+  }
+
+  return problems;
+}
 export const GENERATOR = "sitesourced-demo-generator/0.1";
 
 /**
@@ -1859,7 +1921,7 @@ export function complianceChecks(vars: {
       }
     } else {
       if (html.includes("site.js")) {
-        problems.push(`${on}: loads site.js, but the contact form is only on ${PAGE_SPECS.contact.file}. Every other page must work unchanged with JavaScript off, and asks for one file less.`);
+        problems.push(`${on}: loads site.js, but this page carries no form. site.js is only for the pages that carry one (${PAGE_SPECS.contact.file} and the per-service contact pages); every other page must work unchanged with JavaScript off, and asks for one file less.`);
       }
       if (html.includes(esc(copy.formNotice))) {
         problems.push(`${on}: quotes the form-delivery notice without carrying the form, which tells a visitor where a message goes on a page that has no message field`);
@@ -1921,6 +1983,11 @@ export function complianceChecks(vars: {
   // The phase furniture: required in the demonstration phase, refused in the business
   // phase, per page and in the README (WORKFLOW.md rule 9).
   problems.push(...phaseFurnitureProblems({ pages, record, copy, delivery, readme: vars.readme }));
+  // The README's own page list and its site.js claim, read against the pages this bundle
+  // writes (render.ts derives both; this is what refuses a list typed by hand).
+  if (vars.readme !== undefined) {
+    problems.push(...readmePageListProblems({ pages, readme: vars.readme }));
+  }
   // The privacy notice, both halves of it: the phase checks that already existed, plus
   // the owner's rule that every sentence about collection, storage or deletion is backed
   // by a recorded fact — a provider fact from `docs/formspark.md`, or the one declared
@@ -2353,7 +2420,7 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   const css = renderCss(profile, slug);
   const js = renderJs();
   const favicon = renderFavicon(record, profile);
-  const readme = renderEditingReadme(ctx);
+  const readme = renderEditingReadme(ctx, pages);
 
   const problems = [
     ...problemsBeforeWrite,

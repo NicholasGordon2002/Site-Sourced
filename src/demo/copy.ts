@@ -899,11 +899,31 @@ export function composeCopy(
   // taps away said "No phone number is recorded for this business." Same rule as the
   // contact call to action (7 Oct), same derivation. With nothing carried there is no
   // sentence at all — render.ts drops the empty `<p>` — rather than a list of absences.
+  //
+  // The standing clause the list carries — "… as published for this barber shop",
+  // "… invented for this example barber shop", "… recorded for this barber shop" — follows
+  // the **phase** as well as the source, because "as published" is itself a claim about
+  // where the details came from. On a **delivered** site the details are the client's own,
+  // confirmed at hand-off (provenance.ts's business phase, WORKFLOW.md rule 9): they are
+  // not a listing we read, so the demonstration's wording would be false on the client's
+  // own page. What a delivered page says instead is the phase-neutral fact the rest of the
+  // delivered copy already uses — "the services **recorded** for X" — and that word is the
+  // one the client reads here too.
+  //
+  // All three wordings keep the **same sentence shape**, which is what
+  // `DETAIL_CLAIM_SHAPES` reads to catch an offering line naming a detail the record does
+  // not carry; the shape's own alternatives are extended with "recorded" so the delivered
+  // wording is covered by the same clause rather than escaping it.
+  const heroStanding = delivery.mode === "business"
+    ? `recorded for this ${cat}`
+    : provenance.published
+      ? `as published for this ${cat}`
+      : `invented for this example ${cat}`;
   const heroLead = serviceNames.length > 0
     ? serviceNames.join(" · ")
     : carried.length === 0
       ? ""
-      : `${capitalise(sentenceList(carried))} ${provenance.published ? `as published for this ${cat}` : `invented for this example ${cat}`}.`;
+      : `${capitalise(sentenceList(carried))} ${heroStanding}.`;
 
   // The record's own narrative, spliced between the identity line and the services
   // sentence. Built as an array rather than indexed: the narrative moves the positions
@@ -1828,7 +1848,12 @@ const DETAIL_CLAIM_SHAPES: { what: string; owns: readonly CarriedDetail[]; sourc
   {
     what: "the hero's offering line",
     owns: ["hours", "address", "phone number", "email address"],
-    source: `(${DETAIL_LIST_PATTERN})\\s+(?:as published|invented) for this\\b`,
+    // The standing clause's three wordings — the demonstration's two and the delivered
+    // phase's "recorded for this" — all end in the same shape, so a delivered page's
+    // offering line is covered by this clause exactly as a demonstration's is. A wording
+    // that carried no standing clause at all would drop the sentence out of the clause's
+    // coverage (the composer writes none of them without one).
+    source: `(${DETAIL_LIST_PATTERN})\\s+(?:as published|invented|recorded) for this\\b`,
   },
   {
     what: "the sentence that sends a visitor to a printed detail",
