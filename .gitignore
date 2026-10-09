@@ -22,3 +22,6 @@ out/leads-*.csv
 out/leads-*.json
 # verification bundles
 out/verify/
+
+# generated bundles are build output, never committed (added 9 Oct 2026, lead)
+out/biz/
