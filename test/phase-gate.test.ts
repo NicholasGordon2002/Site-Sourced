@@ -83,7 +83,8 @@ function bundle(rec: BusinessRecord): Bundle {
     slug: SLUG,
     generatedAt: "2026-10-07T00:00:00.000Z",
   };
-  return { record: rec, ctx, pages: renderPages(ctx), readme: renderEditingReadme(ctx) };
+  const pages = renderPages(ctx);
+  return { record: rec, ctx, pages, readme: renderEditingReadme(ctx, pages) };
 }
 
 const fence = (b: Bundle, page: RenderedPage[] = b.pages): string =>

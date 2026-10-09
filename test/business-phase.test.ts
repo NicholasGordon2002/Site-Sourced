@@ -38,15 +38,17 @@
 import { expect, test } from "bun:test";
 import { join } from "node:path";
 
-import { complianceChecks, phaseFurnitureProblems } from "../src/demo/build.ts";
-import { composeCopy, composePrivacy, profileFor } from "../src/demo/copy.ts";
+import { complianceChecks, phaseFurnitureProblems, readmePageListProblems } from "../src/demo/build.ts";
+import { composeCopy, composePrivacy, printedDetailClaimProblems, profileFor } from "../src/demo/copy.ts";
 import { resolveDelivery, type FormDelivery } from "../src/demo/delivery.ts";
 import { resolveForm } from "../src/demo/forms.ts";
 import { provenanceProblems, type Provenance } from "../src/demo/provenance.ts";
 import { inspectSuppliedImage, manifestForSupplied } from "../src/demo/supplied.ts";
 import {
   renderCss,
+  readmeScriptClaim,
   renderEditingReadme,
+  scriptedPages,
   renderJs,
   renderPages,
   type RenderContext,
@@ -121,7 +123,7 @@ async function render(record: BusinessRecord): Promise<Bundle> {
   const pages = renderPages(ctx);
   const css = renderCss(profile, slug);
   const js = renderJs();
-  const readme = renderEditingReadme(ctx);
+  const readme = renderEditingReadme(ctx, pages);
   return {
     record,
     ctx,
@@ -303,4 +305,115 @@ test("the noindex sentence re-typed onto a delivered page is refused", async () 
   );
   const problems = furniture(b, b.readme, withTail);
   expect(problems).toContain("on about.html: carries the sentence about being marked noindex");
+});
+
+/* ------------------- what a DELIVERED bundle says about itself (9 Oct 2026 defects) */
+/**
+ * Four defects a paying client would have read on their own site, and the clause that now
+ * catches each of them.
+ *
+ *   1. the hero's offering line said the client's own details were "as published …"
+ *      (copy.ts) — true of a proposal, false on the client's own page. The delivered
+ *      wording is "recorded for this …", and it keeps the sentence shape
+ *      `DETAIL_CLAIM_SHAPES` reads so the class check still covers it;
+ *   2. the delivered README's AI-image note told the client to replace the picture
+ *      "before this page goes live as anyone's own site" — a step that has already
+ *      happened on a delivered site (render.ts);
+ *   3. the README glued `forms.ts`'s provider presets — answers, not phrases — into a
+ *      sentence: "The form posts to Formspark. yes — a free account … creates the form
+ *      id." Both phases now print each preset against the question it answers;
+ *   4. the README listed five pages and called `contact.html` "the only page that uses
+ *      site.js" while the folder held nine HTML files and five script pages. The list and
+ *      the claim are derived from the bundle now, and `readmePageListProblems` refuses a
+ *      typed one.
+ */
+test("the delivered offering line says the details are recorded, not published", async () => {
+  // A record whose hero shows the offering line rather than service names: no services.
+  const bare = { ...RECORD_FOR_RENDER, services: [] };
+  const business = await delivered();
+  const deliveredCopy = composeCopy(bare, "example-business", resolveForm(bare), business.ctx.delivery);
+  const demoCopy = composeCopy(bare, "example-business", resolveForm(bare), {
+    ...business.ctx.delivery,
+    mode: "demo",
+  } as FormDelivery);
+  expect(deliveredCopy.heroLead).toContain("recorded for this barber shop.");
+  expect(deliveredCopy.heroLead).not.toContain("as published");
+  // The demonstration's twin is untouched: same list, the standing clause only.
+  expect(demoCopy.heroLead).toBe(deliveredCopy.heroLead.replace("recorded for this", "as published for this"));
+});
+
+test("the delivered offering line is still covered by the detail-claim clause", () => {
+  // The doctor: the delivered wording, naming one detail the record does not carry. If the
+  // new standing clause had dropped out of `DETAIL_CLAIM_SHAPES`, this page would pass.
+  const problems = printedDetailClaimProblems({
+    record: {
+      name: "Example Barber Shop",
+      category: "Barber shop",
+      form_recipient: OUR_INBOX,
+      form_provider: "formspark",
+      form_access_key: "test-form-id",
+      source_kind: "public-listings",
+      hours: [{ days: "Mon–Fri", hours: "9:00 am – 5:00 pm" }],
+      address: { street: "1 Ladybug Lane", city: "Hamilton", province: "ON", postcode: "L8P 2A1" },
+      phone: "+1 905-555-0142",
+    } as BusinessRecord,
+    pages: [
+      {
+        file: "index.html",
+        html: "<p>Hours, address, phone number and email address recorded for this barber shop.</p>",
+      },
+    ],
+  }).join(" | ");
+  expect(problems).toContain('names "email address" in the hero\'s offering line');
+});
+
+test("the delivered README's page list and its site.js claim come from the bundle", async () => {
+  const b = await delivered();
+  for (const p of b.pages) expect(`${p.file}: ${b.readme.includes(p.file)}`).toBe(`${p.file}: true`);
+  expect(b.readme).toContain(readmeScriptClaim(b.pages));
+  expect(b.readme).not.toContain("the only page that uses site.js");
+  // The claim is the bundle's own: contact.html plus one page per recorded service.
+  expect(scriptedPages(b.pages).map((p) => p.file)).toEqual([
+    "contact.html",
+    "contact-haircut.html",
+    "contact-beard-trim.html",
+    "contact-hot-shave.html",
+  ]);
+  expect(b.readme).not.toContain("links in all five");
+  expect(b.readme).toContain("links on every page that points at it");
+});
+
+test("the old five-page list, the one-page site.js claim and an invented page are all refused", async () => {
+  const b = await delivered();
+  const stale = b.readme
+    .replace(readmeScriptClaim(b.pages), "contact.html is the only page that uses site.js.")
+    .replace(/  contact-haircut\.html[^\n]*\n/, "");
+  const problems = readmePageListProblems({ pages: b.pages, readme: stale }).join(" | ");
+  expect(problems).toContain('the README does not name "contact-haircut.html"');
+  expect(problems).toContain("does not state which pages load site.js");
+  const invented = readmePageListProblems({
+    pages: b.pages,
+    readme: b.readme.replace("  privacy.html", "  contact-wax.html"),
+  }).join(" | ");
+  expect(invented).toContain('the README names "contact-wax.html" but this bundle ships no such page');
+});
+
+test("the delivered README's provider facts read as answers, not as a broken sentence", async () => {
+  const b = await delivered();
+  // The defect, verbatim, was "The form posts to Formspark. yes — a free account …".
+  expect(b.readme).not.toMatch(/posts to Formspark\.\s+(?:yes|no)\b/);
+  expect(b.readme).toContain("The form posts to Formspark. Notifications go to");
+  expect(b.readme).toContain("  Does it need an account? yes — a free account");
+  expect(b.readme).toContain("  Whose account is it? whoever's account holds the form");
+  expect(b.readme).toContain("  Does the form service keep a copy? yes —");
+  expect(b.readme).toContain("  What does it cost? free plan:");
+});
+
+test("the delivered AI-image note has no deadline the finished site cannot meet", async () => {
+  const b = await delivered();
+  expect(b.readme).toContain("The photograph");
+  if (b.readme.includes("AI-generated illustration")) {
+    expect(b.readme).not.toContain("before this page goes live as");
+    expect(b.readme).toContain("nothing here waits on a photograph before it can go live");
+  }
 });

@@ -1,0 +1,889 @@
+/* Site Sourced demo stylesheet — business-phase-fixture
+   Plain CSS: no framework, no preprocessor, no @import, and nothing fetched from
+   the network. The two fonts live in fonts/, beside this file, and are served from
+   the same folder. The business's category supplies the four accent values; every
+   other value is a token below, so a palette change is a change of four lines.
+
+   One stylesheet serves all five pages. The design system behind these decisions is
+   docs/design-system.md. */
+
+/* ------------------------------------------------------------------ fonts */
+
+@font-face {
+  font-family: "Fraunces";
+  src: url("fonts/fraunces-latin-600.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Source Sans 3";
+  src: url("fonts/source-sans-3-latin.woff2") format("woff2");
+  font-weight: 200 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ----------------------------------------------------------------- tokens */
+
+:root {
+  /* Type */
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+  --font-body: "Source Sans 3", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  /* CANDIDATE A (owner's type-treatment ask, 6 Oct 2026) — a display-scale push, same
+     two faces, no new file. The tokens below replace the ones docs/design-system.md §2
+     carries; if this candidate is the one the owner picks, that section's table changes
+     in the same commit. --fs-page is new here: an inner page's title used to borrow
+     --fs-h2 (24px at 360px, barely above a section heading), so the loudest thing on
+     an inner page was the least designed thing on it. */
+  --fs-display: clamp(2.4rem, 11vw, 3.6rem);
+  --fs-page: clamp(2.1rem, 8.5vw, 2.6rem);
+  --fs-h2: clamp(1.5rem, 5vw, 2.05rem);
+  --fs-h3: 1.2rem;
+  --fs-lead: clamp(1.0625rem, 2.4vw, 1.1875rem);
+  --fs-body: 1.0625rem;
+  --fs-small: 0.875rem;
+  --fs-label: 0.75rem;
+
+  /* Colour — one accent, ink, paper, warm grey. Contrast is measured in
+     docs/design-system.md §3; every pair a visitor reads meets 4.5:1. */
+  --accent: #9E2B23;
+  --accent-ink: #7A1F19;
+  --accent-soft: #FBEDEA;
+  --ink: #16181B;
+  --body-text: #3D444C;
+  --muted: #5E6672;
+  --paper: #FFFFFF;
+  --paper-2: #FAF7F2;
+  --line: #E6E2DA;
+  --footer-ink: #C3C9D1;
+
+  /* Space — a 4px base, named by what it is for. */
+  --s-1: 0.25rem;
+  --s-2: 0.5rem;
+  --s-3: 0.75rem;
+  --s-4: 1rem;
+  --s-5: 1.5rem;
+  --s-6: 2rem;
+  --s-7: 3rem;
+  --s-8: 4rem;
+  --s-9: 6rem;
+  --section-y: clamp(3rem, 8vw, 5rem);
+
+  /* Layout and shape */
+  --wrap: 68rem;
+  --gutter: 1.25rem;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 18px;
+  --rule: 1px solid var(--line);
+  --shadow: 0 1px 2px rgba(16, 18, 20, .05), 0 8px 24px -16px rgba(16, 18, 20, .25);
+}
+
+/* ------------------------------------------------------------------- base */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--body-text);
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: 1.6;
+}
+
+img { display: block; max-width: 100%; height: auto; }
+
+h1, h2, h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+h1 { font-size: var(--fs-display); line-height: 1.02; letter-spacing: -0.025em; margin: 0 0 var(--s-4); }
+h2 { font-size: var(--fs-h2); line-height: 1.15; margin: 0 0 var(--s-3); }
+h3 { font-size: var(--fs-h3); line-height: 1.25; margin: 0 0 var(--s-1); }
+
+p { margin: 0 0 var(--s-4); max-width: 34em; }
+
+a { color: var(--accent-ink); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+a:hover { text-decoration-thickness: 2px; }
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.wrap { width: min(var(--wrap), 100% - var(--gutter) * 2); margin-inline: auto; }
+.muted { color: var(--muted); }
+.lead { max-width: 34em; font-size: var(--fs-lead); line-height: 1.5; color: var(--body-text); }
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 9;
+  background: var(--paper);
+  color: var(--ink);
+  padding: var(--s-3) var(--s-4);
+  border-radius: 0 0 var(--r-md) 0;
+  box-shadow: var(--shadow);
+}
+.skip-link:focus { left: 0; }
+
+/* The proposal banner: first thing on the page, in normal flow, never hidden. */
+.proposal-banner {
+  background: var(--ink);
+  color: #fff;
+  border-bottom: 3px solid var(--accent);
+}
+/* The three standalone compliance lines — this banner, the footer disclaimer and the
+   illustration caption — are centred at both widths. They stand on their own with
+   nothing beside them, so a centred block does not break a reading line. The two lines
+   that sit beside a control (the printed-details caveat and the form-delivery notice)
+   stay left-aligned: they are read as prose attached to the details and the button.
+
+   The inline-auto margin also fixes the alignment this line had: a bare
+   margin: 0 used to beat the wrap rule's margin-inline: auto, so the banner's text sat
+   flush to the viewport's left edge while the rest of the page was inset by the
+   gutter. */
+.proposal-banner p {
+  margin: 0 auto;
+  padding: 0.7rem 0;
+  font-size: var(--fs-small);
+  line-height: 1.5;
+  max-width: 60em;
+  text-align: center;
+}
+
+/* ----------------------------------------------------------------- header */
+
+.site-header {
+  /* The phone menu panel is positioned against this box, and --gutter is the page's
+     own left edge, so the panel opens on the same line the hamburger sits on. */
+  position: relative;
+  background: var(--paper);
+  border-bottom: var(--rule);
+}
+.header-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3) var(--s-4);
+  padding: var(--s-4) 0;
+}
+
+/* The home page is one surface, and the header sits **on** the photograph (owner
+   retouch, 6 Oct 2026). The header and the page body are given the same grid row, so
+   the picture behind the header runs up to the proposal banner and no white band sits
+   between them; the header takes the top of that row (align-self: start) and paints
+   above the picture (z-index, which works because .site-header is positioned). The
+   banner keeps row 1 and the footer row 3, so the page below the hero is exactly the
+   page it was. The photograph's own height is untouched: it is the header's former
+   row that the picture now fills.
+
+   An inner page has no photograph, so nothing there overlays anything. page--index is
+   on the home page alone, and headerOverlayProblems in build.ts refuses an overlay
+   rule that is not scoped to it. Those pages keep the paper surface and the hairline
+   that gives the page-head band its top edge.
+
+   The surface under the type is the header's own, because the picture is unknown until
+   it is drawn: it has to hold up over the lightest pixel a photograph can contain, which
+   is pure white. It is a scrim mixed from the hero's own ink — the same rgba(10, 12, 14)
+   the hero's scrim is built from — and the band the type can land in holds it at .64, so
+   white text reaches 6.0:1 over pure white whatever the picture turns out to be (the
+   build measures exactly this and requires 5.6:1, its own standard for type over an
+   unknown photograph). */
+/* Every one of the four is placed in the one column explicitly: a row without a
+   column lets auto-placement find the cell occupied and start a second, implicit
+   column, which is sized by its content and leaves the real one nothing to give. */
+.page--index body { display: grid; grid-template-columns: minmax(0, 1fr); }
+.page--index .proposal-banner { grid-area: 1 / 1; }
+.page--index .site-header { grid-area: 2 / 1; }
+.page--index main { grid-area: 2 / 1; }
+.page--index .site-footer { grid-area: 3 / 1; }
+.page--index .site-header {
+  align-self: start;
+  z-index: 1;
+  /* A surface, not a line (owner, 6 Oct 2026, after rejecting the hairlines at each
+     edge). The header paints a scrim of the hero's own ink over the top of the
+     photograph and eases it to nothing by its own bottom edge. Its last stop is fully
+     transparent, so the header's last pixel IS the hero's pixel: the two read as one
+     continuous surface with no edge to see, and the picture "opens up" from under the
+     banner instead of being ruled off into a band. Nothing delimits the header now but
+     the light itself.
+
+     Two properties are load-bearing and headerOverlayProblems refuses a build without
+     either: the scrim above, held at .64 through the band the type lands in (the top 70%
+     of the box — the wordmark's row, the wide row's links and the action all sit there),
+     which is 6.0:1 for white text over pure white; and border: 0, because the base
+     .site-header rule ends in a border-bottom of var(--rule) (a 1px #E6E2DA hairline) and
+     would otherwise draw the rejected line straight back in under the picture. The base
+     rule also paints --paper, which the transparent background-color switches off —
+     without it the paper would show through the scrim's transparent tail as a white
+     band. */
+  background-color: transparent;
+  background-image: linear-gradient(180deg, rgba(10, 12, 14, .66) 0%, rgba(10, 12, 14, .64) 70%, rgba(10, 12, 14, 0) 100%);
+  border: 0;
+  /* The wordmark inherits this, which is the only reason white reaches it: the
+     wordmark's own rule is color: inherit, and it stays that way. */
+  color: #fff;
+}
+/* The halo stays, but it is no longer what carries legibility: the scrim above is, and
+   it is measured. What the halo still does is soften the anti-aliased edge of a stroke
+   where it crosses a light patch of the picture, which is below the resolution of any
+   contrast measurement — a glyph-level device, not a surface and not a separator. */
+.page--index .site-header .wordmark { text-shadow: 0 1px 2px rgba(10, 12, 14, .55); }
+/* The action on the scrim is a white pill with the ink label (about 17:1 inside it) and
+   about 6:1 against the scrim's lightest pixel in the band the type lands in — where the
+   ink pill on that scrim is about 2.5:1, under the 3:1 a control's own boundary needs.
+   Every .call-button in the header is the action: the slot is the page's primary action
+   (render.ts headerActionBlock) and nothing else in the header wears the treatment, so
+   this rule needs no exemption for a chip that is not a link. */
+.page--index .site-header .call-button { background: #fff; color: var(--ink); }
+.page--index .site-header .call-button:hover { background: #F1EEE8; color: var(--ink); }
+/* The accent focus ring is 1.3:1 on the scrim — invisible, and an outright failure of
+   the 3:1 an indicator needs. Inside this header the ring is white (about 6:1 there). */
+.page--index .site-header :focus-visible { outline-color: #fff; }
+.page--index .header-inner { padding: var(--s-3) 0; }
+.wordmark {
+  /* A phone needs the wordmark on one line with the hamburger and the header's action
+     on the next, and a flex line is broken on the item's hypothetical main size before
+     anything shrinks. A basis of half the row puts the wordmark and the hamburger on
+     the first line — the wordmark's own width, about 255px at 1.3rem, would otherwise
+     claim that line and leave the action nowhere but a third line — and the action,
+     which cannot share a line with both, takes the second row to itself. The
+     desktop block below puts the auto basis back, so the wide layout is untouched. */
+  flex: 1 1 50%;
+  min-width: 0;
+  margin: 0;
+  font-family: var(--font-display);
+  /* CANDIDATE A: the name goes up with the h1 — 18.4px to 20px. It is measured, not
+     guessed, because the row is the hard limit: at 360px the header's inner box is
+     320px, and the 44px menu chip plus the gap leaves the name 260px. Measured natural
+     widths in Fraunces: 1.15rem 231px, 1.2rem 241px, 1.25rem 251px, 1.3rem 261px — so
+     1.25rem is the ceiling and 1.3rem wrapped the name onto two lines at 360px. It also
+     means a real business whose name runs longer than these two fixtures wraps here. */
+  font-size: 1.25rem;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  /* The wordmark is a link home (owner revision, 6 Oct). At rest it keeps exactly the
+     look it had as a paragraph — the site's name in the display face, no underline —
+     and it shows a visitor it is a link by underlining on hover and on keyboard focus,
+     which is also the only state in which an underline here would mean anything. The
+     colour is inherited, so the header's contrast pairs are unchanged: body text on
+     paper and on the footer, both measured in docs/design-system.md §3. */
+  color: inherit;
+  text-decoration: none;
+}
+.wordmark:hover, .wordmark:focus-visible { text-decoration: underline; text-underline-offset: 3px; }
+.site-header .call-button { margin-left: auto; }
+/* Off-screen, still read aloud. The phone menu's summary draws three lines, so its name
+   cannot be its visible text; this carries the name a screen reader reads. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  min-width: 0;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* The navigation, in two shapes and with no JavaScript in either.
+   On a phone the page links sit in a left-side panel opened by a hamburger: a
+   <details> summary (native semantics, keyboard-operable, no script) whose next
+   sibling is the panel — never its child, because a nav inside a closed <details>
+   cannot be revealed by CSS.
+   The summary is a 44×44px target, the printable minimum, and it is named twice over:
+   by aria-label and by the visually-hidden text inside it. Three lines are not a
+   label, and an icon-only control is one a screen reader cannot read.
+   The panel is a third of the viewport wide with a min-content floor, so a link row
+   can never wrap or clip: 33% of a 360px viewport is 119px, which holds "Services" with
+   room to spare, and on a narrower screen the floor widens the panel rather than
+   squeezing the text (white-space: nowrap on the links is what gives the floor its
+   job). The panel is taken **out of the flow**, so opening it cannot add a row to the
+   header: item 44's two-row phone header holds whatever the menu does.
+   From 48rem the summary goes, the panel's geometry is undone, and the same list sits
+   inline on the wordmark's line. */
+.site-menu { flex: 0 0 auto; margin: 0; }
+.site-menu-summary {
+  /* The visually-hidden name is positioned against this box, not the page. */
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: var(--rule);
+  border-radius: var(--r-md);
+  background: var(--paper-2);
+  color: var(--ink);
+  list-style: none;
+  cursor: pointer;
+}
+.site-menu-summary::-webkit-details-marker { display: none; }
+.site-menu-summary::marker { content: ""; }
+.site-menu[open] .site-menu-summary { background: var(--accent-soft); border-color: var(--accent); }
+/* Three 18×2px lines, 6px apart, drawn from one element: the two shadows repeat the bar
+   rather than a second and third span. No icon file, no third-party asset. */
+.site-menu-icon {
+  display: block;
+  width: 1.125rem;
+  height: 2px;
+  background: currentColor;
+  box-shadow: 0 -0.375rem 0 currentColor, 0 0.375rem 0 currentColor;
+}
+.site-nav {
+  position: absolute;
+  top: 100%;
+  left: var(--gutter);
+  z-index: 5;
+  display: none;
+  width: 33vw;
+  min-width: min-content;
+  margin-top: var(--s-2);
+  padding: var(--s-2);
+  background: var(--paper);
+  border: var(--rule);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow);
+}
+.site-menu[open] ~ .site-nav { display: block; }
+.site-nav ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* The privacy notice is not in the phone's menu (owner, 6 Oct): the four page links the
+   owner named are, and the notice stays reachable from the footer's small print on every
+   page — which privacyLinkProblems keeps there. It keeps its place in the desktop row. */
+.site-nav li.nav-item--desktop { display: none; }
+.site-nav a {
+  display: flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0 var(--s-3);
+  border-radius: var(--r-md);
+  background: var(--paper-2);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--body-text);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.site-nav a:hover { color: var(--ink); background: #F1EEE8; }
+.site-nav a[aria-current="page"] { background: var(--accent-soft); color: var(--accent-ink); }
+
+/* ---------------------------------------------------------------- buttons */
+
+.button, .call-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  min-height: 2.75rem;
+  padding: 0.7rem 1.15rem;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  background: var(--ink);
+  color: #fff;
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none;
+  cursor: pointer;
+}
+.button:hover, .call-button:hover { background: #000; color: #fff; }
+
+.button--paper { background: #fff; color: var(--ink); }
+.button--paper:hover { background: #F1EEE8; color: var(--ink); }
+
+.button--ghost {
+  background: rgba(255, 255, 255, .1);
+  color: #fff;
+  border-color: rgba(255, 255, 255, .75);
+}
+.button--ghost:hover { background: rgba(255, 255, 255, .22); color: #fff; }
+
+/* Backlog 273f40d1: the design system promises 44×44 (docs/design-system.md §…), and
+   this control was 36px. It is the "Get directions" action, alone in its own paragraph,
+   so the height is the whole fix — nothing sits on the line beside it. */
+.button--small { min-height: 2.75rem; padding: 0.45rem 0.9rem; font-size: var(--fs-small); }
+
+/* The quiet link — "More about <the business's name>", under the home page's About
+   excerpt. It is a control, not part of a sentence: it is the only thing in its
+   paragraph (the --inline modifier resets the left offset and nothing else), so padding
+   can give it the 44px the design system promises without bursting a line of running
+   text. The box grows downward and the words stay where they were; the fill is
+   transparent, so what a visitor sees is unchanged. A quiet link set *inside* running
+   text would need a pseudo-element hit area instead — that is why this rule says where
+   it is used. */
+.link-quiet {
+  display: inline-block;
+  min-height: 2.75rem;
+  padding: 0.5rem 0;
+  margin: var(--s-3) 0 0 var(--s-4);
+  font-size: var(--fs-small);
+  color: var(--muted);
+}
+.link-quiet--inline { margin-left: 0; }
+.cta-actions { margin: var(--s-5) 0 0; max-width: none; }
+
+/* --------------------------------------------------------------- eyebrow */
+
+/* Uppercase label line — category and place — with the one accent mark that is not
+   a button. Used on the hero and at the top of every other page. */
+.eyebrow {
+  margin: 0 0 var(--s-3);
+  font-size: var(--fs-label);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.eyebrow::before {
+  content: "";
+  display: inline-block;
+  width: 1.5rem;
+  height: 2px;
+  margin-right: var(--s-2);
+  vertical-align: middle;
+  background: var(--accent);
+}
+
+/* ------------------------------------------------------------------- hero */
+
+/* The hero is a real <img> filling a grid cell the copy sits in: the row is as tall
+   as the taller of the two, so the picture never decides where the words go. The
+   background below is the fallback — a bundle where no photograph passed the licence
+   check gets this ink gradient and nothing else. */
+.hero {
+  display: grid;
+  background: linear-gradient(140deg, var(--ink), #2C323A 70%);
+  color: #fff;
+}
+.hero > * { grid-area: 1 / 1; }
+.hero--photo { background: #1A1D21; }
+/* The picture fills the first screen on a phone and is bounded on a tall desktop
+   monitor: the 22rem line is the fallback for a browser without svh. Height only —
+   the bytes the hero costs are set by its srcset and the per-page weight budget. */
+.hero-img {
+  width: 100%;
+  height: 100%;
+  min-height: 22rem;
+  min-height: min(78svh, 34rem);
+  object-fit: cover;
+  object-position: center;
+}
+/* The scrim is what makes white text on an unknown photograph legible: measured at
+   11:1 for white on the lightest part of it. Never removed, whatever the picture. */
+.hero-scrim {
+  background: linear-gradient(180deg, rgba(10, 12, 14, .58) 0%, rgba(10, 12, 14, .40) 34%, rgba(10, 12, 14, .88) 100%);
+}
+.hero-inner { align-self: end; padding: var(--s-7) 0 var(--s-6); }
+.hero .eyebrow { color: rgba(255, 255, 255, .9); }
+.hero .eyebrow::before { background: #fff; }
+.hero h1 { color: #fff; margin-bottom: var(--s-4); max-width: 20ch; letter-spacing: -0.035em; }
+.hero-lead { margin: 0; max-width: 30rem; font-size: var(--fs-lead); line-height: 1.5; color: rgba(255, 255, 255, .94); }
+.hero-actions { display: flex; flex-wrap: wrap; gap: var(--s-3); margin: var(--s-5) 0 0; max-width: none; }
+.hero :focus-visible { outline-color: #fff; }
+
+/* The two figures exist so a placeholder has a caption element to live in: the hero's
+   under the picture, in normal flow. Its wording is fixed by build-gated copy; only
+   its spacing is design. */
+.hero-figure, .about-figure { margin: 0; }
+/* A standalone notice, centred like the banner and the footer disclaimer. The auto
+   inline margin keeps the wrap measure this element also carries — a bare
+   margin: var(--s-3) 0 0 used to cancel it and leave the caption flush to the left. */
+.hero-caption { margin: var(--s-3) auto 0; padding-bottom: var(--s-1); font-size: var(--fs-small); text-align: center; }
+
+/* ----------------------------------------------------------------- page head */
+
+/* Every page but the home page opens with this band instead of a photograph: cheaper
+   on a phone than five copies of one hero, and it keeps the headline the loudest
+   thing on the page. */
+.page-head {
+  padding: var(--s-7) 0 var(--s-5);
+  background: var(--paper-2);
+  border-bottom: var(--rule);
+}
+.page-head h1 { font-size: var(--fs-page); line-height: 1.05; margin-bottom: var(--s-3); }
+.page-head .lead { margin: 0; }
+
+/* --------------------------------------------------------------- sections */
+
+.section { padding: var(--section-y) 0; }
+.section--alt { background: var(--paper-2); border-block: var(--rule); }
+.section h2 { margin-bottom: var(--s-3); }
+.section h2::before {
+  content: "";
+  display: block;
+  width: 2.25rem;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+  margin-bottom: var(--s-3);
+}
+.section p { color: var(--body-text); }
+.section .muted, .muted { color: var(--muted); }
+
+.address { font-style: normal; font-weight: 600; color: var(--ink); line-height: 1.5; }
+.address-links { margin: var(--s-4) 0 0; }
+/* The hours/address split is two blocks inside one section. On a phone they stack, and
+   they used to touch — the hours card's bottom margin is 0 and the second block began
+   the moment the first ended, so "Where {name} is" read as part of the card above it.
+   The gap is the token every section boundary in the template is built from rather than
+   a number of its own: --section-y, the section's own top spacing, so the pair reads
+   like the section boundary it is. Above 48rem the pair is the two-column grid below,
+   whose own gap does this job, so the margin goes there. */
+.two-col > div + div { margin-top: var(--section-y); }
+.page-head + .section { padding-top: var(--s-7); }
+
+/* The card: one white surface with a hairline edge, used for the service list and
+   the hours table. Defined once so the two cannot drift apart. */
+.card {
+  background: var(--paper);
+  border: var(--rule);
+  border-radius: var(--r-lg);
+  box-shadow: 0 1px 2px rgba(16, 18, 20, .03);
+}
+
+.services { list-style: none; margin: var(--s-5) 0 0; padding: 0; display: grid; gap: var(--s-3); }
+/* A service card is ONE link covering the whole card (owner text, 6 Oct 2026: "Make each
+   entire service card one accessible keyboard/touch-safe interactive target, with no
+   nested interactive elements"). The <a> *is* the card — it carries the surface, the
+   heading, the note and the action line — so a thumb can land anywhere on it and a
+   keyboard finds one stop per card. Nothing interactive sits inside the link: that is
+   what the build's serviceCardProblems check refuses. The list item is only a grid cell,
+   and flexing it is what lets the link fill the cell in the two-column layout. */
+.services li { display: flex; }
+.services .service-tile {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 2.75rem;
+  padding: var(--s-4) var(--s-5);
+  color: inherit;
+  text-decoration: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.services .service-tile:hover, .services .service-tile:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 2px 10px rgba(16, 18, 20, .08);
+}
+/* The whole card is the focusable target, so the focus ring is drawn round the card
+   itself — the site's global :focus-visible ring, restated for the card so that the ring
+   belongs to the thing a keyboard visitor is actually on: one card in a grid of
+   identical cards. */
+.services .service-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.services p { margin: 0; max-width: none; color: var(--muted); font-size: 0.9375rem; }
+/* The card's action line. It is text inside the link, never a control of its own — the
+   whole card is the target and a nested <a>/<button> is refused by the build. The
+   underline is what tells a visitor the card is a link before they touch it, and the
+   family's own words for the service ("Request Hot shave") are what make the target
+   honest. A top margin of auto is what puts the line at the foot of every card, so a row
+   of cards with notes of different lengths still lines its action lines up. */
+.services .service-action {
+  margin: auto 0 0;
+  padding-top: var(--s-4);
+  color: var(--accent-ink);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+.services .service-tile:hover .service-action { text-decoration-thickness: 2px; }
+
+.hours { margin: var(--s-5) 0 0; max-width: 30rem; overflow: hidden; }
+.hours-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-4);
+  padding: var(--s-3) var(--s-4);
+  border-bottom: var(--rule);
+}
+.hours-row:last-child { border-bottom: 0; }
+.hours dt { margin: 0; font-weight: 600; color: var(--ink); }
+.hours dd { margin: 0; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.about-photo { margin-top: var(--s-4); border-radius: var(--r-lg); }
+
+/* --------------------------------------------------------------- how it works */
+
+/* Family B's three steps. The same metric rhythm as .hours-row and .extras-item, so
+   the page has one list language rather than three. */
+.steps { list-style: none; margin: var(--s-5) 0 0; padding: 0; max-width: 34rem; }
+.steps li { display: flex; gap: var(--s-4); padding: var(--s-3) 0; border-bottom: var(--rule); }
+.steps li:last-child { border-bottom: 0; }
+.step-num {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--r-sm);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: var(--fs-small);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.step-text { color: var(--ink); }
+
+/* The extras card: the record's own facts, in the client's own words. Identical
+   metrics to .hours-row, so the two cards read as siblings. */
+.extras { margin: var(--s-5) 0 0; max-width: 34rem; overflow: hidden; }
+.extras-item { padding: var(--s-3) var(--s-4); border-bottom: var(--rule); }
+.extras-item:last-child { border-bottom: 0; }
+.extras-item dt {
+  margin: 0 0 var(--s-1);
+  font-size: var(--fs-label);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.extras-item dd { margin: 0; font-size: 0.9375rem; color: var(--ink); }
+
+/* ------------------------------------------------------------ contact + form */
+
+.form-notice,
+.notice {
+  margin: var(--s-5) 0;
+  padding: var(--s-4) var(--s-5);
+  background: var(--accent-soft);
+  border-left: 4px solid var(--accent);
+  border-radius: 0 var(--r-md) var(--r-md) 0;
+  color: var(--ink);
+  font-size: 0.9375rem;
+}
+
+/* The form is two field sets — your details, then the request itself (design spec §2).
+   The vocabulary it needs beyond the text input: a fieldset, a small-caps legend, a
+   native select, and a chip group for checkboxes and radios. No new tokens: every value
+   below is one of the tokens above. */
+fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+
+.field-group { margin-top: var(--s-4); }
+.field-group--second { border-top: var(--rule); margin-top: var(--s-5); padding-top: var(--s-5); }
+.field-group-legend {
+  display: block;
+  width: 100%;
+  margin: 0 0 var(--s-4);
+  padding: 0;
+  font-size: var(--fs-label);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.contact-form { max-width: 34rem; margin-top: var(--s-5); }
+.field { margin-bottom: var(--s-4); }
+.field label { display: block; margin-bottom: var(--s-2); font-weight: 600; font-size: 0.9375rem; color: var(--ink); }
+.optional { font-weight: 400; color: var(--muted); }
+.field input, .field textarea, .field select {
+  width: 100%;
+  padding: 0.7rem 0.8rem;
+  border: var(--rule);
+  border-radius: var(--r-sm);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+}
+.field textarea { min-height: 8rem; resize: vertical; }
+.field input:focus-visible, .field textarea:focus-visible, .field select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* The select keeps the browser's own picker: it is better on a phone than anything we
+   would draw, it needs no script, and it costs nothing. */
+.field select { min-height: 2.75rem; }
+
+/* Choice chips: one component for checkboxes and radios. The input is visually hidden
+   but focusable, so the group still posts with JavaScript off and works by keyboard. */
+.choice-group { margin-bottom: var(--s-4); }
+.choice-group legend { display: block; margin-bottom: var(--s-2); padding: 0; font-weight: 600; font-size: 0.9375rem; color: var(--ink); }
+.choice-wrap { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.chip { display: inline-flex; position: relative; cursor: pointer; }
+.chip input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.chip-text {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+  padding: 0.4rem 0.9rem;
+  border: var(--rule);
+  border-radius: var(--r-md);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+.chip input:checked + .chip-text { background: var(--accent-soft); border-color: var(--accent); }
+.chip input:focus-visible + .chip-text { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* The preferred days, if the record states any, read as a date-picker strip rather
+   than as a form: 52x44 chips, five to seven to a row. */
+.choice-group--days .choice-wrap { display: grid; grid-template-columns: repeat(auto-fit, minmax(3.25rem, 1fr)); gap: var(--s-2); }
+.choice-group--days .chip-text { width: 100%; }
+
+.form-actions { margin: var(--s-5) 0 0; }
+.form-actions .button { width: 100%; }
+.form-note { margin: var(--s-3) 0 0; max-width: 34rem; font-size: var(--fs-small); color: var(--muted); }
+
+.hp { position: absolute; left: -9999px; height: 0; overflow: hidden; }
+
+.form-status { min-height: 1.5rem; margin: var(--s-4) 0 0; font-weight: 600; }
+.form-status[data-state="error"] { color: #A3241F; }
+.form-status[data-state="ok"] { color: #1F6B3A; }
+
+.form-privacy { margin: var(--s-4) 0 0; font-size: var(--fs-small); }
+
+.contact-fallback {
+  max-width: 34rem;
+  margin-top: var(--s-6);
+  padding-top: var(--s-5);
+  border-top: var(--rule);
+}
+.contact-fallback h3 { margin-bottom: var(--s-2); }
+.contact-fallback p { margin: 0 0 var(--s-2); }
+.contact-fallback p:last-child { margin-bottom: 0; font-size: var(--fs-small); }
+
+/* ------------------------------------------------------------- privacy page */
+
+/* A notice is read, not skimmed: one narrow measure, headings that separate the
+   questions a visitor actually asks, and no accent marks competing with the text. */
+.privacy-notice { max-width: 42rem; }
+.privacy-notice h2 { margin-top: var(--s-6); font-size: var(--fs-h3); }
+.privacy-notice h2:first-child { margin-top: 0; }
+.privacy-notice .updated { margin: var(--s-6) 0 0; padding-top: var(--s-4); border-top: var(--rule); font-size: var(--fs-small); }
+
+/* ---------------------------------------------------------------- footer */
+
+.site-footer {
+  background: var(--ink);
+  color: var(--footer-ink);
+  padding: var(--s-8) 0 var(--s-7);
+  font-size: var(--fs-small);
+}
+.footer-grid { display: grid; gap: var(--s-7); }
+.footer-biz { margin: 0 0 var(--s-2); font-family: var(--font-display); font-size: 1.35rem; color: #fff; }
+.footer-contact { margin: 0 0 var(--s-4); color: #E8EBEE; line-height: 1.7; max-width: 34em; }
+.site-footer a { color: #fff; text-decoration-color: rgba(255, 255, 255, .45); }
+.site-footer a:hover { text-decoration-color: #fff; }
+.site-footer p { max-width: 46em; }
+/* A standalone notice, centred like the banner and the hero caption. The accent bar
+   that used to sit on its left was a left-alignment device, so it goes with the
+   alignment and nothing decorative replaces it. */
+.disclaimer {
+  margin: var(--s-4) auto 0;
+  color: #fff;
+  font-size: 0.9375rem;
+  text-align: center;
+}
+.footer-small { margin: 0 0 var(--s-4); }
+.footer-small:last-child { margin-bottom: 0; }
+.site-footer code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1em; color: #E8EBEE; }
+.site-footer :focus-visible { outline-color: #fff; }
+
+/* The footer carries no list of page links: the header is the navigation, on a phone
+   behind the Pages disclosure and on a desktop as the inline row. The one page link
+   that must stay reachable from every page — the privacy notice — sits in the small
+   print above, as inline 14px text rather than a 44px target. That is deliberate: the
+   footer's job is to be read, and the phone's large targets are in the header. */
+
+/* ------------------------------------------------------------ wider screens */
+
+@media (min-width: 48rem) {
+  :root { --gutter: 2rem; }
+  /* The hero's min-height — min(78svh, 34rem) — is the same at every width: from 48rem
+     up, the viewport-height term exceeds the 34rem cap on any screen taller than about
+     700px, so a desktop hero is capped at 34rem and a phone hero fills what it can. No
+     separate upper bound is needed: the 34rem in the min() is it. */
+  .hero-inner { padding: var(--s-9) 0 var(--s-8); }
+  /* Level rows: a card whose service has a recorded note and one without end at the
+     same height instead of leaving the shorter card floating. The grid has no height of
+     its own, so 1fr auto-rows resolve to the tallest card's height. On a phone the list
+     is one column, where unequal heights are honest and a reserved empty box would be
+     unexplainable — and no note is ever written to fill one. */
+  .services { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 1fr; align-items: stretch; }
+  .two-col { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: var(--s-7); align-items: start; }
+  /* The stacked pair's gap (see the phone rule) is the grid's own gap up here. */
+  .two-col > div + div { margin-top: 0; }
+  .footer-grid { grid-template-columns: 1.1fr 0.9fr; gap: var(--s-8); }
+  /* Desktop keeps the plain inline row it has always had: the summary goes, the nav
+     comes back into the flow — the phone panel's geometry undone property by property,
+     since it is out of the flow and inset on the gutter down there — and the links lose
+     the phone panel's row shape. The wordmark takes its auto basis back, so the wide
+     header is exactly the one it has always been, and the privacy link returns to the
+     row it has always been in. */
+  .site-menu { display: none; }
+  .wordmark { flex: 1 1 auto; }
+  .site-nav {
+    position: static;
+    top: auto;
+    left: auto;
+    z-index: auto;
+    display: block;
+    width: auto;
+    min-width: 0;
+    margin-top: 0;
+    padding: 0;
+    background: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    flex: 1 1 auto;
+    order: 2;
+    margin-left: var(--s-6);
+  }
+  .site-nav li.nav-item--desktop { display: block; }
+  .site-nav ul { flex-direction: row; flex-wrap: wrap; gap: 0 var(--s-4); }
+  .site-nav a {
+    display: inline-flex;
+    min-height: 2rem;
+    padding: 0;
+    border-radius: 0;
+    background: none;
+    border-bottom: 2px solid transparent;
+  }
+  .site-nav a:hover { background: none; color: var(--ink); border-bottom-color: var(--line); }
+  .site-nav a[aria-current="page"] { background: none; color: var(--accent-ink); border-bottom-color: var(--accent); }
+  /* From 48rem the nav sits in the header row rather than in the phone panel — and on
+     the home page that row is now on the photograph, where the body colour is 1.7:1 and
+     the accent "current" mark is 1.3:1. The wide row's links, hover and current mark go
+     white there. Only the wide row: the phone panel is an opaque paper surface of its
+     own, and white text on it would be nothing at all. */
+  .page--index .site-header .site-nav a { color: #fff; text-shadow: 0 1px 2px rgba(10, 12, 14, .55); }
+  .page--index .site-header .site-nav a:hover { color: #fff; border-bottom-color: rgba(255, 255, 255, .6); }
+  .page--index .site-header .site-nav a[aria-current="page"] { color: #fff; border-bottom-color: #fff; }
+  .site-header .call-button { order: 3; }
+  .page-head { padding: var(--s-8) 0 var(--s-6); }
+  .form-actions .button { width: auto; }
+  .privacy-notice h2 { font-size: var(--fs-h3); }
+}
+
+@media (min-width: 64rem) {
+  /* CANDIDATE A: steps up from the phone's 1.25rem, so the wide header keeps its gain. */
+  .wordmark { font-size: 1.4rem; }
+}
+
+/* ------------------------------------------------------------ preferences */
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  * { transition: none !important; animation: none !important; }
+}
