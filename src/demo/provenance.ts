@@ -320,7 +320,7 @@ export function pageText(html: string): string {
  * Detection is by the words, not by "is this string missing": the business-phase strings
  * are shorter versions of the demonstration ones, so an equality test would prove nothing.
  */
-const DEMO_SOURCING_CLAIMS: [string, RegExp][] = [
+export const DEMO_SOURCING_CLAIMS: [string, RegExp][] = [
   ["the sentence that says the details came from public listings", /\b(?:came|come|sourced|taken) from public listings\b/i],
   ["the \"as published in public listings\" caveat", /\bas published in public listings\b/i],
   ["the \"public mapping data\" credit", /\bpublic mapping data\b/i],

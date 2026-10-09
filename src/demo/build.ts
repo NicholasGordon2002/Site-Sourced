@@ -187,20 +187,21 @@ export interface BuildOptions {
  * note. Attributes, comments and scripts are stripped first: what is scanned is what a
  * visitor would read.
  */
+export const PLACEHOLDER_PATTERNS: [string, RegExp][] = [
+  ["a bracketed placeholder", /\[[^\]\n]{2,60}\]/],
+  ["an unfilled template token", /\{[a-zA-Z][^}\n]{2,60}\}/],
+  ["a working note", /\b(TBD|TODO|FIXME)\b/],
+  ["filler text", /lorem ipsum/i],
+];
+
 export function placeholderProblems(pages: RenderedPage[]): string[] {
-  const patterns: [RegExp, string][] = [
-    [/\[[^\]\n]{2,60}\]/, "a bracketed placeholder"],
-    [/\{[a-zA-Z][^}\n]{2,60}\}/, "an unfilled template token"],
-    [/\b(TBD|TODO|FIXME)\b/, "a working note"],
-    [/lorem ipsum/i, "filler text"],
-  ];
   const problems: string[] = [];
   for (const page of pages) {
     const text = page.html
       .replace(/<!--[\s\S]*?-->/g, " ")
       .replace(/<[^>]*>/g, " ")
       .replace(/\s+/g, " ");
-    for (const [pattern, what] of patterns) {
+    for (const [what, pattern] of PLACEHOLDER_PATTERNS) {
       const hit = pattern.exec(text);
       if (hit) {
         problems.push(
@@ -661,6 +662,21 @@ function overlayColour(value: string, tokens: Map<string, string>): Rgb | null {
 }
 
 /**
+ * The marks a header with no photograph behind it may not wear, one named pattern per
+ * shape so a refusal can say which one it found (clause 2 of `headerOverlayProblems`).
+ * Declared at module scope because the coverage meta-check reads every named-pattern
+ * list this generator refuses with (`refusalCoverageProblems`).
+ */
+export const OVERLAY_MARKS: { what: string; re: RegExp }[] = [
+  { what: "a shared grid cell", re: /\bgrid-(area|row|column)\s*:|(^|;)\s*display\s*:\s*grid\b/ },
+  { what: "a wash over the photograph", re: /linear-gradient\([^;]*rgba\(/ },
+  { what: "white header text", re: /(^|;)\s*color\s*:\s*#(?:fff|ffffff)\b|(^|;)\s*color\s*:\s*white\s*(;|$)/i },
+  { what: "a white action on the wash", re: /(^|;)\s*background(-color)?\s*:\s*#(?:fff|ffffff)\b|(^|;)\s*background(-color)?\s*:\s*white\s*(;|$)/i },
+  { what: "a white focus ring on the wash", re: /outline-color\s*:\s*#(?:fff|ffffff)\b|outline-color\s*:\s*white\s*(;|$)/i },
+  { what: "the header stacked above the page", re: /(^|;)\s*z-index\s*:\s*\d/ },
+];
+
+/**
  * The home page's header, sitting on the hero photograph (owner retouch, 6 Oct 2026) — as
  * a rule the build enforces (WORKFLOW.md rule 6: a page rule that lives only in prose or a
  * comment rots, and this one is CSS-wide while the safety of one page depends on the scope
@@ -758,17 +774,9 @@ export function headerOverlayProblems(pages: RenderedPage[], css = ""): string[]
   const tokens = overlayRuleDeclarations(base, (selector) => selector === ":root");
 
   /* 2. No overlay declaration may reach a header with no photograph behind it. */
-  const MARKS: { what: string; re: RegExp }[] = [
-    { what: "a shared grid cell", re: /\bgrid-(area|row|column)\s*:|(^|;)\s*display\s*:\s*grid\b/ },
-    { what: "a wash over the photograph", re: /linear-gradient\([^;]*rgba\(/ },
-    { what: "white header text", re: /(^|;)\s*color\s*:\s*#(?:fff|ffffff)\b|(^|;)\s*color\s*:\s*white\s*(;|$)/i },
-    { what: "a white action on the wash", re: /(^|;)\s*background(-color)?\s*:\s*#(?:fff|ffffff)\b|(^|;)\s*background(-color)?\s*:\s*white\s*(;|$)/i },
-    { what: "a white focus ring on the wash", re: /outline-color\s*:\s*#(?:fff|ffffff)\b|outline-color\s*:\s*white\s*(;|$)/i },
-    { what: "the header stacked above the page", re: /(^|;)\s*z-index\s*:\s*\d/ },
-  ];
   for (const rule of all) {
     if (scoped(rule.selector) || !mentionsHeader(rule.selector)) continue;
-    const hit = MARKS.find((mark) => mark.re.test(rule.body));
+    const hit = OVERLAY_MARKS.find((mark) => mark.re.test(rule.body));
     if (hit) {
       problems.push(
         `the stylesheet puts ${hit.what} on "${rule.selector}", which is not scoped to ${overlay}. An inner page has no photograph behind its header, so the overlaid header is the home page's alone.`,
@@ -1689,7 +1697,7 @@ export function bookingProblems(vars: {
 }
 
 /** The furniture that belongs to the demonstration phase, in the words a page writes it. */
-const PROPOSAL_FURNITURE: [string, RegExp][] = [
+export const PROPOSAL_FURNITURE: [string, RegExp][] = [
   ["the proposal banner element", /<div class="proposal-banner"/i],
   ["an unsolicited-proposal sentence", /unsolicited (?:design )?proposal/i],
   ["the footer disclaimer", /not affiliated with, endorsed by, or operated by/i],
@@ -1724,7 +1732,7 @@ const DEMO_README_MARKER = "DEMONSTRATION — not the business's website";
  * demonstration" is not refused, because a record's own recorded wording is allowed to
  * contain the word and a client build must never fail on the client's own copy.
  */
-const DEMO_ONLY_PROSE: [string, RegExp][] = [
+export const DEMO_ONLY_PROSE: [string, RegExp][] = [
   ["the demonstration paragraph", /DEMONSTRATION — not the business's website/],
   ["the demonstration bundle's contact-form paragraph", /This is a demonstration bundle, not a delivered site/],
   ["the demonstration-page sentence", /on a demonstration page\b/i],
@@ -2161,6 +2169,28 @@ export function complianceChecks(vars: {
  *     page" rather than "never". With JavaScript off the browser navigates to that
  *     service's own page, whose behaviour is not ours (docs/formspark.md records it).
  */
+/**
+ * The two ways a stylesheet can pull a file from another origin. Named and at module
+ * scope for the coverage meta-check; the refusal itself is `externalReferenceProblems`.
+ */
+
+/**
+ * The browser APIs `site.js` must never touch, because the privacy notice prints a
+ * sentence saying it does not (the "no cookies, no analytics and no tracking" line).
+ */
+export const EXTERNAL_STYLESHEET_PATTERNS: [string, RegExp][] = [
+  ["an @import", /@import\s+(?:url\(\s*)?['"]?\s*(?:https?:)?\/\//i],
+  ["a url()", /url\(\s*['"]?\s*(?:https?:)?\/\//i],
+];
+
+export const FORBIDDEN_SCRIPT_PATTERNS: [string, RegExp][] = [
+  ["a cookie", /document\s*\.\s*cookie/i],
+  ["web storage", /\b(?:localStorage|sessionStorage|indexedDB)\b/i],
+  ["a tracking beacon", /\b(?:sendBeacon|new\s+Image\b)/i],
+  ["a direct XHR", /\bXMLHttpRequest\b/i],
+  ["an analytics call", /\b(?:gtag|dataLayer|analytics|mixpanel|segment|plausible|fathom)\b/i],
+];
+
 export function externalReferenceProblems(vars: { pages: RenderedPage[]; css: string; js: string }): string[] {
   const { pages, css, js } = vars;
   const problems: string[] = [];
@@ -2227,10 +2257,7 @@ export function externalReferenceProblems(vars: { pages: RenderedPage[]; css: st
     }
   }
 
-  for (const [what, pattern] of [
-    ["an @import", /@import\s+(?:url\(\s*)?['"]?\s*(?:https?:)?\/\//i],
-    ["a url()", /url\(\s*['"]?\s*(?:https?:)?\/\//i],
-  ] as [string, RegExp][]) {
+  for (const [what, pattern] of EXTERNAL_STYLESHEET_PATTERNS) {
     if (pattern.test(css)) {
       problems.push(
         `the stylesheet pulls a file from another origin (${what}), so a page using it is not the self-contained file the privacy notice describes. Fonts and images are bundled for exactly this reason.`,
@@ -2238,13 +2265,7 @@ export function externalReferenceProblems(vars: { pages: RenderedPage[]; css: st
     }
   }
 
-  for (const [what, pattern] of [
-    ["a cookie", /document\s*\.\s*cookie/i],
-    ["web storage", /\b(?:localStorage|sessionStorage|indexedDB)\b/i],
-    ["a tracking beacon", /\b(?:sendBeacon|new\s+Image\b)/i],
-    ["a direct XHR", /\bXMLHttpRequest\b/i],
-    ["an analytics call", /\b(?:gtag|dataLayer|analytics|mixpanel|segment|plausible|fathom)\b/i],
-  ] as [string, RegExp][]) {
+  for (const [what, pattern] of FORBIDDEN_SCRIPT_PATTERNS) {
     if (pattern.test(js)) {
       problems.push(
         `site.js uses ${what}, which the privacy notice's "no cookies, no analytics and no tracking on this page" sentence says it does not. Either the script changes or the sentence does.`,

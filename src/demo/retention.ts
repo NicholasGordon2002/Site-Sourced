@@ -250,12 +250,17 @@ export function allowedWindows(practice: RetentionPractice | null): string[] {
 
 /* ------------------------------------------------------------------- the guard */
 
-/** Shapes of a retention window, in the words a notice might reach for. */
-const WINDOW_PATTERNS: RegExp[] = [
-  /\bwithin\s+\d+\s+(?:days?|weeks?|months?)\b/gi,
-  /\b\d+\s+(?:days?|weeks?|months?)\b/gi,
-  /\b(?:one|two|three|four|five|six|thirty|forty|sixty|ninety)\s+(?:days?|weeks?|months?)\b/gi,
-  /\babout\s+(?:two|three|four|forty|thirty|sixty)\s+months?\b/gi,
+/**
+ * Shapes of a retention window, in the words a notice might reach for — **one named
+ * shape per pattern**, so the coverage meta-check can prove each of them can still
+ * find the kind of window it names (`refusal-coverage.ts`). The `g` flag is
+ * load-bearing: the guard reads the notice with `matchAll`.
+ */
+export const WINDOW_SHAPES: [string, RegExp][] = [
+  ['a window counted from now ("within 30 days")', /\bwithin\s+\d+\s+(?:days?|weeks?|months?)\b/gi],
+  ['a window stated in days, weeks or months ("30 days")', /\b\d+\s+(?:days?|weeks?|months?)\b/gi],
+  ['a window spelled out in words ("thirty days")', /\b(?:one|two|three|four|five|six|thirty|forty|sixty|ninety)\s+(?:days?|weeks?|months?)\b/gi],
+  ['an approximate window in months ("about three months")', /\babout\s+(?:two|three|four|forty|thirty|sixty)\s+months?\b/gi],
 ];
 
 /**
@@ -310,7 +315,7 @@ export function retentionProblems(vars: {
 
   const allowed = mode === "business" ? [] : allowedWindows(practice);
   const found = new Set<string>();
-  for (const pattern of WINDOW_PATTERNS) {
+  for (const [, pattern] of WINDOW_SHAPES) {
     for (const match of operator.matchAll(pattern)) {
       const phrase = (match[0] ?? "").trim().toLowerCase();
       if (!phrase) continue;

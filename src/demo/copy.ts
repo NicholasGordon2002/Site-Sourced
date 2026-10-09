@@ -1685,7 +1685,7 @@ export function collectionProblems(vars: {
  * Phrases a demo is never allowed to contain. Checked against the rendered HTML;
  * a hit that is not also present in the record itself fails the build.
  */
-const BANNED = [
+export const BANNED = [
   "award",
   "award-winning",
   "testimonial",
@@ -1811,7 +1811,7 @@ export function fictionalNarrativeProblems(record: BusinessRecord): string[] {
  * The wording is what builds the list pattern below, and the pattern is what reads a
  * captured claim, so a detail cannot be named one way and recognised another.
  */
-const NAMED_DETAILS: { detail: CarriedDetail; wording: string; re: RegExp }[] = [
+export const NAMED_DETAILS: { detail: CarriedDetail; wording: string; re: RegExp }[] = [
   { detail: "hours", wording: "hours", re: /\b(?:opening hours|hours)\b/i },
   { detail: "address", wording: "address(?:es)?", re: /\baddress(?:es)?\b/i },
   { detail: "phone number", wording: "phone numbers?", re: /\bphone numbers?\b/i },
