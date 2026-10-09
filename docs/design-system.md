@@ -1,9 +1,17 @@
 # Site Sourced — design system v1
 
 **Status:** working document, written by the designer. Applied to the home page shell and the
-hero (session S1). The four-page build, the icon set, the schematic map, the patterns and the
-remaining category variants are S2/S3. This document is the source of truth for those sessions:
+hero (session S1). The icon set, the schematic map, the no-photograph patterns and the remaining
+category variants are S3/beyond. This document is the source of truth for those sessions:
 if the code and this file disagree, one of them is a bug.
+
+*Correction pass, 9 Oct 2026 — the designer's own described layout, counts and status against the
+shipped code.* The remaining pages, the navigation, the family layer and the booking flow have
+**shipped** since S1 (five named pages plus a pre-rendered `contact-<service>.html` per recorded
+service — §7, §12): the sentence that stood here named "the four-page build" as still to come. The
+lines this pass moved, each with the code path that proves it, are listed in
+`research/template-truth-ledger-2026-10-09.md` §D1–§D7. Correcting facts only: no instruction, no
+token and no owner-supplied wording was rewritten.
 
 **The standard, in one line:** on a phone, a barber would hold this up to a customer without
 apologising for it.
@@ -224,8 +232,12 @@ the phone menu panel. Depth is not used for decoration.
   photograph starts directly under it, so the home page reads as one surface. Inner pages keep
   the header's own surface and hairline, which is what gives `.page-head` a top edge. The page
   id is carried on `<html class="page page--{id}">`.
-- Tap targets are at least 44×44px. The call button in the header and the submit button in the
-  form are the two that matter most and both are taller than that.
+- Tap targets are at least 44×44px. The **header's action slot**, the hero's own **Call** button
+  and the form's submit button are the ones that matter most and all three are taller than that;
+  the phone menu's summary and the service cards carry a 44px floor of their own, and
+  `headerActionProblems` / `serviceCardProblems` fail a build whose stylesheet cannot show it.
+  *(Corrected 9 Oct 2026: this read "the call button in the header" — the header's third item is
+  the page's primary action, not a call button; see §5.)*
 
 ---
 
@@ -238,9 +250,10 @@ tokens only.
 | --- | --- | --- |
 | Skip link | `.skip-link` | First focusable thing; appears on focus only |
 | Proposal banner | `.proposal-banner` | **Compliance. Frozen wording.** Ink strip above everything, accent hairline beneath, in normal flow, never sticky, never dismissible |
-| Header | `.site-header` | Wordmark left, call button right, five-link nav. On a phone a 44×44px hamburger summary opens the nav as a left-side panel (owner revision, 6 Oct — it was a labelled `Pages` pill); on the home page the header sits **on** the hero photograph (`.page--index`): it paints a scrim of the hero's own ink over the top of the picture and eases it to alpha 0 at its bottom edge, so the picture runs into the header with no band edge and no hairline at either edge (owner, 6 Oct — the flat dark wash and the ruled-off box were both rejected). `headerOverlayProblems` requires the scrim's shape and refuses a border on any side |
+| Header | `.site-header` | Wordmark left, **the page's primary-action slot** right (never a hardcoded Call link — see the next rows), five-link nav. On a phone a 44×44px hamburger summary opens the nav as a left-side panel (owner revision, 6 Oct — it was a labelled `Pages` pill); on the home page the header sits **on** the hero photograph (`.page--index`): it paints a scrim of the hero's own ink over the top of the picture and eases it to alpha 0 at its bottom edge, so the picture runs into the header with no band edge and no hairline at either edge (owner, 6 Oct — the flat dark wash and the ruled-off box were both rejected). `headerOverlayProblems` requires the scrim's shape and refuses a border on any side |
 | Wordmark | `.wordmark` | Business name in Fraunces 600, and the **link home**: one `<a class="wordmark" href="index.html">` on every page (owner revision, 6 Oct), underlined on hover and keyboard focus only, so the header's rest state is unchanged. The header prints the name once, here. `wordmarkLinkProblems` enforces one link, pointing at the home file, with `aria-current` still on the nav's own item |
-| Call button | `.call-button` | Ink pill with the published phone number, `tel:` link. If no phone is recorded, a muted, non-interactive note instead — never a dead `tel:` link |
+| Header action (`.call-button` treatment) | `.call-button header-action` | **The page's primary action**, an ink pill wearing the `.call-button` styling: the family's own label on a build from a real record, the neutral `Contact Us` on a fictional fixture, the client's own booking page in `business` mode. It is a **slot**, not a Call link (owner, 6 Oct 2026): it replaced a Call link on every page — and, on a record with no phone, a dead "no phone" chip where the action should be. `headerActionBelongs()`, `primaryActionHref()`, `primaryActionLabel()` in `render.ts` decide it; `headerActionProblems` refuses a missing, duplicated, mislabelled or misplaced one, or an action whose stylesheet cannot show it is 44px. The notice that keeps a demonstration link honest must be readable **before** the tap, so nothing leaves our site from this slot on a demo. *(Corrected 9 Oct 2026: this row described the header pill as a `tel:` link carrying the phone number, with a muted fallback note when no phone is recorded — neither is in the shipped header.)* |
+| Hero **Call** button | `.button--paper` | White-on-photo pill in the **hero's** action row with the record's published phone number, as a `tel:` link: `Call {phone}`. It is the hero's own action and stays; a record with no phone renders no Call button rather than a dead `tel:` (`.hero-actions`, `heroSection()` in `render.ts`). Beside it sits the ghost button carrying the page's primary contact label |
 | Eyebrow | `.eyebrow` | Uppercase label line: category and city, with an accent tick (see §6) |
 | Hero | `.hero`, `.hero-img`, `.hero-scrim`, `.hero-inner` | Full-bleed photograph with a scrim and the headline block |
 | Caption | `.hero-caption` | **Compliance. Frozen wording.** The AI-illustration label, in normal flow under the hero. Always `.wrap .muted .hero-caption` — the build-enforced class string |
@@ -294,7 +307,9 @@ no logo, and nothing that could be mistaken for the business's own mark. The ico
 Order matters; this is the order a phone user meets it.
 
 1. **Proposal banner** (frozen wording).
-2. **Header** — business name, call button. One name, once.
+2. **Header** — the wordmark (one name, once), the navigation, and the page's primary-action
+   slot: `Contact Us` on a fictional fixture, the family's own label on a record from a real
+   business (§5, "Header action") — not a call button. *(Corrected 9 Oct 2026.)*
 3. **Hero** — full-bleed photograph, dark scrim, and three lines:
    - eyebrow: `Barber shop · Hamilton, ON` — the category and city, which is what a visitor
      wants to know first and what the header used to say badly;
@@ -308,13 +323,29 @@ Order matters; this is the order a phone user meets it.
      business's record. See "The primary contact action", below.
    - Hero copy is assembled in `composeCopy()`, from the record only. The words "On this page:"
      and the "X is a Y in Z" restatement are gone: the identity sentence lives once, in About.
-4. **About** — three short paragraphs from the record, plus the about photograph when there is one.
+4. **About** — an **excerpt** of the recorded narrative: the first one or two paragraphs
+   (`aboutExcerptLength` in `copy.ts` — two when the record carries a narrative, one when it does
+   not) plus the quiet link through to the About page, and the about photograph when there is one.
+   *(Corrected 9 Oct 2026: this read "three short paragraphs from the record". The full narrative
+   is the About page's own body; the home page never prints all of it, and never fewer than one
+   paragraph where the record carries one — `aboutSection()` in `render.ts`.)*
 5. **Services** (`--alt`) — what is recorded, in cards. When nothing is recorded it says so.
 6. **Hours and address** (`two-col`) — the hours table, the address, directions.
-7. **Contact** — the delivery notice (frozen, derived from the record), the form, then the printed
-   phone and email with the published-listings caveat.
+7. **Contact band** (`id="contact"`) — a heading, one line of intro, the family's primary action as
+   a button to the contact page (a quiet link where the header already carries the booking action,
+   so one page never shows two ink pills), then the printed phone/email with the caveat.
+   **The home page carries no form and no delivery notice**: both live on `contact.html` and on each
+   `contact-<service>.html`, which the service cards open with that service already chosen.
+   *(Corrected 9 Oct 2026: this item listed "the delivery notice …, the form" on the home page —
+   `SECTION_ORDER` puts no `form` block on `index` and a built `index.html` contains no `<form>`;
+   the band is `contactCtaSection()` in `render.ts`.)*
 8. **Footer** — name, address, phone, email, the not-affiliated line next to the name, the caveat,
-   the OpenStreetMap attribution, the noindex note, the take-down line.
+   **the link to the privacy notice** (the footer's only route to it, now that item 54 removed the
+   page list), the provenance line — which carries the OpenStreetMap credit only where the record's
+   own `source` is OSM, and the "marked noindex" note — and the take-down line.
+   *(Corrected 9 Oct 2026: the privacy link was missing from this list, and the OpenStreetMap
+   attribution was listed as unconditional; it is derived from the record's source, which is why no
+   fixture prints it. `footerBlock()`/`provenance.ts`.)*
 
 ### The hero image
 
@@ -379,15 +410,30 @@ licence to claim a booking.
 
 ## 7. The five-page structure, ordered per family (S2)
 
-One template, four pages, same header and footer on each. S1 builds the home page; S2 adds the
-rest by reusing these sections rather than inventing new ones.
+One template, **five** pages — plus one pre-rendered `contact-<service>.html` per recorded service
+— same header and footer on each. S1 built the home page; the rest reuse these sections rather
+than inventing new ones. *(Corrected 9 Oct 2026: this read "four pages". The count is five —
+`PAGE_IDS`/`PAGE_SPECS` in `render.ts`, and `build.ts` refuses a bundle missing one of the named
+files or carrying a `site.js` on a page with no form. The same wording in §12 and in this
+document's status line moved with it.)*
 
 | Page | File | Carries |
 | --- | --- | --- |
-| Home | `index.html` | Hero, About (short), Services (top 4–6), Hours + address, contact CTA |
+| Home | `index.html` | Hero, About (short), **every service the record lists**, Hours + address, contact CTA |
 | Services | `services.html` | The full recorded list as cards, hours, contact CTA |
-| About | `about.html` | The About paragraphs, the about photograph, hours + address, contact CTA |
+| About | `about.html` | The About paragraphs, the about photograph, hours + address, the extras card (record-only), contact CTA |
 | Contact | `contact.html` | The form, the delivery notice, printed phone/email with the caveat, directions, hours |
+| Privacy | `privacy.html` | The derived notice (demo / client variant), linked from the form and from every footer |
+
+**The home page does not truncate the service list.** It renders the **whole** recorded list —
+the same `servicesBlock()` the services page uses, reached through `servicesHomeSection()`
+(`src/demo/render.ts`), with `normaliseServices()` in `copy.ts` as its only filter and the
+`.services` grid (one column on a phone, two from `48rem`) as its only limit. Nothing slices it
+to a "top" number. *(Corrected 9 Oct 2026: this row read "Services (top 4–6)" — a count nothing
+in the code implements; both fixtures' home pages carry all four and all five of their recorded
+services. The same claim in `template-system.md` §2.2/§2.3/§2.4 moved with it.)* A record with no
+services renders the plain "nothing recorded" line rather than an empty list, and a five-item
+list is not thinned to look tidier: what the record holds is what the page shows.
 
 - Navigation lives in the header and nowhere else: **five** plain text links (the privacy notice
   included) on the wordmark's line from `48rem`, and on a phone behind a CSS-only `<details>`
@@ -539,10 +585,16 @@ and place, the name is printed once, and the hero line is the recorded offering.
 and their OFL text now ship inside every bundle.
 
 **Not built yet, in the order it should happen:** responsive hero variants and the fixture
-re-encoding (§8); the three remaining pages and the navigation (§7); the icon set and the
-schematic map; the remaining category accents (§3); and the placeholder patterns for the
+re-encoding (§8); the icon set and the schematic map; the placeholder patterns for the
 no-photograph fallback, which S1 leaves as the existing gradient treatment so that the fallback
-still has somewhere to live.
+still has somewhere to live; and the remaining per-category variant work (§9).
+
+*Corrected 9 Oct 2026:* this list also said "the three remaining pages and the navigation (§7)" and
+"the remaining category accents (§3)". The **navigation shipped in the 6 Oct rewrite** and every
+bundle carries the five named pages plus a per-service contact page (`PAGE_IDS`/`PAGE_SPECS` in
+`render.ts`; `navProblems`, `privacyLinkProblems` in `build.ts`); the **ten category accents are
+wired** — the §3 table is in `PROFILES` in `copy.ts` and the stylesheet reads the tokens (§3 says
+so itself), so what remains there is the variant work, not the palette.
 
 ## 13. Where the family layer's CSS lives (4 Oct)
 
