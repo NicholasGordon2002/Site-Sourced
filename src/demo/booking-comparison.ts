@@ -83,6 +83,20 @@ export const OPTION1_LABEL = "Book a demonstration time";
 /** Option 2's control label. Google's own wording, fixed by the owner, byte-exact. */
 export const OPTION2_LABEL = "Book an appointment";
 /**
+ * The wrap rule on the shared-address small print, as an **inline** style: the paragraph
+ * prints the booking address as visible text, and an address is one long unbreakable token
+ * (`https://calendar.app.google/q6s7CqbW1HJGp8BQ6` is 45 characters). Measured on the built
+ * page at a 360 px viewport: the text run ended at x=384, so `documentElement.scrollWidth`
+ * was 384 against a `clientWidth` of 360, and the whole page scrolled sideways on the phone
+ * the owner judges it on. `overflow-wrap: anywhere` lets the address break when it must and
+ * — unlike `break-word` — also lowers the paragraph's min-content width, which is what
+ * removes the scroll. It is inline because `styles.css` is shared by all ten pages and may
+ * not change for this one.
+ */
+export const SHARED_ADDRESS_WRAP_STYLE = "overflow-wrap:anywhere";
+/** The small print's opening tag, wrap rule included. */
+export const SHARED_ADDRESS_OPEN = `<p class="muted" style="${SHARED_ADDRESS_WRAP_STYLE}">`;
+/**
  * Option 3's frame's accessible name (the `title` attribute). The lead fixed this string:
  * a frame with no name is a nameless region to a screen reader, and this one says both
  * what it holds and whose page it is.
@@ -182,6 +196,7 @@ function optionTwo(vars: { url: string }): string {
         <h2>Option 2 — Google's scheduling button</h2>
         <p>Google's own scheduling button: a short piece of Google's code draws a button on this page, with the wording and the colour set in that code.</p>
         <p>This option loads Google's code when this page opens, so the browser contacts Google before any button is tapped — and with JavaScript turned off that code does not run, so no button appears.</p>
+        <p class="muted">That wording is Google's, not Site Sourced's, and it does not say whose booking page the button opens.</p>
         <div class="booking-comparison-button" id="scheduling-button"></div>
         <script src="https://calendar.google.com/calendar/scheduling-button-script.js" async></script>
         <script>
@@ -198,7 +213,6 @@ function optionTwo(vars: { url: string }): string {
             });
           })();
         </script>
-        <p class="muted">That wording is Google's, not Site Sourced's, and it does not say whose booking page the button opens.</p>
         <p>If JavaScript is turned off, Google's code does not run and no button appears here at all; the same happens if a browser setting or an extension blocks Google's code. Either way the booking page can still be reached: use option 1, which is an ordinary link and needs no JavaScript.</p>
       </div>
     </section>`;
@@ -256,7 +270,7 @@ export function comparisonBody(ctx: RenderContext, url: string): string {
       <div class="wrap">
         <p>${esc(disclosure(business))}</p>
         <p>The three options are shown in the order they were asked for. That order says nothing about which one is better, and nothing on this page recommends one over the others.</p>
-        <p class="muted">All three use the same address: ${esc(url)}</p>
+        ${SHARED_ADDRESS_OPEN}All three use the same address: ${esc(url)}</p>
       </div>
     </section>
 
@@ -292,8 +306,8 @@ export const GOOGLE_BUTTON_SCRIPT =
  * **The checks that keep the exception to one file** (WORKFLOW.md rule 6: a rule that lives
  * only in prose is a rule that rots).
  *
- * Four clauses, each one something the owner's own instruction requires, and each one able
- * to fail:
+ * Five clauses, each one something the owner's own instruction or a measurement requires,
+ * and each one able to fail:
  *
  *   1. **Any other page stays clean.** No page of the bundle except `booking-comparison.html`
  *      may load a remote `script`, `iframe`, `embed` or `object`, and no page may link to
@@ -430,6 +444,18 @@ export function bookingComparisonProblems(vars: {
     if (!/height:\s*600px/.test(frame)) {
       problems.push(`${on}: the frame is not the 600-pixel-tall box the page's own sentence describes.`);
     }
+  }
+  /*
+   * 4b. **the address must be able to wrap.** A narrow phone must not have to scroll
+   * sideways to read this page, and the only thing that ever made it do so was this
+   * paragraph: the address is one 45-character token, and measured on the built page at
+   * 360 px its line box ended at x=384 (clientWidth 360 / scrollWidth 384 before the rule;
+   * 360/360 after). A build that loses the rule loses the fix.
+   */
+  if (!html.includes(`${SHARED_ADDRESS_OPEN}All three use the same address: `)) {
+    problems.push(
+      `${on}: the shared-address small print does not carry ${JSON.stringify(SHARED_ADDRESS_WRAP_STYLE)}. It prints the booking address as visible text, and that address is one long unbreakable token — measured at a 360 px viewport the paragraph reached x=384 and the whole page scrolled sideways (clientWidth 360). Without the rule the page cannot be judged on a phone, which is what it exists for.`,
+    );
   }
   if (!/name="robots" content="noindex, nofollow"/.test(html)) {
     problems.push(`${on}: no noindex meta. Every page of a demonstration carries it, including this one.`);
