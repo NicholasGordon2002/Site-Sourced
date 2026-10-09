@@ -37,6 +37,7 @@ import {
   type ServiceCardActionDecision,
 } from "../src/demo/service-card-action.ts";
 import type { BusinessRecord } from "../src/demo/types.ts";
+import { resolveBuildParts } from "../src/demo/build.ts";
 
 const FIXTURES = join(import.meta.dir, "fixtures");
 const BARBER_RECORD: BusinessRecord = JSON.parse(
@@ -53,9 +54,7 @@ interface Built {
 /** Render every page exactly as the build does, with the variant on or off. */
 function build(record: BusinessRecord, on: boolean, slug = SERVICE_CARD_ACTION_SLUG): Built {
   const decision = serviceCardActionDecision({ slug, phase: "demo", env: on ? { [SERVICE_CARD_ACTION_VAR]: "1" } : {} });
-  const form = resolveForm(record);
-  const delivery = resolveDelivery(record, form);
-  const copy = composeCopy(record, slug, form, delivery);
+  const { form: form, delivery: delivery, copy: copy } = resolveBuildParts(record, slug);
   const ctx: RenderContext = {
     record,
     copy,

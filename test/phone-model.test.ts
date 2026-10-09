@@ -35,6 +35,7 @@ import { resolveDelivery } from "../src/demo/delivery.ts";
 import { resolveForm } from "../src/demo/forms.ts";
 import { renderEditingReadme, renderPages, type RenderContext, type RenderedPage } from "../src/demo/render.ts";
 import type { BusinessRecord } from "../src/demo/types.ts";
+import { resolveBuildParts } from "../src/demo/build.ts";
 
 const OUR_INBOX = "site-sourced-311e0184@ctomail.io";
 const SLUG = "example-business";
@@ -67,9 +68,7 @@ interface Bundle {
 }
 /** Render the bundle exactly as the build does, README included. */
 function bundle(rec: BusinessRecord): Bundle {
-  const form = resolveForm(rec);
-  const delivery = resolveDelivery(rec, form);
-  const copy = composeCopy(rec, SLUG, form, delivery);
+  const { form: form, delivery: delivery, copy: copy } = resolveBuildParts(rec, SLUG);
   const privacy = composePrivacy(rec, form, delivery);
   const ctx: RenderContext = {
     record: rec,

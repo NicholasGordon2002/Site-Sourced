@@ -36,6 +36,7 @@
 
 import type { BusinessRecord, FormDeliveryMode } from "./types.ts";
 import { familyHonestyProblems, serviceActionLabel, type ConversionFamily } from "./family.ts";
+import { notificationSubject } from "./forms.ts";
 
 /** One block of a page. `render.ts` owns how each one is drawn. */
 export type SectionId =
@@ -205,6 +206,14 @@ export function familyRenderingProblems(vars: {
   record: BusinessRecord;
   /** The family this build resolved — the value every form page's `request_type` must carry. */
   family: ConversionFamily;
+  /**
+   * The provider's own key for the notification email's title (`FormProvider.subjectField`):
+   * `_email.template.title` on Formspark, `_subject` on FormSubmit. Passed in rather than
+   * assumed, because a title under the wrong key is a title the provider never reads.
+   */
+  subjectField: string;
+  /** The phase this bundle is in — the other half of the title (`delivery.mode`). */
+  phase: FormDeliveryMode;
   fields: { name: string; id: string }[];
   openDays: string[];
   steps: string[];
@@ -212,7 +221,7 @@ export function familyRenderingProblems(vars: {
   order: Record<string, string[]>;
   pageKeys: Record<string, PageKey>;
 }): string[] {
-  const { pages, record, family, fields, openDays, steps, extras, order, pageKeys } = vars;
+  const { pages, record, family, subjectField, phase, fields, openDays, steps, extras, order, pageKeys } = vars;
   const problems: string[] = [];
   // Every page that carries the form, not only the first: a per-service contact page
   // (the page a service card links to) is one of them, and it is rendered from the same
@@ -269,6 +278,27 @@ export function familyRenderingProblems(vars: {
       } else if (requestType !== family) {
         problems.push(
           `${contact.file}: the hidden request_type says "${requestType}" while this bundle is the ${family} family. The value is derived (copy.conversion.family), never typed in — a form whose own claim about itself contradicts the page it sits on is the one field a visitor cannot check.`,
+        );
+      }
+      // 8. The notification email's title, under the provider's own key — the same hidden
+      // half as `request_type`, and the reason it is checked on the rendered page: the value
+      // is written by the build *between* resolving the form and rendering it
+      // (`build.ts` `resolveBuildParts`), because it needs the family and the phase, and
+      // `resolveForm` knows neither. A page rendered from a bare `resolveForm` therefore
+      // carries no title at all, and a check that ran against such a page would either fail
+      // the harness or — worse — be written to tolerate the absence and prove nothing.
+      // The expected value is re-derived here from the three facts behind it (the business's
+      // own name, this build's family, this build's phase), never handed over ready-made, so
+      // the check disagrees with the build whenever the build's own derivation is wrong.
+      const printedTitle = hidden.get(esc(subjectField));
+      const expectedTitle = esc(notificationSubject(record.name, family, phase));
+      if (printedTitle === undefined) {
+        problems.push(
+          `${contact.file}: the form carries no hidden "${subjectField}" field, so the provider has no title for the notification it sends and a message from this page arrives looking like any other email. The title is set by the build once the family and the phase are known (build.ts \`resolveBuildParts\`); a page rendered from a bare \`resolveForm\` never has it.`,
+        );
+      } else if (printedTitle !== expectedTitle) {
+        problems.push(
+          `${contact.file}: the hidden "${subjectField}" says "${printedTitle}" while this bundle's own facts derive "${expectedTitle}" (${record.name}, the ${family} family, the ${phase} phase). The title is derived, never typed in — a notification announcing a family or a phase this page is not is a claim nobody who receives it can check against the form.`,
         );
       }
     }

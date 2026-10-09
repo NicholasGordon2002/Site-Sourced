@@ -29,6 +29,7 @@ import { isUndeliverable, resolveDelivery } from "../src/demo/delivery.ts";
 import { formDeliveryProblems } from "../src/demo/delivery.ts";
 import { KEY_PLACEHOLDER, resolveForm } from "../src/demo/forms.ts";
 import type { BusinessRecord } from "../src/demo/types.ts";
+import { resolveBuildParts } from "../src/demo/build.ts";
 
 const BUSINESS_EMAIL = "shop@example-barber.ca";
 const BUSINESS_NAME = "Example Barber Shop";
@@ -48,9 +49,7 @@ function record(over: Partial<BusinessRecord> = {}): BusinessRecord {
 
 /** Everything the single build self-check would refuse, for one record. */
 function problemsFor(rec: BusinessRecord): string[] {
-  const form = resolveForm(rec);
-  const delivery = resolveDelivery(rec, form);
-  const copy = composeCopy(rec, "example-barber-shop", form, delivery);
+  const { form: form, delivery: delivery, copy: copy } = resolveBuildParts(rec, "example-barber-shop");
   // The address half of the guard now lives in addresses.ts, behind one shared
   // function covering the form's recipient *and* every printed address — see
   // test/addresses.test.ts. This file stays about which notice a record may print.

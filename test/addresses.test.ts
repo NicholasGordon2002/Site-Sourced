@@ -26,7 +26,7 @@
 import { expect, test } from "bun:test";
 
 import { addressesPrintedIn, isUndeliverable, printedAddresses, undeliverableAddressProblems } from "../src/demo/addresses.ts";
-import { complianceChecks } from "../src/demo/build.ts";
+import { complianceChecks, resolveBuildParts } from "../src/demo/build.ts";
 import { composeCopy, composePrivacy, profileFor } from "../src/demo/copy.ts";
 import { resolveDelivery } from "../src/demo/delivery.ts";
 import { resolveForm } from "../src/demo/forms.ts";
@@ -52,9 +52,7 @@ function record(over: Partial<BusinessRecord> = {}): BusinessRecord {
 
 /** Render the home page exactly as the build does, and hand back html + context. */
 function page(rec: BusinessRecord): { html: string; ctx: RenderContext } {
-  const form = resolveForm(rec);
-  const delivery = resolveDelivery(rec, form);
-  const copy = composeCopy(rec, SLUG, form, delivery);
+  const { form: form, delivery: delivery, copy: copy } = resolveBuildParts(rec, SLUG);
   const ctx: RenderContext = {
     record: rec,
     copy,

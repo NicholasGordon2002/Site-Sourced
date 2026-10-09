@@ -24,7 +24,7 @@
  */
 import { expect, test } from "bun:test";
 
-import { phaseFurnitureProblems } from "../src/demo/build.ts";
+import { phaseFurnitureProblems, resolveBuildParts } from "../src/demo/build.ts";
 import { composeCopy, composePrivacy, profileFor } from "../src/demo/copy.ts";
 import { resolveDelivery } from "../src/demo/delivery.ts";
 import { resolveForm } from "../src/demo/forms.ts";
@@ -68,9 +68,7 @@ interface Bundle {
 
 /** Render the bundle exactly as the build does, README included. */
 function bundle(rec: BusinessRecord): Bundle {
-  const form = resolveForm(rec);
-  const delivery = resolveDelivery(rec, form);
-  const copy = composeCopy(rec, SLUG, form, delivery);
+  const { form: form, delivery: delivery, copy: copy } = resolveBuildParts(rec, SLUG);
   const privacy = composePrivacy(rec, form, delivery);
   const ctx: RenderContext = {
     record: rec,

@@ -37,7 +37,7 @@ import {
   RETENTION_HEADING,
   type PrivacyNotice,
 } from "../src/demo/copy.ts";
-import { externalReferenceProblems } from "../src/demo/build.ts";
+import { externalReferenceProblems, resolveBuildParts } from "../src/demo/build.ts";
 import { resolveDelivery } from "../src/demo/delivery.ts";
 import { resolveForm } from "../src/demo/forms.ts";
 import { profileFor, composeCopy } from "../src/demo/copy.ts";
@@ -159,11 +159,10 @@ test("the collection sentence names every field the family's form asks for", () 
   // ...and the check compares the notice with the page the visitor is actually shown.
   const record = BASE;
   const { privacy } = composed(record);
-  const form = resolveForm(record);
-  const delivery = resolveDelivery(record, form);
+  const { form, delivery, copy } = resolveBuildParts(record, SLUG);
   const ctx: RenderContext = {
     record,
-    copy: composeCopy(record, SLUG, form, delivery),
+    copy,
     profile: profileFor(record),
     form,
     delivery,

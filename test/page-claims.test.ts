@@ -20,7 +20,7 @@
  */
 import { expect, test } from "bun:test";
 
-import { complianceChecks } from "../src/demo/build.ts";
+import { complianceChecks, resolveBuildParts } from "../src/demo/build.ts";
 import { composeCopy, composePrivacy, illustrationLabel, isIllustrativeImage, profileFor } from "../src/demo/copy.ts";
 import { resolveDelivery } from "../src/demo/delivery.ts";
 import { resolveForm } from "../src/demo/forms.ts";
@@ -70,9 +70,7 @@ async function manifestImages(record: BusinessRecord): Promise<ManifestImage[]> 
 
 /** Render the page for a record, exactly as the build does. */
 async function page(record: BusinessRecord, images: ManifestImage[]): Promise<{ html: string; pages: RenderedPage[]; ctx: RenderContext }> {
-  const form = resolveForm(record);
-  const delivery = resolveDelivery(record, form);
-  const copy = composeCopy(record, SLUG, form, delivery);
+  const { form: form, delivery: delivery, copy: copy } = resolveBuildParts(record, SLUG);
   const ctx: RenderContext = {
     record,
     copy,

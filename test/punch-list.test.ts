@@ -16,7 +16,13 @@
  */
 import { expect, test } from "bun:test";
 
-import { complianceChecks, headingStackProblems, privacyLinkProblems, wordmarkLinkProblems } from "../src/demo/build.ts";
+import {
+  complianceChecks,
+  headingStackProblems,
+  privacyLinkProblems,
+  wordmarkLinkProblems,
+  resolveBuildParts,
+} from "../src/demo/build.ts";
 import { composeCopy, composePrivacy, profileFor } from "../src/demo/copy.ts";
 import { resolveDelivery } from "../src/demo/delivery.ts";
 import { resolveForm } from "../src/demo/forms.ts";
@@ -37,9 +43,7 @@ const RECORD: BusinessRecord = {
 const SLUG = "example-barber-shop";
 
 function render(record: BusinessRecord = RECORD): { pages: RenderedPage[]; ctx: RenderContext } {
-  const form = resolveForm(record);
-  const delivery = resolveDelivery(record, form);
-  const copy = composeCopy(record, SLUG, form, delivery);
+  const { form: form, delivery: delivery, copy: copy } = resolveBuildParts(record, SLUG);
   const ctx: RenderContext = {
     record,
     copy,

@@ -26,7 +26,12 @@ import { expect, test } from "bun:test";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 
-import { externalReferenceProblems, headerOverlayProblems, placeholderProblems, refusalCoverageChecks } from "../src/demo/build.ts";
+import {
+  externalReferenceProblems,
+  headerOverlayProblems,
+  placeholderProblems,
+  refusalCoverageChecks,
+} from "../src/demo/build.ts";
 import { guardCopy, printedDetailClaimProblems } from "../src/demo/copy.ts";
 import { manifestClaimProblems, NEUTRAL_PROSE, refusalCoverageProblems, type RefusalList } from "../src/demo/refusal-coverage.ts";
 import { REFUSAL_LISTS, REFUSAL_SAMPLES } from "../src/demo/refusal-registry.ts";

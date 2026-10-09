@@ -33,6 +33,7 @@ import {
   headerActionMeasure,
   headerActionProblems,
   tapTargetProblems,
+  resolveBuildParts,
 } from "../src/demo/build.ts";
 import { composeCopy, composePrivacy, profileFor } from "../src/demo/copy.ts";
 import { resolveDelivery } from "../src/demo/delivery.ts";
@@ -85,12 +86,10 @@ interface Rendered {
   actionHref: string;
 }
 function render(record: BusinessRecord = FICTIONAL): Rendered {
-  const form = resolveForm(record);
-  const delivery = resolveDelivery(record, form);
   // The configured demonstration booking page, exactly as the build boundary reads it —
   // the renderer never touches the environment, so a caller that passes nothing gets
   // booking mode `none`.
-  const copy = composeCopy(record, SLUG, form, delivery, (process.env.DEMO_BOOKING_URL ?? "").trim());
+  const { form, delivery, copy } = resolveBuildParts(record, SLUG, (process.env.DEMO_BOOKING_URL ?? "").trim());
   const ctx: RenderContext = {
     record,
     copy,
@@ -361,12 +360,11 @@ test("with no stylesheet the check still refuses the markup, and makes no height
 
 /** The whole self-check, as the build runs it, for one set of pages. */
 function checks(pages: RenderedPage[]): string[] {
-  const form = resolveForm(FICTIONAL);
-  const delivery = resolveDelivery(FICTIONAL, form);
+  const { form, delivery, copy } = resolveBuildParts(FICTIONAL, SLUG);
   return complianceChecks({
     pages,
     record: FICTIONAL,
-    copy: composeCopy(FICTIONAL, SLUG, form, delivery),
+    copy,
     form,
     delivery,
     images: [],
@@ -385,13 +383,12 @@ test("the tap-target check runs in the build's own self-check too", () => {
   // The check reads the stylesheet the build passes it: a 36px control is refused
   // through `complianceChecks`, which is what the build throws on.
   const { pages } = render();
-  const form = resolveForm(FICTIONAL);
-  const delivery = resolveDelivery(FICTIONAL, form);
+  const { form, delivery, copy } = resolveBuildParts(FICTIONAL, SLUG);
   const small = `${renderCss(profileFor(FICTIONAL), SLUG)}\n.button--small { min-height: 2.25rem; }\n`;
   const problems = complianceChecks({
     pages,
     record: FICTIONAL,
-    copy: composeCopy(FICTIONAL, SLUG, form, delivery),
+    copy,
     form,
     delivery,
     images: [],

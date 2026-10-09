@@ -23,7 +23,7 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { complianceChecks } from "../src/demo/build.ts";
+import { complianceChecks, resolveBuildParts } from "../src/demo/build.ts";
 import { composeCopy, composePrivacy, fictionalNarrativeProblems, narrativeParagraphs, profileFor } from "../src/demo/copy.ts";
 import { resolveDelivery } from "../src/demo/delivery.ts";
 import { resolveForm } from "../src/demo/forms.ts";
@@ -59,9 +59,7 @@ interface Rendered {
 }
 
 function render(rec: BusinessRecord): Rendered {
-  const form = resolveForm(rec);
-  const delivery = resolveDelivery(rec, form);
-  const copy = composeCopy(rec, SLUG, form, delivery);
+  const { form: form, delivery: delivery, copy: copy } = resolveBuildParts(rec, SLUG);
   const ctx: RenderContext = {
     record: rec,
     copy,

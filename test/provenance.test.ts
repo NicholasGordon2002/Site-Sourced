@@ -28,7 +28,7 @@
  */
 import { expect, test } from "bun:test";
 
-import { complianceChecks } from "../src/demo/build.ts";
+import { complianceChecks, resolveBuildParts } from "../src/demo/build.ts";
 import { composeCopy, composePrivacy, profileFor } from "../src/demo/copy.ts";
 import { resolveDelivery } from "../src/demo/delivery.ts";
 import { resolveForm } from "../src/demo/forms.ts";
@@ -56,9 +56,7 @@ function record(over: Partial<BusinessRecord> = {}): BusinessRecord {
 
 /** Render every page of a bundle exactly as the build does. */
 function pages(rec: BusinessRecord) {
-  const form = resolveForm(rec);
-  const delivery = resolveDelivery(rec, form);
-  const copy = composeCopy(rec, SLUG, form, delivery);
+  const { form: form, delivery: delivery, copy: copy } = resolveBuildParts(rec, SLUG);
   const privacy = composePrivacy(rec, form, delivery);
   const ctx: RenderContext = {
     record: rec,

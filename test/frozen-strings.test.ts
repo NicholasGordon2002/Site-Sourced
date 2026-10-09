@@ -23,7 +23,7 @@ import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { complianceChecks, pruneLeftovers } from "../src/demo/build.ts";
+import { complianceChecks, pruneLeftovers, resolveBuildParts } from "../src/demo/build.ts";
 import { composeCopy, composePrivacy, profileFor } from "../src/demo/copy.ts";
 import { resolveDelivery } from "../src/demo/delivery.ts";
 import { resolveForm } from "../src/demo/forms.ts";
@@ -41,9 +41,7 @@ const RECORD: BusinessRecord = {
   form_access_key: "test-form-id",
 };
 const SLUG = "example-barber-shop";
-const FORM = resolveForm(RECORD);
-const DELIVERY = resolveDelivery(RECORD, FORM);
-const COPY = composeCopy(RECORD, SLUG, FORM, DELIVERY);
+const { form: FORM, delivery: DELIVERY, copy: COPY } = resolveBuildParts(RECORD, SLUG);
 const PRIVACY = composePrivacy(RECORD, FORM, DELIVERY);
 
 function render(): { pages: RenderedPage[]; banner: string; disclaimer: string } {

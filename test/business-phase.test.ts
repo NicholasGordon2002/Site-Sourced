@@ -38,7 +38,12 @@
 import { expect, test } from "bun:test";
 import { join } from "node:path";
 
-import { complianceChecks, phaseFurnitureProblems, readmePageListProblems } from "../src/demo/build.ts";
+import {
+  complianceChecks,
+  phaseFurnitureProblems,
+  readmePageListProblems,
+  resolveBuildParts,
+} from "../src/demo/build.ts";
 import { composeCopy, composePrivacy, printedDetailClaimProblems, profileFor } from "../src/demo/copy.ts";
 import { resolveDelivery, type FormDelivery } from "../src/demo/delivery.ts";
 import { resolveForm } from "../src/demo/forms.ts";
@@ -100,9 +105,7 @@ interface Bundle {
 async function render(record: BusinessRecord): Promise<Bundle> {
   const slug = record.slug ?? "business-phase-fixture";
   const profile = profileFor(record);
-  const form = resolveForm(record);
-  const delivery = resolveDelivery(record, form);
-  const copy = composeCopy(record, slug, form, delivery);
+  const { form: form, delivery: delivery, copy: copy } = resolveBuildParts(record, slug);
   const privacy = composePrivacy(record, form, delivery);
   const images: ManifestImage[] = [];
   for (const image of record.images ?? []) {

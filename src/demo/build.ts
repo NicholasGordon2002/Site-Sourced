@@ -2039,6 +2039,12 @@ export function complianceChecks(vars: {
         pages,
         record,
         family: copy.conversion.family,
+        // The notification title's two outer facts: the key the provider reads it under, and
+        // the phase this bundle is in. The title itself is re-derived inside the check from
+        // the record's name, the family and this phase, so a wrong derivation in
+        // `resolveBuildParts` disagrees with it instead of agreeing with itself.
+        subjectField: form.provider.subjectField,
+        phase: delivery.mode,
         fields: fields.fields.map((f) => ({ name: f.name, id: f.id })),
         openDays: fields.preferredDays.days,
         steps: copy.steps,
@@ -2302,6 +2308,39 @@ export async function pruneLeftovers(dir: string, keep: Set<string>): Promise<{ 
   return { files, dirs };
 }
 
+/**
+ * The build's own ordering, in one place: **resolve the form → derive the delivery from the
+ * record and that form → compose the copy → write the notification title against the
+ * provider's own subject key.**
+ *
+ * The title is the one value on the page that no single step above can produce: it needs the
+ * family (which the copy resolves) *and* the phase (which the delivery resolves), while
+ * `resolveForm` runs before either is known and takes no phase at all. So it is written here,
+ * onto the same `form` object the pages are later rendered from.
+ *
+ * It exists as one function because a harness that re-derives those parts by hand stops at
+ * `resolveForm` and renders a form the build never produces — a form with **no notification
+ * title**. The rendering harnesses did exactly that, which is why the check on the title
+ * (`family-render.ts`, clause 8) could not be added until they went through here: a check run
+ * against pages that never carried the value either fails every harness or proves nothing.
+ * Every renderer-model in this repo calls this; nothing renders a page from a bare
+ * `resolveForm`.
+ */
+export function resolveBuildParts(
+  record: BusinessRecord,
+  slug: string,
+  /** The configured demonstration booking page, read once at the boundary. */
+  demoBookingUrl = "",
+): { form: ResolvedForm; delivery: FormDelivery; copy: DemoCopy } {
+  const form = resolveForm(record);
+  const delivery = resolveDelivery(record, form);
+  const copy = composeCopy(record, slug, form, delivery, demoBookingUrl);
+  // The provider's own key, never a literal here: Formspark reads
+  // `_email.template.title`, FormSubmit `_subject` (forms.ts `subjectField`).
+  form.hiddenFields[form.provider.subjectField] = notificationSubject(record.name, copy.conversion.family, delivery.mode);
+  return { form, delivery, copy };
+}
+
 export async function buildBundle(record: BusinessRecord, opts: BuildOptions): Promise<BundleResult> {
   const slug = (record.slug ?? "").trim() || slugify(record.name);
   const dir = join(opts.outRoot, slug);
@@ -2316,23 +2355,16 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   };
 
   const profile = profileFor(record);
-  // The form is resolved first, then the delivery is derived from the record and
-  // that form: the page's notice depends on both the provider and on whether the
-  // message actually reaches the business.
-  const form = resolveForm(record);
-  const delivery = resolveDelivery(record, form);
   // The demonstration booking page, read **once, here at the boundary**: the renderer never
   // reads the environment, and a record names the variable (`env:DEMO_BOOKING_URL`) rather
   // than carrying a URL, so no per-client booking address is ever committed. Unset — which
   // is the state of this repository until the owner creates the page — every record
   // resolves to booking mode `none` and the pages are the approved ones, byte for byte.
   const demoBookingUrl = (process.env[DEMO_BOOKING_URL_VAR] ?? "").trim();
-  const copy = composeCopy(record, slug, form, delivery, demoBookingUrl);
-  // The notification email's title is family- and phase-derived, and the key it sits
-  // under is provider-specific — so it is set here, after both are known, against the
-  // key the provider reads (forms.ts `notificationSubject`). `resolveForm` runs earlier
-  // and carries no phase parameter.
-  form.hiddenFields[form.provider.subjectField] = notificationSubject(record.name, copy.conversion.family, delivery.mode);
+  // The form, the delivery and the copy — and, with them, the notification title the form
+  // carries. One call, so the build and every harness that models it cannot drift
+  // (`resolveBuildParts`).
+  const { form, delivery, copy } = resolveBuildParts(record, slug, demoBookingUrl);
   // The operator practice the privacy notice is allowed to print, read once from the
   // team file that declares it (`ops/retention-log.md`). A missing or unreadable
   // declaration is a build failure, not a softer sentence: the notice's retention half

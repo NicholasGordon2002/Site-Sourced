@@ -32,7 +32,7 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { complianceChecks } from "../src/demo/build.ts";
+import { complianceChecks, resolveBuildParts } from "../src/demo/build.ts";
 import { composeCopy, composePrivacy, familyFields, profileFor, UI } from "../src/demo/copy.ts";
 import { resolveDelivery } from "../src/demo/delivery.ts";
 import { extrasLines, SECTION_ORDER, inquirySteps, serviceCardProblems } from "../src/demo/family-render.ts";
@@ -86,9 +86,7 @@ interface Rendered {
 
 /** Render the five pages for a record exactly as the build does. */
 function render(rec: BusinessRecord): Rendered {
-  const form = resolveForm(rec);
-  const delivery = resolveDelivery(rec, form);
-  const copy = composeCopy(rec, SLUG, form, delivery);
+  const { form: form, delivery: delivery, copy: copy } = resolveBuildParts(rec, SLUG);
   const ctx: RenderContext = {
     record: rec,
     copy,
@@ -562,4 +560,58 @@ test("a form with no hidden request_type fails the build", () => {
   const rendered = render(GARDENER);
   const stripped = doctored(rendered, "contact.html", '<input type="hidden" name="request_type" value="inquiry">\n', "");
   expect(checks(rendered, stripped).join("\n")).toContain("carries no hidden request_type field");
+});
+
+/* ------------------- 11. the hidden half's other value: the notification title */
+test("every form page carries the notification title the build derives, never one typed in", () => {
+  // The build writes this value *between* resolving the form and rendering it
+  // (`build.ts` `resolveBuildParts`), because it needs the family and the phase, and
+  // `resolveForm` knows neither. This harness models that same ordering — that is what
+  // makes the clause below a check on the page a visitor gets rather than on a page that
+  // simply lacks the value (the state every harness was in until 9 Oct).
+  const barber = render(BARBER); // appointment, demonstration phase
+  expect(barber.ctx.delivery.mode).toBe("demo");
+  for (const p of barber.pages.filter((page) => page.html.includes('id="contact-form"'))) {
+    expect(p.html).toContain(
+      '<input type="hidden" name="_email.template.title" value="Appointment request from Example Barber Shop (Site Sourced demo)">',
+    );
+  }
+  expect(checks(barber)).toEqual([]);
+  // The inquiry family, in its own words: "Quote request", never "Appointment request" —
+  // and the demo suffix present, because nobody at the business reads this message.
+  const gardener = render(GARDENER);
+  expect(gardener.ctx.delivery.mode).toBe("demo");
+  for (const p of gardener.pages.filter((page) => page.html.includes('id="contact-form"'))) {
+    expect(p.html).toContain('value="Quote request from Example Garden Works (Site Sourced demo)"');
+  }
+  expect(checks(gardener)).toEqual([]);
+});
+test("a notification title claiming the wrong phase fails the build", () => {
+  const rendered = render(BARBER);
+  const leaked = doctored(
+    rendered,
+    "contact.html",
+    'value="Appointment request from Example Barber Shop (Site Sourced demo)"',
+    'value="Appointment request from Example Barber Shop"',
+  );
+  const report = checks(rendered, leaked).join("\n");
+  expect(report).toContain('the hidden "_email.template.title" says "Appointment request from Example Barber Shop"');
+  expect(report).toContain('while this bundle\'s own facts derive "Appointment request from Example Barber Shop (Site Sourced demo)"');
+});
+test("a form with no notification title fails the build", () => {
+  const rendered = render(BARBER);
+  const stripped = doctored(
+    rendered,
+    "contact.html",
+    '<input type="hidden" name="_email.template.title" value="Appointment request from Example Barber Shop (Site Sourced demo)">\n',
+    "",
+  );
+  expect(checks(rendered, stripped).join("\n")).toContain('carries no hidden "_email.template.title" field');
+});
+test("a title under a key the provider does not read fails the build", () => {
+  // A title the provider never reads is a title the notification does not carry, however
+  // right the words are: the check reads the key, not the sentence.
+  const rendered = render(BARBER);
+  const wrongKey = doctored(rendered, "contact.html", 'name="_email.template.title"', 'name="_subject"');
+  expect(checks(rendered, wrongKey).join("\n")).toContain('carries no hidden "_email.template.title" field');
 });

@@ -21,7 +21,7 @@
  */
 import { expect, test } from "bun:test";
 
-import { navProblems } from "../src/demo/build.ts";
+import { navProblems, resolveBuildParts } from "../src/demo/build.ts";
 import { composeCopy, composePrivacy, profileFor } from "../src/demo/copy.ts";
 import { resolveDelivery } from "../src/demo/delivery.ts";
 import { resolveForm } from "../src/demo/forms.ts";
@@ -43,9 +43,7 @@ const SLUG = "example-barber-shop";
 const NAMED = PAGE_IDS.map((id) => PAGE_SPECS[id].file);
 
 function render(): RenderedPage[] {
-  const form = resolveForm(RECORD);
-  const delivery = resolveDelivery(RECORD, form);
-  const copy = composeCopy(RECORD, SLUG, form, delivery);
+  const { form: form, delivery: delivery, copy: copy } = resolveBuildParts(RECORD, SLUG);
   const ctx: RenderContext = {
     record: RECORD,
     copy,

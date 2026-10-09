@@ -21,7 +21,9 @@ import {
   bookingAnchorSizeProblems,
   bookingProblems,
   complianceChecks,
-  type RenderedPage,
+  type,
+  RenderedPage,
+  resolveBuildParts,
 } from "../src/demo/build.ts";
 import {
   BOOKING_LABEL_DEMO,
@@ -96,9 +98,7 @@ function withDemoUrl<T>(demoUrl: string, run: () => T): T {
 
 function render(record: BusinessRecord = BARBER, demoUrl = DEMO_URL): Rendered {
   return withDemoUrl(demoUrl, () => {
-    const form = resolveForm(record);
-    const delivery = resolveDelivery(record, form);
-    const copy = composeCopy(record, SLUG, form, delivery, demoUrl);
+    const { form, delivery, copy } = resolveBuildParts(record, SLUG, demoUrl);
     const ctx: RenderContext = {
       record,
       copy,
@@ -473,8 +473,7 @@ test("an inquiry fixture renders no booking link at all, whatever the record car
 
 test("the booking check runs in the build's own self-check, not merely when called by name", () => {
   const set = render();
-  const form = resolveForm(BARBER);
-  const delivery = resolveDelivery(BARBER, form);
+  const { form, delivery } = resolveBuildParts(BARBER, SLUG, DEMO_URL);
   const checks = (pages: RenderedPage[], css = set.css) =>
     complianceChecks({
       pages,

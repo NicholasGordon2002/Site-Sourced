@@ -23,7 +23,7 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { complianceChecks } from "../src/demo/build.ts";
+import { complianceChecks, resolveBuildParts } from "../src/demo/build.ts";
 import { PROFILES, composeCopy, composePrivacy, profileFor, profileMatch } from "../src/demo/copy.ts";
 import { resolveDelivery } from "../src/demo/delivery.ts";
 import {
@@ -67,9 +67,7 @@ interface Rendered {
 
 /** Render the five pages for a record exactly as the build does, with no images. */
 function render(rec: BusinessRecord): Rendered {
-  const form = resolveForm(rec);
-  const delivery = resolveDelivery(rec, form);
-  const copy = composeCopy(rec, SLUG, form, delivery);
+  const { form: form, delivery: delivery, copy: copy } = resolveBuildParts(rec, SLUG);
   const ctx: RenderContext = {
     record: rec,
     copy,

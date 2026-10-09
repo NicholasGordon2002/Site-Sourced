@@ -39,7 +39,7 @@
  */
 import { expect, test } from "bun:test";
 
-import { headerOverlayMeasure, headerOverlayProblems } from "../src/demo/build.ts";
+import { headerOverlayMeasure, headerOverlayProblems, resolveBuildParts } from "../src/demo/build.ts";
 import { composeCopy, composePrivacy, profileFor } from "../src/demo/copy.ts";
 import { resolveDelivery } from "../src/demo/delivery.ts";
 import { resolveForm } from "../src/demo/forms.ts";
@@ -60,9 +60,7 @@ const RECORD: BusinessRecord = {
 const SLUG = "example-barber-shop";
 
 function render(): { pages: RenderedPage[]; css: string } {
-  const form = resolveForm(RECORD);
-  const delivery = resolveDelivery(RECORD, form);
-  const copy = composeCopy(RECORD, SLUG, form, delivery);
+  const { form: form, delivery: delivery, copy: copy } = resolveBuildParts(RECORD, SLUG);
   const ctx: RenderContext = {
     record: RECORD,
     copy,
