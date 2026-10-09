@@ -338,7 +338,7 @@ function pageDescription(ctx: RenderContext, id: PageId): string {
 }
 
 /** The navigation: same links on every page, as real files. */
-function navBlock(copy: DemoCopy, current: PageId, className: string, label: string): string {
+function navBlock(copy: DemoCopy, current: PageId | null, className: string, label: string): string {
   const items = PAGE_IDS.map((id) => navItem(copy, id, current)).join("\n");
   return `      <nav class="${className}" aria-label="${esc(label)}">
         <ul>
@@ -357,7 +357,7 @@ ${items}
  * page's only other route to the notice. It keeps its place in the desktop row, so the
  * wide layout is unchanged.
  */
-function navItem(copy: DemoCopy, id: PageId, current: PageId): string {
+function navItem(copy: DemoCopy, id: PageId, current: PageId | null): string {
   const current_ = id === current ? ' aria-current="page"' : "";
   const desktopOnly = id === "privacy" ? ' class="nav-item--desktop"' : "";
   return `          <li${desktopOnly}><a href="${PAGE_SPECS[id].file}"${current_}>${esc(copy.nav[id])}</a></li>`;
@@ -459,13 +459,16 @@ export function primaryActionLabel(record: BusinessRecord, copy: DemoCopy): { la
  * action, a second one, another label, another destination, or an element whose own
  * stylesheet cannot show it is 44px.
  */
-function headerActionBlock(ctx: RenderContext, id: PageId): string {
+function headerActionBlock(ctx: RenderContext, id: PageId | null): string {
   const { record, copy } = ctx;
-  if (!headerActionBelongs(id)) return "";
+  // `null` is the review-only comparison page: it is not one of the nine, so it is not
+  // the contact page and not the privacy notice either. Its header is the same shape as
+  // an inner page's header — the demo's own action slot, unchanged (lead ruling, 8 Oct).
+  if (id !== null && !headerActionBelongs(id)) return "";
   return `          <a class="call-button ${HEADER_ACTION_CLASS}" href="${esc(primaryActionHref(record, copy.booking))}">${esc(primaryActionLabel(record, copy).label)}</a>`;
 }
 
-function headerBlock(ctx: RenderContext, id: PageId): string {
+function headerBlock(ctx: RenderContext, id: PageId | null): string {
   const { record, copy } = ctx;
   const action = headerActionBlock(ctx, id);
   return `  <header class="site-header">
@@ -515,15 +518,19 @@ ${copy.contactCaveat ? `          <!-- Compliance: the caveat that belongs with 
           <p class="muted">${esc(copy.contactCaveat)}</p>\n` : ""}        </div>`;
 }
 
-function footerBlock(ctx: RenderContext, id: PageId): string {
+function footerBlock(ctx: RenderContext, id: PageId | null): string {
   const { record, copy } = ctx;
-  const spec = PAGE_SPECS[id];
+  // The comparison page (`id === null`) prints **none** of the business's details: the
+  // page is not ours to put an unconfirmed phone number or address on, and a page that
+  // prints no details needs no caveat about them. So its footer is the privacy notice's
+  // shape — name, disclaimer, privacy link, provenance, takedown — and nothing else.
+  const spec = id === null ? null : PAGE_SPECS[id];
   const addr = addressLine(record);
   const tel = record.phone ? telHref(record.phone) : "";
   // The privacy page deliberately prints none of the business's details: a privacy
   // notice is not the place to repeat an unconfirmed phone number, and the plan's
   // caveat belongs only with details we actually print.
-  const details = spec.printsDetails
+  const details = spec?.printsDetails
     ? [addr ? esc(addr) : "", record.phone ? `<a href="${tel}">${esc(record.phone)}</a>` : "", record.email ? `<a href="mailto:${esc(record.email)}">${esc(record.email)}</a>` : ""]
         .filter(Boolean)
         .join("<br>\n          ")
@@ -537,7 +544,7 @@ ${details ? `        <p class="footer-contact">\n          ${details}\n        <
         <p class="disclaimer">${esc(copy.footerDisclaimer)}</p>
 ` : ""}      </div>
       <div>
-${copy.contactCaveat && spec.printsDetails ? `        <!-- Compliance: the caveat that belongs with the printed details, derived from the
+${copy.contactCaveat && spec?.printsDetails ? `        <!-- Compliance: the caveat that belongs with the printed details, derived from the
              record's source. Do not remove. -->
         <p class="footer-small">${esc(copy.contactCaveat)}</p>
 ` : ""}        <!-- Compliance: the privacy notice must stay reachable from the footer of every
@@ -1050,6 +1057,70 @@ export function renderPages(ctx: RenderContext): RenderedPage[] {
 /** The home page alone — kept for the tests and callers that only want it. */
 export function renderIndex(ctx: RenderContext): string {
   return renderPage(ctx, "index");
+}
+/**
+ * The shell of the **review-only comparison page** (`design/booking-comparison-copy.md`):
+ * the same furniture as every other page of the bundle — banner, header, nav, footer,
+ * `noindex` — around a body the comparison module composes.
+ *
+ * It is passed `null` for the page id, and that is the point of the `| null` in this
+ * file's page-id parameters: this page is **not one of the nine**. Nothing in the nav is
+ * marked current (this page is not in the nav), the header's action slot renders as it
+ * does on an inner page, and the footer prints none of the business's details. It is
+ * never linked from the rest of the demonstration and never delivered to a client.
+ *
+ * The comparison page is the one page in this bundle allowed to load Google's script or
+ * a Google frame, and only when `DEMO_BOOKING_COMPARISON_URL` is set: the owner asked for
+ * it in writing on 8 Oct ("do not silently retain third-party embed/script if it violates
+ * the comparison structure"). The carve-outs that keep that exception to one file are in
+ * `bookingComparisonProblems` (`booking-comparison.ts`); a remote `script`, `iframe` or
+ * `embed` on ANY other page stays refused, and this page never exists in the delivered
+ * phase.
+ */
+export function renderComparisonPage(
+  ctx: RenderContext,
+  vars: { title: string; description: string; body: string },
+): string {
+  return `<!doctype html>
+<html lang="en-CA" class="page page--comparison">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+${robotsMeta(ctx)}  <title>${esc(vars.title)}</title>
+  <meta name="description" content="${esc(vars.description)}">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">${esc(ctx.copy.ui.skip)}</a>
+${ctx.copy.banner ? `  <!-- Compliance: the proposal banner sits above everything, in normal flow, so it
+       is visible without scrolling on every screen size. Do not remove. -->
+  <div class="proposal-banner" role="note">
+    <p class="wrap">${esc(ctx.copy.banner)}</p>
+  </div>
+` : ""}${headerBlock(ctx, null)}
+  <main id="main">
+${vars.body}
+  </main>
+${footerBlock(ctx, null)}
+</body>
+</html>
+`;
+}
+/**
+ * The heading block of the comparison page, in the shape of every inner page's
+ * `page-head` (eyebrow, then the h1) so the page looks like the rest of the bundle.
+ */
+export function renderComparisonHead(ctx: RenderContext, title: string): string {
+  const { record } = ctx;
+  const city = record.address?.city;
+  const eyebrow = [record.category, city ? `${city}, ${record.address?.province ?? "ON"}` : ""].filter(Boolean).join(" · ");
+  return `    <header class="page-head">
+      <div class="wrap">
+        <p class="eyebrow">${esc(eyebrow)}</p>
+        <h1>${esc(title)}</h1>
+      </div>
+    </header>`;
 }
 
 /* -------------------------------------------------------------- the stylesheet */

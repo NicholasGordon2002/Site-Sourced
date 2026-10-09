@@ -21,6 +21,13 @@ import type { BundleResult, BusinessRecord, DemoManifest, ManifestHeaderAction, 
 import type { BookingCopy, DemoCopy, PrivacyNotice } from "./copy.ts";
 import { BOOKING_ANCHOR_CLASS, BOOKING_ARROW, bookingBelongs, DEMO_BOOKING_URL_VAR } from "./booking.ts";
 import {
+  BOOKING_COMPARISON_FILE,
+  BOOKING_COMPARISON_VAR,
+  comparisonDecision,
+  renderBookingComparison,
+  type ComparisonDecision,
+} from "./booking-comparison.ts";
+import {
   collectionProblems,
   composeCopy,
   composePrivacy,
@@ -2417,6 +2424,34 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   };
 
   const pages = renderPages(ctx);
+  // The **review-only comparison page** (owner's request of 8 Oct 2026, scoped to this one
+  // demonstration). It is rendered **outside** `renderPages`, deliberately: it is not one of
+  // the nine, so it is not in the nav, not in the page contract, and every check that walks
+  // `pages` — self-containment, the booking scoping rules, the phase furniture rules —
+  // still refuses a remote `script`, `iframe` or `embed` on any other page of the bundle.
+  // With `DEMO_BOOKING_COMPARISON_URL` unset (the repository's state, and the requirement:
+  // `DEMO_BOOKING_URL` stays unset so the derived booking mode stays `none`) no page is
+  // written at all and the bundle is byte-identical to a build from master.
+  const comparisonUrl = (process.env[BOOKING_COMPARISON_VAR] ?? "").trim();
+  const comparison: ComparisonDecision = comparisonDecision({
+    record,
+    slug,
+    url: comparisonUrl,
+    phase: delivery.mode,
+  });
+  const comparisonPage = comparison.enabled
+    ? {
+        file: BOOKING_COMPARISON_FILE,
+        html: renderBookingComparison(ctx, comparisonUrl),
+        url: comparisonUrl,
+        basis: comparison.basis,
+      }
+    : null;
+  if (comparisonPage) {
+    warnings.push(
+      `comparison page: ${comparisonPage.file} is in this bundle — ${comparison.basis} It is not one of the nine pages and it is not part of the proposal's design.`,
+    );
+  }
   const css = renderCss(profile, slug);
   const js = renderJs();
   const favicon = renderFavicon(record, profile);
@@ -2438,6 +2473,9 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   };
 
   for (const page of pages) await write(page.file, page.html);
+  // The comparison page, when this build has one: the only file in the bundle that is not
+  // one of the nine, and the only one that may load Google's code or a Google frame.
+  if (comparisonPage) await write(comparisonPage.file, comparisonPage.html);
   await write("styles.css", css);
   await write("site.js", js);
   await write("favicon.svg", favicon);
@@ -2599,6 +2637,22 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
       basis_note:
         "A booking link is a plain anchor that leaves the site: https only, target=\"_blank\" with rel=\"noopener noreferrer\", no iframe, embed, script or stylesheet rule, and the arrow is a text glyph. bookingProblems refuses a business's booking page in the demonstration phase, our demonstration page in a delivered site, anything but https, a link on a page that should not carry it, a label that is not the derived one, a demonstration notice that is missing, doubled, moved away from the link or naming another business, a changed header slot while the bundle is a proposal, and any iframe/embed/object. The control's class must also be one the 44px audit measures (bookingAnchorSizeProblems): the first draft's button--ghost was neither measured nor visible on paper.",
     },
+    /* The review-only comparison page: whether this bundle has one, why, and where the
+       exception to the booking rule comes from. Absent entirely when no page was written,
+       which is what keeps the manifest of an unconfigured build byte-identical. */
+    ...(comparisonPage
+      ? {
+          booking_comparison: {
+            file: comparisonPage.file,
+            url: comparisonPage.url,
+            basis: comparisonPage.basis,
+            scope: `this one page, in this one bundle (${slug}), and nowhere else`,
+            basis_note:
+              "The plan's booking rule is a plain anchor — \"never an embed, script or iframe\" — and template-system.md \u00a72.5 forbids a booking iframe outright. Options 2 and 3 on this page break that rule because the owner asked for them in writing on 8 Oct 2026, for this demonstration only, to judge the live flow. The exception is held to one file: the page is rendered outside renderPages and so in not one of the nine, every check that walks the nine still refuses a remote script/iframe/embed on another page, this page is refused outright in the delivered phase, and DEMO_BOOKING_URL stays unset so no approved page changes. No sign-off is implied by this page.",
+            measured: "see /home/team/shared/design/booking-comparison-notes-2026-10-08.md",
+          },
+        }
+      : {}),
     /* Which family the page converts for, the rule that decided it, and the primary
        contact label with its own basis — derived in family.ts, recorded here so a
        reviewer reads the result and the reason together. */
