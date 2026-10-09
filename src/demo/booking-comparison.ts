@@ -81,6 +81,12 @@ export const BOOKING_COMPARISON_BASIS =
 export const OPTION1_LABEL = "Book a demonstration time";
 /** Option 2's control label. Google's own wording, fixed by the owner, byte-exact. */
 export const OPTION2_LABEL = "Book an appointment";
+/**
+ * Option 3's frame's accessible name (the `title` attribute). The lead fixed this string:
+ * a frame with no name is a nameless region to a screen reader, and this one says both
+ * what it holds and whose page it is.
+ */
+export const FRAME_TITLE = "Demonstration booking page — a Google page shown inside this page";
 
 export interface ComparisonRenderVars {
   record: BusinessRecord;
@@ -156,6 +162,75 @@ function optionOne(vars: { url: string; business: string }): string {
     </section>`;
 }
 
+/**
+ * Option 2 — Google's scheduling button.
+ *
+ * The button is **Google's own**: a script from Google's domain draws it here, and the
+ * wording and the colour are set in the load call below (the owner's `Book an appointment`
+ * and their `#039BE5`). Two consequences the page states outright rather than hiding: the
+ * browser contacts Google as soon as the page opens, and with JavaScript off nothing is
+ * drawn at all — which is why the fallback paragraph points at option 1.
+ *
+ * The label in the load call is `OPTION2_LABEL` — the owner's fixed string, byte-exact —
+ * so the button a visitor sees carries exactly the words the comparison is about.
+ */
+function optionTwo(vars: { url: string }): string {
+  const { url } = vars;
+  return `    <section class="section" id="option-2">
+      <div class="wrap">
+        <h2>Option 2 — Google's scheduling button</h2>
+        <p>Google's own scheduling button: a short piece of Google's code draws a button on this page, with the wording and the colour set in that code.</p>
+        <p>This option loads Google's code when this page opens, so the browser contacts Google before any button is tapped — and with JavaScript turned off that code does not run, so no button appears.</p>
+        <div class="booking-comparison-button" id="scheduling-button"></div>
+        <script src="https://calendar.google.com/calendar/scheduling-button-script.js" async></script>
+        <script>
+          (function () {
+            var target = document.getElementById("scheduling-button");
+            window.addEventListener("load", function () {
+              if (!window.calendar || !window.calendar.schedulingButton || !target) return;
+              window.calendar.schedulingButton.load({
+                url: ${JSON.stringify(url)},
+                color: "#039BE5",
+                label: ${JSON.stringify(OPTION2_LABEL)},
+                target: target,
+              });
+            });
+          })();
+        </script>
+        <p class="muted">That wording is Google's, not Site Sourced's, and it does not say whose booking page the button opens.</p>
+        <p>If JavaScript is turned off, Google's code does not run and no button appears here at all; the same happens if a browser setting or an extension blocks Google's code. Either way the booking page can still be reached: use option 1, which is an ordinary link and needs no JavaScript.</p>
+      </div>
+    </section>`;
+}
+/**
+ * Option 3 — the booking page in a frame.
+ *
+ * Three deliberate details, all of them the lead's rulings: **no `loading="lazy"`**, because
+ * the page's own words say the frame asks Google for the page when the page opens and a
+ * lazy attribute would make that false; the frame is **600 px tall and borderless**, as the
+ * wording states, through an inline style rather than a stylesheet rule, because
+ * `styles.css` is shared by all ten pages and a shared file may not change for this page;
+ * and it carries a **`title`**, which is the frame's accessible name — an untitled frame is
+ * a nameless region to a screen reader.
+ *
+ * The caption above the frame and the paragraph below it do not promise that anything
+ * loads: a blank box is one of the outcomes the page already describes.
+ */
+function optionThree(vars: { url: string }): string {
+  const { url } = vars;
+  return `    <section class="section section--alt" id="option-3">
+      <div class="wrap">
+        <h2>Option 3 — the booking page in a frame</h2>
+        <p>The booking page itself, loaded inside this page in a box 600 pixels tall, with no border.</p>
+        <p>This option loads Google's booking page inside this page when the page opens, so the browser contacts Google before anything is tapped, and what appears in the box is Google's own page.</p>
+        <p class="muted">The demonstration booking page, shown inside this page:</p>
+        <iframe src="${esc(url)}" title="${esc(FRAME_TITLE)}" style="display:block;width:100%;height:600px;border:0"></iframe>
+        <p>If it loads, Google's booking page appears in that box. Google can change or withdraw that page at any time and Site Sourced would not know; what the box holds is Google's page, not a page Site Sourced draws. If the box stays empty, or the page or the browser refuses to be shown inside another page, use option 1.</p>
+        <p>With JavaScript turned off, the frame still asks Google for the page, and what it then shows has not been tested and is not claimed here.</p>
+      </div>
+    </section>`;
+}
+
 /** The limits block: what this comparison is not, in the words the document fixes. */
 function limits(vars: { business: string }): string {
   const { business } = vars;
@@ -185,6 +260,10 @@ export function comparisonBody(ctx: RenderContext, url: string): string {
     </section>
 
 ${optionOne({ url, business })}
+
+${optionTwo({ url })}
+
+${optionThree({ url })}
 
 ${limits({ business })}`;
 }
