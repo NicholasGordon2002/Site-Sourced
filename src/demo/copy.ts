@@ -1844,7 +1844,7 @@ const DETAIL_LIST_PATTERN = `(?:${NAMED_DETAILS.map((d) => d.wording).join("|")}
  * tag or a full stop ends the match — so two unrelated mentions cannot be welded into one
  * claim.
  */
-const DETAIL_CLAIM_SHAPES: { what: string; owns: readonly CarriedDetail[]; source: string }[] = [
+export const DETAIL_CLAIM_SHAPES: { what: string; owns: readonly CarriedDetail[]; source: string }[] = [
   {
     what: "the hero's offering line",
     owns: ["hours", "address", "phone number", "email address"],

@@ -42,8 +42,19 @@ import {
   printedDetailClaimProblems,
   privacyNoticeProblems,
   profileFor,
-  slugify,
-} from "./copy.ts";
+  slugify,} from "./copy.ts";
+import {
+  DEMO_ONLY_PROSE,
+  DEMO_README_MARKER,
+  EXTERNAL_STYLESHEET_PATTERNS,
+  FORBIDDEN_SCRIPT_PATTERNS,
+  OVERLAY_MARKS,
+  PHASE_REFUSAL_LISTS,
+  PLACEHOLDER_PATTERNS,
+  PROPOSAL_FURNITURE,
+  REFUSAL_LISTS,
+} from "./refusal-registry.ts";
+import { manifestClaimProblems, refusalCoverageProblems } from "./refusal-coverage.ts";
 import { contactLabelProblems, familyHonestyProblems, familyProblems, submitLabelProblems } from "./family.ts";
 import {
   SECTION_ORDER,
@@ -176,23 +187,6 @@ export interface BuildOptions {
   onNote: (msg: string) => void;
 }
 
-/**
- * Visitor-facing text that is still a working note rather than a sentence.
- *
- * The plan's rule is that nothing published carries placeholder data, and the privacy
- * notice is the first page with a value we do not have yet (the owner's legal name and
- * mailing address). The rule the owner set for it is stricter than "looks finished": a
- * bracket-shaped or invented value must never reach a public path, so the build refuses
- * a page containing a bracketed token, an unfilled `{Template}` token, or a working
- * note. Attributes, comments and scripts are stripped first: what is scanned is what a
- * visitor would read.
- */
-export const PLACEHOLDER_PATTERNS: [string, RegExp][] = [
-  ["a bracketed placeholder", /\[[^\]\n]{2,60}\]/],
-  ["an unfilled template token", /\{[a-zA-Z][^}\n]{2,60}\}/],
-  ["a working note", /\b(TBD|TODO|FIXME)\b/],
-  ["filler text", /lorem ipsum/i],
-];
 
 export function placeholderProblems(pages: RenderedPage[]): string[] {
   const problems: string[] = [];
@@ -661,20 +655,6 @@ function overlayColour(value: string, tokens: Map<string, string>): Rgb | null {
   return null;
 }
 
-/**
- * The marks a header with no photograph behind it may not wear, one named pattern per
- * shape so a refusal can say which one it found (clause 2 of `headerOverlayProblems`).
- * Declared at module scope because the coverage meta-check reads every named-pattern
- * list this generator refuses with (`refusalCoverageProblems`).
- */
-export const OVERLAY_MARKS: { what: string; re: RegExp }[] = [
-  { what: "a shared grid cell", re: /\bgrid-(area|row|column)\s*:|(^|;)\s*display\s*:\s*grid\b/ },
-  { what: "a wash over the photograph", re: /linear-gradient\([^;]*rgba\(/ },
-  { what: "white header text", re: /(^|;)\s*color\s*:\s*#(?:fff|ffffff)\b|(^|;)\s*color\s*:\s*white\s*(;|$)/i },
-  { what: "a white action on the wash", re: /(^|;)\s*background(-color)?\s*:\s*#(?:fff|ffffff)\b|(^|;)\s*background(-color)?\s*:\s*white\s*(;|$)/i },
-  { what: "a white focus ring on the wash", re: /outline-color\s*:\s*#(?:fff|ffffff)\b|outline-color\s*:\s*white\s*(;|$)/i },
-  { what: "the header stacked above the page", re: /(^|;)\s*z-index\s*:\s*\d/ },
-];
 
 /**
  * The home page's header, sitting on the hero photograph (owner retouch, 6 Oct 2026) — as
@@ -1696,47 +1676,7 @@ export function bookingProblems(vars: {
   return problems;
 }
 
-/** The furniture that belongs to the demonstration phase, in the words a page writes it. */
-export const PROPOSAL_FURNITURE: [string, RegExp][] = [
-  ["the proposal banner element", /<div class="proposal-banner"/i],
-  ["an unsolicited-proposal sentence", /unsolicited (?:design )?proposal/i],
-  ["the footer disclaimer", /not affiliated with, endorsed by, or operated by/i],
-  ["a noindex marker", /<meta\s+name="robots"[^>]*noindex/i],
-  ["the sentence about being marked noindex", /marked noindex/i],
-  ["the takedown promise", /ask and (?:we will take it down|it comes down)/i],
-];
 
-const DEMO_README_MARKER = "DEMONSTRATION — not the business's website";
-/**
- * The prose **only a demonstration may carry**, in the words this build writes it.
- *
- * `PROPOSAL_FURNITURE` above catches the *unsolicited-proposal* family: the offer, the
- * noindex marker, the takedown promise. It does not catch the demonstration's *own*
- * sentences, and three of them did reach a delivered bundle:
- *
- *   1. the README's demonstration paragraph — "DEMONSTRATION — not the business's
- *      website, and never sent to the business. The contact form's submissions come to
- *      Site Sourced." The manifest already **claimed** this was refused ("the
- *      demonstration paragraph in the delivered README", `MANIFEST_PHASE_REFUSED`) while
- *      no line of code tested it: the paragraph on its own matched no pattern, so the
- *      only thing keeping it out of a client's README was the phase ternary in
- *      `renderEditingReadme` — a promise about the phase, checked by nothing;
- *   2. the README's demonstration contact-form section — "This is a demonstration bundle,
- *      not a delivered site.", the block that follows the same ternary;
- *   3. "on a demonstration page …" — our own template's, in the comment above the form's
- *      qualifier line and in a provider fact, both of which ship inside the folder.
- *
- * Three of the delivered bundle's files are the client's to read and edit — the README
- * and the pages — and on a delivered site none of them may describe the work as a
- * demonstration. Each pattern names the sentence itself rather than a keyword: "this
- * demonstration" is not refused, because a record's own recorded wording is allowed to
- * contain the word and a client build must never fail on the client's own copy.
- */
-export const DEMO_ONLY_PROSE: [string, RegExp][] = [
-  ["the demonstration paragraph", /DEMONSTRATION — not the business's website/],
-  ["the demonstration bundle's contact-form paragraph", /This is a demonstration bundle, not a delivered site/],
-  ["the demonstration-page sentence", /on a demonstration page\b/i],
-];
 
 /** The furniture the demonstration phase requires, as the manifest lists it. */
 const MANIFEST_PHASE_REQUIRED = [
@@ -1870,6 +1810,28 @@ export function phaseFurnitureProblems(vars: {
 }
 
 /**
+ * The refusals themselves, checked as a **class** rather than one at a time.
+ *
+ * Every refusal in this generator is a named pattern in a list, and a pattern can stop
+ * matching the thing it names without anything else changing: the 9 Oct leak had
+ * `MANIFEST_PHASE_REFUSED` listing "the demonstration paragraph in the delivered README"
+ * while no pattern in the build matched that paragraph. `refusal-coverage.ts` walks the
+ * registry and proves each entry can still refuse the prose it names; this is where a build
+ * is held to it, so a bundle whose own refusal tables have rotted fails to build rather
+ * than shipping a guard that quietly does nothing.
+ */
+export function refusalCoverageChecks(): string[] {
+  return [
+    ...refusalCoverageProblems(REFUSAL_LISTS),
+    ...manifestClaimProblems({
+      claim: "MANIFEST_PHASE_REFUSED",
+      manifest: MANIFEST_PHASE_REFUSED,
+      lists: PHASE_REFUSAL_LISTS,
+    }),
+  ];
+}
+
+/**
  * Everything that must be true for a bundle to be publishable at all — one list, one
  * throw — checked **on every page**, because the plan's compliance rules are per page
  * and never inherited. It covers the pages' compliance strings, the contact form, and
@@ -1919,7 +1881,9 @@ export function complianceChecks(vars: {
 }): string[] {
   const { pages, record, copy, form, delivery, images, privacy } = vars;
   const practice = vars.practice === undefined ? currentRetentionPractice() : vars.practice;
-  const problems: string[] = [];
+  // The refusals themselves, before anything about this bundle: every named refusal
+  // this generator enforces must still be able to fire (refusalCoverageChecks).
+  const problems: string[] = refusalCoverageChecks();
   const illustrative = images.filter(isIllustrativeImage);
   const label = illustrationLabel(record.name);
   const caveat = copy.contactCaveat;
@@ -2174,22 +2138,7 @@ export function complianceChecks(vars: {
  * scope for the coverage meta-check; the refusal itself is `externalReferenceProblems`.
  */
 
-/**
- * The browser APIs `site.js` must never touch, because the privacy notice prints a
- * sentence saying it does not (the "no cookies, no analytics and no tracking" line).
- */
-export const EXTERNAL_STYLESHEET_PATTERNS: [string, RegExp][] = [
-  ["an @import", /@import\s+(?:url\(\s*)?['"]?\s*(?:https?:)?\/\//i],
-  ["a url()", /url\(\s*['"]?\s*(?:https?:)?\/\//i],
-];
 
-export const FORBIDDEN_SCRIPT_PATTERNS: [string, RegExp][] = [
-  ["a cookie", /document\s*\.\s*cookie/i],
-  ["web storage", /\b(?:localStorage|sessionStorage|indexedDB)\b/i],
-  ["a tracking beacon", /\b(?:sendBeacon|new\s+Image\b)/i],
-  ["a direct XHR", /\bXMLHttpRequest\b/i],
-  ["an analytics call", /\b(?:gtag|dataLayer|analytics|mixpanel|segment|plausible|fathom)\b/i],
-];
 
 export function externalReferenceProblems(vars: { pages: RenderedPage[]; css: string; js: string }): string[] {
   const { pages, css, js } = vars;
