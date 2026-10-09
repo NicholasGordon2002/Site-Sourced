@@ -404,9 +404,82 @@ test("the delivered README's provider facts read as answers, not as a broken sen
   expect(b.readme).not.toMatch(/posts to Formspark\.\s+(?:yes|no)\b/);
   expect(b.readme).toContain("The form posts to Formspark. Notifications go to");
   expect(b.readme).toContain("  Does it need an account? yes — a free account");
-  expect(b.readme).toContain("  Whose account is it? whoever's account holds the form");
+  // The one fact that names a party answers for **this** phase: a client reading
+  // their own README is not told what a demonstration page would say (`forms.ts`).
+  expect(b.readme).toContain(
+    "  Whose account is it? your own account — the form id belongs to it, so you can read, export or delete submissions yourself",
+  );
+  expect(b.readme).not.toContain("on a demonstration page");
   expect(b.readme).toContain("  Does the form service keep a copy? yes —");
   expect(b.readme).toContain("  What does it cost? free plan:");
+});
+
+/* ---------------------- the demonstration's own prose in a client's build (9 Oct 2026) */
+/**
+ * The leak class the phase gate did not cover.
+ *
+ * `PROPOSAL_FURNITURE` refuses the *unsolicited-proposal* family on a delivered site —
+ * the offer, the noindex marker, the takedown promise. The demonstration's own sentences
+ * were a different family, and nothing tested them:
+ *
+ *   - `MANIFEST_PHASE_REFUSED` has always listed "the demonstration paragraph in the
+ *     delivered README", while no code line tested for it — the paragraph on its own
+ *     matched no pattern, so the only thing keeping it out of a client's README was the
+ *     phase ternary in `renderEditingReadme`;
+ *   - "on a demonstration page …" reached a delivered build twice, in the comment above
+ *     the form's qualifier line (in every contact page's source) and in the Formspark
+ *     provider fact (`forms.ts`) printed in the client's README.
+ *
+ * Each test below injects the sentence its clause exists to catch and asserts the
+ * refusal's own words, so the clauses are shown to fire rather than assumed to.
+ */
+test("the demonstration paragraph in a delivered README is refused, by name", async () => {
+  const b = await delivered();
+  const demo = await render({ ...RECORD_FOR_RENDER, form_recipient: OUR_INBOX, form_delivery: "demo", booking_url: "" });
+  // Verbatim, from the demonstration's own README: the paragraph at the top, then the
+  // contact-form section further down. Both belong to that phase and to no other.
+  const problems = furniture(b, `${b.readme}\n${demo.readme}\n`);
+  expect(problems).toContain("the delivered README carries the demonstration paragraph");
+  expect(problems).toContain("the delivered README carries the demonstration bundle's contact-form paragraph");
+  expect(problems).toContain("the delivered README carries the demonstration-page sentence");
+});
+
+test("the demonstration-page sentence is refused on a delivered page too", async () => {
+  const b = await delivered();
+  const injected = doctored(
+    b,
+    "about.html",
+    "</footer>",
+    "<p>Nothing is booked here: see the note on a demonstration page.</p></footer>",
+  );
+  expect(furniture(b, b.readme, injected)).toContain("on about.html: carries the demonstration-page sentence");
+});
+
+test("no delivered page or README says anything about a demonstration", async () => {
+  const b = await delivered();
+  for (const p of b.pages) {
+    expect(`${p.file}: ${/on a demonstration page\b/i.test(p.html)}`).toBe(`${p.file}: false`);
+    expect(`${p.file}: ${p.html.includes("demonstration")}`).toBe(`${p.file}: false`);
+  }
+  expect(/demonstration/i.test(b.readme)).toBe(false);
+});
+
+test("the demonstration keeps every one of those sentences — it is a derivation, not a deletion", async () => {
+  const demo = await render({ ...RECORD_FOR_RENDER, form_recipient: OUR_INBOX, form_delivery: "demo", booking_url: "" });
+  expect(demo.ctx.delivery.mode).toBe("demo");
+  expect(demo.problems).toEqual([]);
+  expect(demo.readme).toContain("DEMONSTRATION — not the business's website");
+  expect(demo.readme).toContain("This is a demonstration bundle, not a delivered site.");
+  expect(demo.readme).toContain(
+    "  Whose account is it? whoever's account holds the form — the form id belongs to it, so they can read, export or delete submissions themselves. In a delivered site that is the client's own account; on a demonstration page it is Site Sourced's",
+  );
+  expect(page(demo, "contact.html")).toContain("on a demonstration page it says nothing here is booked");
+  // The delivered twin of the same comment, which is the reason the comment follows the
+  // phase: the demonstration's words above, and the client's words here.
+  expect(page(await delivered(), "contact.html")).toContain(
+    "on an enquiry page it says the business will get back to you",
+  );
+  expect(page(await delivered(), "contact.html")).not.toContain("demonstration page it says nothing here is booked");
 });
 
 test("the delivered AI-image note has no deadline the finished site cannot meet", async () => {

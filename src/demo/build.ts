@@ -1699,6 +1699,36 @@ const PROPOSAL_FURNITURE: [string, RegExp][] = [
 ];
 
 const DEMO_README_MARKER = "DEMONSTRATION — not the business's website";
+/**
+ * The prose **only a demonstration may carry**, in the words this build writes it.
+ *
+ * `PROPOSAL_FURNITURE` above catches the *unsolicited-proposal* family: the offer, the
+ * noindex marker, the takedown promise. It does not catch the demonstration's *own*
+ * sentences, and three of them did reach a delivered bundle:
+ *
+ *   1. the README's demonstration paragraph — "DEMONSTRATION — not the business's
+ *      website, and never sent to the business. The contact form's submissions come to
+ *      Site Sourced." The manifest already **claimed** this was refused ("the
+ *      demonstration paragraph in the delivered README", `MANIFEST_PHASE_REFUSED`) while
+ *      no line of code tested it: the paragraph on its own matched no pattern, so the
+ *      only thing keeping it out of a client's README was the phase ternary in
+ *      `renderEditingReadme` — a promise about the phase, checked by nothing;
+ *   2. the README's demonstration contact-form section — "This is a demonstration bundle,
+ *      not a delivered site.", the block that follows the same ternary;
+ *   3. "on a demonstration page …" — our own template's, in the comment above the form's
+ *      qualifier line and in a provider fact, both of which ship inside the folder.
+ *
+ * Three of the delivered bundle's files are the client's to read and edit — the README
+ * and the pages — and on a delivered site none of them may describe the work as a
+ * demonstration. Each pattern names the sentence itself rather than a keyword: "this
+ * demonstration" is not refused, because a record's own recorded wording is allowed to
+ * contain the word and a client build must never fail on the client's own copy.
+ */
+const DEMO_ONLY_PROSE: [string, RegExp][] = [
+  ["the demonstration paragraph", /DEMONSTRATION — not the business's website/],
+  ["the demonstration bundle's contact-form paragraph", /This is a demonstration bundle, not a delivered site/],
+  ["the demonstration-page sentence", /on a demonstration page\b/i],
+];
 
 /** The furniture the demonstration phase requires, as the manifest lists it. */
 const MANIFEST_PHASE_REQUIRED = [
@@ -1710,9 +1740,9 @@ const MANIFEST_PHASE_REQUIRED = [
 ];
 
 /** The furniture the business phase refuses, as the manifest lists it. */
-const MANIFEST_PHASE_REFUSED = PROPOSAL_FURNITURE.map(([what]) => what).concat([
-  "the demonstration paragraph in the delivered README",
-]);
+const MANIFEST_PHASE_REFUSED = PROPOSAL_FURNITURE.map(([what]) => what).concat(
+  DEMO_ONLY_PROSE.map(([what]) => what),
+);
 
 /**
  * The unsolicited-proposal furniture: **required in the demonstration phase and refused
@@ -1796,11 +1826,13 @@ export function phaseFurnitureProblems(vars: {
     }
 
     // Business phase: the whole set is refused, and the refusal names what it found.
-    for (const [what, pattern] of PROPOSAL_FURNITURE) {
+    // Both lists: the unsolicited-proposal furniture *and* the demonstration's own
+    // sentences. A client's page may carry neither.
+    for (const [what, pattern] of [...PROPOSAL_FURNITURE, ...DEMO_ONLY_PROSE]) {
       if (pattern.test(html)) {
         problems.push(
           `${on}: carries ${what}, but this bundle is a delivered site (${delivery.basis}). ` +
-            `The unsolicited-proposal furniture belongs to the demonstration phase and nowhere else: a client's own page must not introduce itself as somebody's proposal, hide the client from search engines, or promise a takedown that is not ours to offer.`,
+            `The unsolicited-proposal furniture belongs to the demonstration phase and nowhere else: a client's own page must not introduce itself as somebody's proposal, hide the client from search engines, or promise a takedown that is not ours to offer — and must not be told what a demonstration page would say.`,
         );
       }
     }
@@ -1815,11 +1847,11 @@ export function phaseFurnitureProblems(vars: {
         );
       }
     } else {
-      for (const [what, pattern] of PROPOSAL_FURNITURE) {
+      for (const [what, pattern] of [...PROPOSAL_FURNITURE, ...DEMO_ONLY_PROSE]) {
         if (pattern.test(readme)) {
           problems.push(
             `the delivered README carries ${what}, but this bundle is a delivered site. ` +
-              `A paying client's own README may not tell them their website was built as an unsolicited proposal, that it is marked noindex, or that it comes down on request.`,
+              `A paying client's own README may not tell them their website was built as an unsolicited proposal, that it is marked noindex, that it comes down on request, or what a demonstration page would say — it is the client's own instruction sheet, and it describes the client's own site.`,
           );
         }
       }
@@ -2891,7 +2923,7 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
         success_message: copy.formSuccess,
       },
       needs_account: form.provider.needs_account,
-      who_owns_the_account: form.provider.who_owns_the_account,
+      who_owns_the_account: form.provider.who_owns_the_account({ phase: delivery.mode }),
       stores_submissions: form.provider.stores_submissions,
       free_tier: form.provider.free_tier,
       if_it_lapses: form.provider.if_it_lapses,
@@ -2910,7 +2942,7 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
             delivery.mode === "business"
               ? "delivers contact-form submissions to the business's own inbox"
               : `carries contact-form submissions to ${delivery.party} while this site is a demonstration — the business named on the page is not a recipient`,
-          owner: form.provider.who_owns_the_account,
+          owner: form.provider.who_owns_the_account({ phase: delivery.mode }),
           cost: form.provider.free_tier,
           url: form.provider.url || "(the endpoint configured in this record)",
         },

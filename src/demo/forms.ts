@@ -64,7 +64,22 @@ export interface FormProvider {
    */
   deletion_exception: (vars: { service: string }) => string;
   needs_account: string;
-  who_owns_the_account: string;
+  /**
+   * Whose account holds the form, **as the phase the bundle is in makes it true**.
+   *
+   * This was a plain string that answered for both phases at once — "… In a delivered
+   * site that is the client's own account; on a demonstration page it is Site
+   * Sourced's" — and it is printed under its own question in the README that ships
+   * *inside* the bundle. On a delivered site that README is the paying client's own
+   * instruction sheet, so the answer described our demonstration phase to the client:
+   * one provider fact carrying demo-phase prose into the one document a client reads.
+   *
+   * Same shape as `visitor_storage` below: the caller passes the phase
+   * (`delivery.mode`) and gets the sentence that is true of it. Only the preset whose
+   * wording actually named a phase needs to branch; the rest answer the provider's
+   * model the same way in both.
+   */
+  who_owns_the_account: (vars: { phase: "demo" | "business" }) => string;
   free_tier: string;
   if_it_lapses: string;
   /**
@@ -97,7 +112,7 @@ export const PROVIDERS: Record<string, FormProvider> = {
     // key is tied to the recipient address, and submissions are forwarded, not kept.
     stores_submissions: "no — the provider states submissions are forwarded to the recipient and not stored (no dashboard, nothing to delete)",
     needs_account: "no account — one access key, created by entering the recipient's email address once",
-    who_owns_the_account: "the client: they create the access key with their own address, so it is theirs to rotate or revoke",
+    who_owns_the_account: () => "the client: they create the access key with their own address, so it is theirs to rotate or revoke",
     free_tier: "free plan: 250 submissions per month, no card, no monthly bill",
     if_it_lapses: "the form stops delivering; the page still shows the client's email address and phone number, so an enquiry is never lost",
     service_descriptor: "a third-party form service",
@@ -126,7 +141,12 @@ export const PROVIDERS: Record<string, FormProvider> = {
     //   documentation.formspark.io/dashboard/email-notification-settings
     stores_submissions: "yes — the message is kept in the Formspark account that owns the form (dashboard) for as long as that account's holder leaves it there; a deleted submission stays recoverable for a further 30 days",
     needs_account: "yes — a free account (email magic-link sign-in) creates the form id",
-    who_owns_the_account: "whoever's account holds the form — the form id belongs to it, so they can read, export or delete submissions themselves. In a delivered site that is the client's own account; on a demonstration page it is Site Sourced's",
+    // The one answer that names who is who, so the one answer that follows the phase:
+    // a client's README must not be told what a demonstration page would say.
+    who_owns_the_account: ({ phase }) =>
+      phase === "business"
+        ? "your own account — the form id belongs to it, so you can read, export or delete submissions yourself"
+        : "whoever's account holds the form — the form id belongs to it, so they can read, export or delete submissions themselves. In a delivered site that is the client's own account; on a demonstration page it is Site Sourced's",
     free_tier: "free plan: 250 submissions, 10 forms, 5 team members; more submissions are a one-off bundle, never a subscription",
     if_it_lapses: "the form stops accepting new submissions once the allowance is spent (recent ones are held back rather than discarded, and released by buying a bundle); the printed email address and phone number still work",
     service_descriptor: "a third-party form service",
@@ -160,7 +180,7 @@ export const PROVIDERS: Record<string, FormProvider> = {
     encode: "json",
     stores_submissions: "no — the provider states submissions are emailed on and not stored",
     needs_account: "no account — one access key, tied to the recipient's email address",
-    who_owns_the_account: "the client: they generate the key with their own address",
+    who_owns_the_account: () => "the client: they generate the key with their own address",
     free_tier: "free plan (low monthly submission cap); paid plans exist but are not needed at a small business's volume",
     if_it_lapses: "the form stops delivering; the printed email address and phone number still work",
     service_descriptor: "a third-party form service",
@@ -179,7 +199,7 @@ export const PROVIDERS: Record<string, FormProvider> = {
     encode: "json",
     stores_submissions: "no dashboard, but the recipient address sits in the page source where scrapers can read it",
     needs_account: "no account — but the first submission needs a one-click activation email from the recipient",
-    who_owns_the_account: "nobody — the address itself is the credential, which is also its weakness",
+    who_owns_the_account: () => "nobody — the address itself is the credential, which is also its weakness",
     free_tier: "free, no published monthly cap",
     if_it_lapses: "the form stops delivering; the printed email address and phone number still work",
     service_descriptor: "a third-party form service",
@@ -198,7 +218,7 @@ export const PROVIDERS: Record<string, FormProvider> = {
     encode: "json",
     stores_submissions: "depends entirely on the endpoint — a relay we run ourselves must not keep the message body",
     needs_account: "no",
-    who_owns_the_account: "whoever runs the endpoint",
+    who_owns_the_account: () => "whoever runs the endpoint",
     free_tier: "n/a",
     if_it_lapses: "the form stops delivering; the printed email address and phone number still work",
     // Our own relay is not a third party, whatever the visitor's reading: the sentence

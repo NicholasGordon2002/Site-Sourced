@@ -862,6 +862,24 @@ function contactFormSection(ctx: RenderContext, preselectService?: string): stri
   // words twice in a row (§P6.0). The delivery notice below already says what the form
   // is and who receives a message, exactly as services.html's block carries no heading
   // because its <h1> is already the offering.
+  // The comment above the qualifier line, **per phase**. It used to spell out both
+  // phases at once — "on an appointment page it is the request-not-a-booking line, and
+  // on a demonstration page it says nothing here is booked" — and a comment travels
+  // inside the page: on a delivered site it sits in the client's own file, where nothing
+  // may describe the work as a demonstration (WORKFLOW.md rule 9; the business phase in
+  // build.ts refuses the phrase now). The delivered wording describes the phase this page
+  // is in and never mentions the other; the demonstration's own wording is byte-for-byte
+  // what it has always been.
+  const formNoteComment =
+    ctx.delivery.mode === "business"
+      ? `<!-- The qualifier the button needs, derived from the delivery mode and the
+               family: on an appointment page it is the request-not-a-booking line, and
+               on an enquiry page it says the business will get back to you. Do not
+               reword without the record behind it. -->`
+      : `<!-- The qualifier the button needs, derived from the delivery mode and the
+               family: on an appointment page it is the request-not-a-booking line, and
+               on a demonstration page it says nothing here is booked. Do not reword
+               without the record behind it. -->`;
   return `    <section class="section section--alt" id="form">
       <div class="wrap">
         <!-- Compliance: this notice must stay next to the form. It is derived from
@@ -879,10 +897,7 @@ ${fields.groups.map((group, index) => fieldGroupHtml(copy, group, index, presele
           <input type="hidden" name="request_type" value="${esc(copy.conversion.family)}">
 ${hidden}
           <p class="form-actions"><button class="button" type="submit">${esc(copy.contactLabel.submit)}</button></p>
-          <!-- The qualifier the button needs, derived from the delivery mode and the
-               family: on an appointment page it is the request-not-a-booking line, and
-               on a demonstration page it says nothing here is booked. Do not reword
-               without the record behind it. -->
+          ${formNoteComment}
           <p class="form-note">${esc(copy.formNote)}</p>
           <p class="form-status" id="form-status" role="status" aria-live="polite"></p>
         </form>
@@ -2234,10 +2249,14 @@ function pageListBlock(pages: RenderedPage[], record: BusinessRecord): string {
  * shape that breaks a sentence it lands in. The labels below are the questions, and they
  * live here rather than in `forms.ts` because they are the README's, not the provider's.
  */
-function providerFactsBlock(form: ResolvedForm): string {
+function providerFactsBlock(form: ResolvedForm, phase: FormDelivery["mode"]): string {
   return [
     `  Does it need an account? ${form.provider.needs_account}`,
-    `  Whose account is it? ${form.provider.who_owns_the_account}`,
+    // The one fact whose wording names a party, so the one fact the phase is passed to:
+    // it used to answer for both phases at once, and the client's own README was told
+    // what "on a demonstration page" would say (`forms.ts`). Every other fact describes
+    // the provider's model and reads the same in either phase.
+    `  Whose account is it? ${form.provider.who_owns_the_account({ phase })}`,
     `  Does the form service keep a copy? ${form.provider.stores_submissions}`,
     `  What does it cost? ${form.provider.free_tier}`,
     `  If it stops working: ${form.provider.if_it_lapses}`,
@@ -2308,7 +2327,7 @@ and rebuild.\n`
 The form posts to ${form.provider.label}. Notifications go to ${form.recipient};
 nobody at Site Sourced receives a copy and no list of names is gathered.
 
-${providerFactsBlock(form)}
+${providerFactsBlock(form, delivery.mode)}
 
 The page says the same thing to your visitors, in the line just above the form.
 If you change form provider, that line changes with it — do not edit it by hand
@@ -2326,7 +2345,7 @@ to them. The line above the form on the page tells the visitor exactly that, in 
 own words, because a form that goes to the demo operator must never read as the
 business's own.
 
-${providerFactsBlock(form)}
+${providerFactsBlock(form, delivery.mode)}
 
 Before this bundle could be handed to a client, the record's form_recipient must be
 the client's own published address in an account the client owns. The page's notice
@@ -2379,8 +2398,9 @@ ${imageNote}
 
 ${formSection}One recurring job
 -----------------
-${businessPhase ? `Your domain name needs renewing once a year. Set it to auto-renew and the website
-can sit untouched indefinitely.
+${businessPhase ? `Your domain name needs renewing once a year. Set it to auto-renew. The files
+themselves need no upkeep: nothing to install, patch or update, and no account of ours
+in the middle. Change any wording whenever you like.
 ` : `The domain name is the one recurring item on a live site: it needs renewing once a
 year, set to auto-renew.`}
 ${businessPhase ? `Built by Site Sourced
