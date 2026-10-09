@@ -54,7 +54,8 @@
  * to a client, and no sign-off is implied by its existence.
  */
 import { BOOKING_ANCHOR_CLASS, BOOKING_ARROW } from "./booking.ts";
-import { bookingNoticeDemo } from "./copy.ts";
+import { familyHonestyProblems } from "./family.ts";
+import { bookingNoticeDemo, guardCopy } from "./copy.ts";
 import { esc, renderComparisonHead, renderComparisonPage, type RenderContext } from "./render.ts";
 import type { BusinessRecord } from "./types.ts";
 
@@ -281,4 +282,168 @@ export function renderBookingComparison(ctx: RenderContext, url: string): string
       "A demonstration-page-only comparison of three ways to reach the same booking page, added at the request of Site Sourced's own owner.",
     body: comparisonBody(ctx, url),
   });
+}
+
+/** Google's own scheduling-button script, as the button option loads it. */
+export const GOOGLE_BUTTON_SCRIPT =
+  "https://calendar.google.com/calendar/scheduling-button-script.js";
+
+/**
+ * **The checks that keep the exception to one file** (WORKFLOW.md rule 6: a rule that lives
+ * only in prose is a rule that rots).
+ *
+ * Four clauses, each one something the owner's own instruction requires, and each one able
+ * to fail:
+ *
+ *   1. **Any other page stays clean.** No page of the bundle except `booking-comparison.html`
+ *      may load a remote `script`, `iframe`, `embed` or `object`, and no page may link to
+ *      the comparison page. The owner's words for the exception — "create a review-only
+ *      comparison on the Maple Avenue Barbershop appointment demo only; do not change
+ *      Northshore, do not release a client/final site, and keep the existing approved demo
+ *      otherwise unchanged … do not silently retain third-party embed/script if it violates
+ *      the comparison structure" — are the whole basis, and they are quoted here because a
+ *      later reader has to be able to weigh the exception, not just see it.
+ *   2. **Never in a delivered bundle.** A `business`-phase build may not carry this page at
+ *      all: it is a review artifact for the owner, and Google's code and Google's frame do
+ *      not belong on a client's site ("do not release a client/final site").
+ *   3. **Never on another demonstration.** It is scoped to the one record the owner named.
+ *   4. **The page's own obligations**, so the page cannot drift: the disclosure, the notice,
+ *      the anchor's shape, the two fixed labels, the frame's `title`, no `loading="lazy"`,
+ *      the bundle's phase furniture, and the copy guards (`guardCopy`, the family honesty
+ *      rules) run over this page too — it is not exempt from the honesty rules just because
+ *      it is exempt from the self-containment one.
+ */
+export function bookingComparisonProblems(vars: {
+  /** The nine pages of this bundle (the comparison page is deliberately not among them). */
+  pages: { file: string; html: string }[];
+  record: BusinessRecord;
+  /** The slug this build is for. */
+  slug: string;
+  /** The phase this bundle is in — `delivery.mode`. */
+  phase: string;
+  /** The rendered comparison page, or `""` when this build has none. */
+  html: string;
+  /** The configured address (`DEMO_BOOKING_COMPARISON_URL`), or `""`. */
+  url: string;
+}): string[] {
+  const { pages, record, slug, phase, html, url } = vars;
+  const problems: string[] = [];
+  const remote = /<(?:script|iframe|embed|object)\b[^>]*\b(?:src|data)\s*=\s*"(?:https?:)?\/\//i;
+
+  /* 1. every other page stays clean, and nothing links to the comparison page. */
+  for (const page of pages) {
+    if (page.file === BOOKING_COMPARISON_FILE) continue;
+    const hit = remote.exec(page.html);
+    if (hit) {
+      problems.push(
+        `${page.file}: loads ${hit[0].replace(/\s+/g, " ").slice(0, 120)} — a remote script or frame on a page of the demonstration. The one page in this bundle allowed to load Google's code or a Google frame is ${BOOKING_COMPARISON_FILE}, and only because the owner asked for it in writing on 8 Oct 2026 ("create a review-only comparison on the Maple Avenue Barbershop appointment demo only … do not silently retain third-party embed/script if it violates the comparison structure"). On every other page the plan's rule holds unchanged: a booking link is a plain anchor, never an embed, script or iframe. Basis: ${BOOKING_COMPARISON_BASIS}.`,
+      );
+    }
+    if (page.html.includes(BOOKING_COMPARISON_FILE)) {
+      problems.push(
+        `${page.file}: links to ${BOOKING_COMPARISON_FILE}. The comparison page is reachable by direct link only — it is not linked from the rest of the demonstration, because it is not part of the design Site Sourced proposed and it must not read as one of the nine pages (owner's words: "keep the existing approved demo otherwise unchanged").`,
+      );
+    }
+  }
+
+  /* 2. never in a delivered bundle. */
+  if (html !== "" && phase === "business") {
+    problems.push(
+      `${BOOKING_COMPARISON_FILE}: present in a bundle built in the delivered phase. This page loads Google's code and Google's frame; it is a review artifact for Site Sourced's owner, and a client's site may not carry it (owner's words: "do not release a client/final site"). ${BOOKING_COMPARISON_VAR} carries no weight in a client build — the page is refused outright, whatever the variable says.`,
+    );
+  }
+
+  /* 3. never on another demonstration. */
+  if (html !== "" && (slug !== BOOKING_COMPARISON_SLUG || !record.booking_url)) {
+    problems.push(
+      `${BOOKING_COMPARISON_FILE}: written into the bundle for "${slug}"${record.booking_url ? "" : ", a record with no booking_url,"} — but this page is scoped to the ${BOOKING_COMPARISON_SLUG} appointment demonstration and to a record that carries a booking page (owner's words: "create a review-only comparison on the Maple Avenue Barbershop appointment demo only; do not change Northshore"). Nothing is written for any other record.`,
+    );
+  }
+
+  if (html === "") return problems;
+
+  /* 4. the page's own obligations, read off the page rather than trusted. */
+  const on = `on ${BOOKING_COMPARISON_FILE}`;
+  if (!html.includes(`<h1>${BOOKING_COMPARISON_TITLE}</h1>`)) {
+    problems.push(`${on}: the h1 is not ${JSON.stringify(BOOKING_COMPARISON_TITLE)}. The page's heading is what a visitor reads first about what this page is.`);
+  }
+  if (!html.includes(esc(disclosure(record.name)))) {
+    problems.push(
+      `${on}: the level disclosure is missing. Every control on the page sits under a paragraph that says the page is an experiment, that it is not one of the nine, and that nothing booked on the demonstration page is an appointment with ${record.name} (design/booking-comparison-copy.md §1).`,
+    );
+  }
+  // The page prints these strings escaped (`esc`), so the check reads them the way the
+  // page writes them rather than comparing against source text that never reaches the HTML.
+  const notice = esc(bookingNoticeDemo(record.name));
+  const noticeCount = html.split(notice).length - 1;
+  if (noticeCount !== 1) {
+    problems.push(
+      `${on}: the demonstration notice appears ${noticeCount} time(s), not once. It belongs immediately under option 1's link, which is the link it describes; a notice repeated around the page stops reading as a notice about that link.`,
+    );
+  }
+  const anchor = new RegExp(
+    `<a class="${BOOKING_ANCHOR_CLASS}" href="([^"]*)" target="_blank" rel="noopener noreferrer">${esc(OPTION1_LABEL)}&nbsp;${BOOKING_ARROW}</a>`,
+  );
+  const anchorHit = anchor.exec(html);
+  if (!anchorHit) {
+    problems.push(
+      `${on}: option 1's control is not the booking anchor this build composes — one <a> wearing ${JSON.stringify(BOOKING_ANCHOR_CLASS)} (the class the 44px audit measures), pointing at the configured address, opening in a new tab with rel="noopener noreferrer", reading ${JSON.stringify(`${OPTION1_LABEL} ${BOOKING_ARROW}`)} with the arrow as a text glyph after a non-breaking space (design/booking-link-spec.md §2).`,
+    );
+  } else if (anchorHit[1] !== url) {
+    problems.push(
+      `${on}: option 1's link points at "${anchorHit[1]}", not at the configured address "${url}". All three options must reach the same address, which is what the page's own small print says.`,
+    );
+  }
+  if (!/^https:\/\//.test(url)) {
+    problems.push(
+      `${on}: the configured address ${JSON.stringify(url)} is not an https URL. The page hands a visitor to Google, so the address must be a plain https one (gbp §5.3 rule 4).`,
+    );
+  }
+  if (!html.includes(`<script src="${GOOGLE_BUTTON_SCRIPT}" async></script>`)) {
+    problems.push(
+      `${on}: option 2 does not load Google's own scheduling-button script (${GOOGLE_BUTTON_SCRIPT}). The option is "Google's scheduling button", and the only honest way to show it is Google's own code.`,
+    );
+  }
+  if (!html.includes(`label: ${JSON.stringify(OPTION2_LABEL)}`)) {
+    problems.push(
+      `${on}: option 2's load call does not set the label ${JSON.stringify(OPTION2_LABEL)}. That wording is fixed by the owner, byte-exact, and it is one of the three things being compared.`,
+    );
+  }
+  const frames = [...html.matchAll(/<iframe\b[^>]*>/gi)].map((m) => m[0]!);
+  if (frames.length !== 1) {
+    problems.push(`${on}: carries ${frames.length} frames, not one. One booking page is being compared inside a frame, and a second frame would be a second third-party load nobody asked to measure.`);
+  } else {
+    const frame = frames[0]!;
+    if (!frame.includes(`title="${esc(FRAME_TITLE)}"`)) {
+      problems.push(
+        `${on}: the frame's title is not ${JSON.stringify(FRAME_TITLE)}. A frame's title is its accessible name; without it a screen reader announces an unnamed region, and the name is also what tells a visitor whose page they are looking at (design/booking-comparison-copy.md §2, option 3).`,
+      );
+    }
+    if (!frame.includes(`src="${esc(url)}"`)) {
+      problems.push(`${on}: the frame does not point at the configured address ("${url}"). Option 3 is the same booking page the other two options reach.`);
+    }
+    if (/\bloading\s*=/i.test(frame)) {
+      problems.push(
+        `${on}: the frame carries a loading attribute. The page's own words say the browser contacts Google when the page opens; a lazy frame would make that sentence false (lead ruling D, design/booking-comparison-copy.md).`,
+      );
+    }
+    if (!/height:\s*600px/.test(frame)) {
+      problems.push(`${on}: the frame is not the 600-pixel-tall box the page's own sentence describes.`);
+    }
+  }
+  if (!/name="robots" content="noindex, nofollow"/.test(html)) {
+    problems.push(`${on}: no noindex meta. Every page of a demonstration carries it, including this one.`);
+  }
+  if (!html.includes("proposal-banner")) {
+    problems.push(`${on}: the proposal banner is missing. This page is part of a demonstration that is an unsolicited proposal, and it says so above everything else.`);
+  }
+  for (const banned of guardCopy(html, record)) {
+    problems.push(
+      `${on}: the page says ${JSON.stringify(banned)}, which is a claim a demonstration may not make. The comparison page is exempt from the self-containment rule, not from the honesty rules.`,
+    );
+  }
+  for (const problem of familyHonestyProblems({ pages: [{ file: BOOKING_COMPARISON_FILE, html }], record, family: "appointment" })) {
+    problems.push(`${on}: ${problem}`);
+  }
+  return problems;
 }

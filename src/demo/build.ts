@@ -23,6 +23,7 @@ import { BOOKING_ANCHOR_CLASS, BOOKING_ARROW, bookingBelongs, DEMO_BOOKING_URL_V
 import {
   BOOKING_COMPARISON_FILE,
   BOOKING_COMPARISON_VAR,
+  bookingComparisonProblems,
   comparisonDecision,
   renderBookingComparison,
   type ComparisonDecision,
@@ -2461,6 +2462,17 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
     ...problemsBeforeWrite,
     ...practiceRead.problems,
     ...complianceChecks({ pages, record, copy, form, delivery, images, privacy, practice, css, js, readme, demoBookingUrl }),
+    // The comparison page's own checks, including the carve-out that keeps the exception to
+    // one file: a remote script, frame or embed on any OTHER page is refused here by name,
+    // and the page is refused outright in the delivered phase and on any other record.
+    ...bookingComparisonProblems({
+      pages,
+      record,
+      slug,
+      phase: delivery.mode,
+      html: comparisonPage?.html ?? "",
+      url: comparisonUrl,
+    }),
   ];
   if (problems.length > 0) await fail(`compliance self-check failed for ${slug}:\n  - ${problems.join("\n  - ")}`);
 
