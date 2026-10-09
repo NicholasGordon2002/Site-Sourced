@@ -49,6 +49,14 @@ import type { FormDelivery } from "./delivery.ts";
 import type { FieldGroup, FieldSpec } from "./fields.ts";
 import { SECTION_ORDER, extrasLines, type SectionId } from "./family-render.ts";
 import { serviceActionLabel } from "./family.ts";
+import {
+  SERVICE_CARD_ACTION_BODY_CLASS,
+  SERVICE_CARD_ACTION_CARD_CLASS,
+  SERVICE_CARD_ACTION_PAGE,
+  serviceActionBarMarkup,
+  serviceCardActionCss,
+  type ServiceCardActionDecision,
+} from "./service-card-action.ts";
 import type { ResolvedForm } from "./forms.ts";
 
 export interface RenderContext {
@@ -63,6 +71,13 @@ export interface RenderContext {
   images: ManifestImage[];
   slug: string;
   generatedAt: string;
+  /**
+   * The **action-bar card variant** (`service-card-action.ts`, owner direction 9 Oct 2026),
+   * attached by `build.ts` only when `DEMO_SERVICE_CARD_ACTION_BAR` opts in. Absent — the
+   * repository's state, and every published build — means `servicesBlock` renders the
+   * markup the owner signed off on 7 Oct, byte for byte.
+   */
+  serviceCardAction?: ServiceCardActionDecision;
 }
 
 export type PageId = "index" | "services" | "about" | "contact" | "privacy";
@@ -216,7 +231,7 @@ function serviceActionHref(name: string): string {
   return `${servicePageFile(name)}#form`;
 }
 
-function servicesBlock(record: BusinessRecord, level: 2 | 3, copy: DemoCopy): string {
+function servicesBlock(record: BusinessRecord, level: 2 | 3, copy: DemoCopy, actionBar = false): string {
   const services = normaliseServices(record);
   const heading = `h${level}`;
   if (services.length === 0) {
@@ -233,15 +248,34 @@ function servicesBlock(record: BusinessRecord, level: 2 | 3, copy: DemoCopy): st
   // here types them. `serviceCardProblems` refuses a second link, a nested control, or a
   // card that leaves anything beside the link.
   return `        <ul class="services">\n${services
-    .map(
-      (s) =>
+    .map((s) => {
+      const label = esc(serviceActionLabel(copy.conversion.family, s.name));
+      const href = esc(serviceActionHref(s.name));
+      const head = `<${heading}>${esc(s.name)}</${heading}>${s.note ? `<p>${esc(s.note)}</p>` : ""}`;
+      // Treatment 1 (`service-card-action.ts`): the recorded name and note in a body block,
+      // then a full-width action bar at the card's foot — still inside the card's one link,
+      // still one target and one tab stop, because the bar is a styled element and not a
+      // control (owner text, 6 Oct 2026). Off unless the build opts in: with the flag false
+      // this returns the exact bytes of the published card.
+      if (actionBar) {
+        return (
+          `          <li>\n` +
+          `            <a class="card service-tile ${SERVICE_CARD_ACTION_CARD_CLASS}" href="${href}">` +
+          `<div class="${SERVICE_CARD_ACTION_BODY_CLASS}">${head}</div>` +
+          serviceActionBarMarkup(label) +
+          `</a>\n` +
+          `          </li>`
+        );
+      }
+      return (
         `          <li>\n` +
-        `            <a class="card service-tile" href="${esc(serviceActionHref(s.name))}">` +
-        `<${heading}>${esc(s.name)}</${heading}>${s.note ? `<p>${esc(s.note)}</p>` : ""}` +
-        `<p class="service-action">${esc(serviceActionLabel(copy.conversion.family, s.name))}</p>` +
+        `            <a class="card service-tile" href="${href}">` +
+        head +
+        `<p class="service-action">${label}</p>` +
         `</a>\n` +
-        `          </li>`,
-    )
+        `          </li>`
+      );
+    })
     .join("\n")}\n        </ul>`;
 }
 
@@ -934,7 +968,7 @@ ${copy.servicesIntro ? `        <p class="muted">${esc(copy.servicesIntro)}</p>\
 function servicesPageSection(ctx: RenderContext): string {
   return `    <section class="section" id="services">
       <div class="wrap">
-${servicesBlock(ctx.record, 2, ctx.copy)}
+${servicesBlock(ctx.record, 2, ctx.copy, ctx.serviceCardAction?.enabled === true && ctx.serviceCardAction.page === SERVICE_CARD_ACTION_PAGE)}
       </div>
     </section>`;
 }
@@ -1125,7 +1159,18 @@ export function renderComparisonHead(ctx: RenderContext, title: string): string 
 
 /* -------------------------------------------------------------- the stylesheet */
 
-export function renderCss(profile: CategoryProfile, slug: string): string {
+export function renderCss(
+  profile: CategoryProfile,
+  slug: string,
+  options: {
+    /**
+     * Append the action-bar card variant's rules (`service-card-action.ts`). False — the
+     * default, and every published build — writes the stylesheet byte for byte as it is,
+     * so the opt-in changes no page of any bundle.
+     */
+    serviceCardAction?: boolean;
+  } = {},
+): string {
   return `/* Site Sourced demo stylesheet — ${slug}
    Plain CSS: no framework, no preprocessor, no @import, and nothing fetched from
    the network. The two fonts live in fonts/, beside this file, and are served from
@@ -2015,7 +2060,7 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
   html { scroll-behavior: auto; }
   * { transition: none !important; animation: none !important; }
 }
-`;
+${options.serviceCardAction ? serviceCardActionCss() : ""}`;
 }
 
 /**

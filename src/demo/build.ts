@@ -54,6 +54,17 @@ import {
   type PageKey,
 } from "./family-render.ts";
 import { SERVICE_ACTION_LABELS, SERVICE_NAME_SLOT, serviceActionLabel } from "./family.ts";
+import {
+  SERVICE_CARD_ACTION_BAR_CLASS,
+  SERVICE_CARD_ACTION_BODY_CLASS,
+  SERVICE_CARD_ACTION_CARD_CLASS,
+  SERVICE_CARD_ACTION_CHEVRON_CLASS,
+  SERVICE_CARD_ACTION_GLYPH,
+  SERVICE_CARD_ACTION_VAR,
+  serviceCardActionDecision,
+  serviceCardActionProblems,
+  type ServiceCardActionDecision,
+} from "./service-card-action.ts";
 import { currentRetentionPractice, PRACTICE_FILE, readRetentionPractice, type RetentionPractice } from "./retention.ts";
 import type { FormDelivery } from "./delivery.ts";
 import { formDeliveryProblems, resolveDelivery, type FormDeliveryMode } from "./delivery.ts";
@@ -2412,6 +2423,13 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   const bytesByPath = new Map<string, Uint8Array>();
   for (const file of [...sourced.files, ...suppliedFiles]) bytesByPath.set(file.path, file.bytes);
 
+  /**
+   * The **action-bar service card** (Treatment 1, owner direction 9 Oct 2026). Like the
+   * review-only comparison page it is opt-in from the environment and scoped to one page of
+   * one demonstration, so with `DEMO_SERVICE_CARD_ACTION_BAR` unset (the repository's state)
+   * both bundles are the pages signed off on 7 Oct 2026, byte for byte.
+   */
+  const cardAction: ServiceCardActionDecision = serviceCardActionDecision({ slug, phase: delivery.mode });
   const ctx: RenderContext = {
     record,
     copy,
@@ -2422,6 +2440,7 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
     images,
     slug,
     generatedAt: new Date().toISOString(),
+    ...(cardAction.enabled ? { serviceCardAction: cardAction } : {}),
   };
 
   const pages = renderPages(ctx);
@@ -2430,6 +2449,9 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   // the nine, so it is not in the nav, not in the page contract, and every check that walks
   // `pages` — self-containment, the booking scoping rules, the phase furniture rules —
   // still refuses a remote `script`, `iframe` or `embed` on any other page of the bundle.
+  // The action-bar card variant is the second opt-in of the same kind, and reads its switch
+  // in the same place (`service-card-action.ts`). `DEMO_SERVICE_CARD_ACTION_BAR` unset means
+  // no page of any bundle changes.
   // With `DEMO_BOOKING_COMPARISON_URL` unset (the repository's state, and the requirement:
   // `DEMO_BOOKING_URL` stays unset so the derived booking mode stays `none`) no page is
   // written at all and the bundle is byte-identical to a build from master.
@@ -2453,10 +2475,16 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
       `comparison page: ${comparisonPage.file} is in this bundle — ${comparison.basis} It is not one of the nine pages and it is not part of the proposal's design.`,
     );
   }
-  const css = renderCss(profile, slug);
+  const css = renderCss(profile, slug, { serviceCardAction: cardAction.enabled });
   const js = renderJs();
   const favicon = renderFavicon(record, profile);
   const readme = renderEditingReadme(ctx, pages);
+
+  if (cardAction.enabled) {
+    warnings.push(
+      `service cards: ${cardAction.page} of ${slug} carries Treatment 1 (the action bar at the card's foot) — a review variant the owner asked to see, not part of the design signed off on 7 Oct. ${cardAction.basis} It is one page of this bundle: every other page, and both published bundles, are unchanged.`,
+    );
+  }
 
   const problems = [
     ...problemsBeforeWrite,
@@ -2472,6 +2500,18 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
       phase: delivery.mode,
       html: comparisonPage?.html ?? "",
       url: comparisonUrl,
+    }),
+    // The action-bar card's own clauses: the variant on the page it names and nowhere else,
+    // only when a build opts in, one bar card per recorded service, the derived label and the
+    // text glyph, the measured 44px bar and the card's own ring — and nothing that costs a
+    // request. It reads the same stylesheet the bundle ships.
+    ...serviceCardActionProblems({
+      pages,
+      record,
+      family: copy.conversion.family,
+      css,
+      decision: cardAction,
+      slug,
     }),
   ];
   if (problems.length > 0) await fail(`compliance self-check failed for ${slug}:\n  - ${problems.join("\n  - ")}`);
@@ -2731,6 +2771,26 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
         ),
         default_option: fields.fields.find((f) => f.name === "service")?.preselected ?? null,
         pages: normaliseServices(record).map((service) => ({ service: service.name, file: servicePageFile(service.name) })),
+        /**
+         * Treatment 1 — the action bar at the card's foot (owner direction, 9 Oct 2026),
+         * read by a reviewer rather than inferred from the page. Off in every published
+         * build: `enabled: false` and `page: null` mean the cards above are the whole
+         * story and no variant class is on any page.
+         */
+        bar_variant: {
+          enabled: cardAction.enabled,
+          page: cardAction.enabled ? cardAction.page : null,
+          basis: cardAction.basis,
+          classes: {
+            card: SERVICE_CARD_ACTION_CARD_CLASS,
+            body: SERVICE_CARD_ACTION_BODY_CLASS,
+            bar: SERVICE_CARD_ACTION_BAR_CLASS,
+            chevron: SERVICE_CARD_ACTION_CHEVRON_CLASS,
+          },
+          chevron_glyph: SERVICE_CARD_ACTION_GLYPH,
+          bar_min_height_px: serviceCardMeasure(css, [SERVICE_CARD_ACTION_BAR_CLASS]).min_height_px,
+          cards: (pages.find((page) => page.file === cardAction.page)?.html.match(/service-tile--bar/g) ?? []).length,
+        },
       },
       narrative: {
         paragraphs: narrativeCount,
