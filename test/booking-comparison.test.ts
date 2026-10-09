@@ -28,9 +28,20 @@ import {
   BOOKING_COMPARISON_FILE,
   BOOKING_COMPARISON_SLUG,
   comparisonDecision,
+  comparisonStyleBlock,
+  FRAME_BOX_CLASS,
+  FRAME_BREAKPOINT,
+  FRAME_DESKTOP_HEIGHT,
+  FRAME_FALLBACK_LABEL,
+  FRAME_NOTES_ID,
+  FRAME_PHONE_HEIGHT,
   FRAME_TITLE,
   OPTION1_LABEL,
   OPTION2_LABEL,
+  OPTION3_BOX_SENTENCE,
+  OPTION3_MANDATED_STRINGS,
+  OPTION3_STALE_MEASUREMENT,
+  optionThreeSection,
 } from "../src/demo/booking-comparison.ts";
 import type { BusinessRecord } from "../src/demo/types.ts";
 import barber from "./fixtures/maple-avenue-barber-shop.json";
@@ -93,4 +104,78 @@ test("the page is scoped: it exists for the named demonstration only, and never 
 
 test("the frame's accessible name is a real sentence, not a filename", () => {
   expect(FRAME_TITLE).toBe("Demonstration booking page — a Google page shown inside this page");
+});
+
+/**
+ * Option 3, the frame, as **one uninterrupted block** — the owner's 9 Oct 2026 reading
+ * ("coded poorly … split between your text", and on a desktop "can't be seen at all").
+ * These read the rendered section and the page's own CSS, so the order and the heights
+ * cannot drift away from the brief without a failing test.
+ */
+const SECTION_URL = "https://example.invalid/demonstration";
+const SECTION = optionThreeSection({ url: SECTION_URL });
+/** Where a marker sits in the rendered section, in document order. */
+function at(marker: string): number {
+  const i = SECTION.indexOf(marker);
+  expect(i).toBeGreaterThan(-1);
+  return i;
+}
+test("option 3 is one uninterrupted block: heading, box, frame, anchor, then the prose", () => {
+  const heading = at("<h2>Option 3 — the booking page in a frame</h2>");
+  const box = at(`<div class="${FRAME_BOX_CLASS}">`);
+  const frame = at("<iframe");
+  const anchor = at(FRAME_FALLBACK_LABEL);
+  const caption = at("The demonstration booking page, shown inside this page:");
+  const boxSentence = at(OPTION3_BOX_SENTENCE);
+  const explanation = at("This option loads Google's booking page inside this page");
+  const notes = at(`<div id="${FRAME_NOTES_ID}">`);
+  expect(heading).toBeLessThan(box);
+  expect(box).toBeLessThan(frame);
+  expect(frame).toBeLessThan(anchor);
+  expect(anchor).toBeLessThan(caption);
+  expect(caption).toBeLessThan(boxSentence);
+  expect(boxSentence).toBeLessThan(explanation);
+  expect(explanation).toBeLessThan(notes);
+});
+test("nothing of ours sits between option 3's heading and its frame", () => {
+  const heading = "<h2>Option 3 — the booking page in a frame</h2>";
+  const afterHeading = SECTION.slice(SECTION.indexOf(heading) + heading.length, SECTION.indexOf("<iframe"));
+  // Whitespace, the box's opening tag and the frame — no prose, no caption, no control.
+  expect(afterHeading.trim()).toBe(`<div class="${FRAME_BOX_CLASS}">`);
+});
+test("the fallback anchor is a plain link under the box, to the same address", () => {
+  const anchor = /<a class="[^"]+" href="([^"]+)" target="_blank" rel="noopener noreferrer">([^<]+)<\/a>/.exec(SECTION);
+  expect(anchor).not.toBeNull();
+  expect(anchor?.[1]).toBe(SECTION_URL);
+  expect(anchor?.[2]).toBe(`${FRAME_FALLBACK_LABEL}&nbsp;↗`);
+  expect(FRAME_FALLBACK_LABEL).toBe("Open the booking page on its own");
+});
+test("the frame is eager, borderless, and the box is visible with nothing loaded in it", () => {
+  const frame = /<iframe\b[^>]*>/.exec(SECTION)?.[0] ?? "";
+  expect(frame).toContain('loading="eager"');
+  expect(frame).not.toContain("lazy");
+  expect(frame).toContain('style="display:block;width:100%;border:0"');
+  const style = comparisonStyleBlock();
+  expect(style).toContain(`.${FRAME_BOX_CLASS} {`);
+  expect(style).toContain("border: var(--rule)");
+  expect(style).toContain("background: var(--paper)");
+  expect(style).toContain("padding: var(--s-2)");
+});
+test("the frame's height answers to the screen in both views, and never to the whole viewport", () => {
+  const style = comparisonStyleBlock();
+  expect(style).toContain(`.${FRAME_BOX_CLASS} iframe { height: ${FRAME_PHONE_HEIGHT}; }`);
+  expect(style).toContain(`@media (min-width: ${FRAME_BREAKPOINT})`);
+  expect(style).toContain(`.${FRAME_BOX_CLASS} iframe { height: ${FRAME_DESKTOP_HEIGHT}; }`);
+  expect(FRAME_PHONE_HEIGHT).toBe("max(520px, 72vh)");
+  expect(FRAME_DESKTOP_HEIGHT).toBe("min(760px, 78vh)");
+  expect(style).not.toMatch(/\b100(?:vh|svh|dvh)\b/);
+});
+test("every option-3 sentence the copy document fixes is still on the page, and the stale measurement is gone", () => {
+  for (const sentence of OPTION3_MANDATED_STRINGS) {
+    expect(SECTION).toContain(sentence);
+  }
+  expect(OPTION3_MANDATED_STRINGS).toContain(OPTION3_BOX_SENTENCE);
+  expect(OPTION3_BOX_SENTENCE).toContain("most of your screen");
+  expect(SECTION).not.toContain(OPTION3_STALE_MEASUREMENT);
+  expect(OPTION3_STALE_MEASUREMENT).toBe("600 pixels");
 });

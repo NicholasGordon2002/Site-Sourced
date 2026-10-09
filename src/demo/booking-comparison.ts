@@ -102,6 +102,130 @@ export const SHARED_ADDRESS_OPEN = `<p class="muted" style="${SHARED_ADDRESS_WRA
  * what it holds and whose page it is.
  */
 export const FRAME_TITLE = "Demonstration booking page — a Google page shown inside this page";
+/**
+ * The frame's **visible container** (owner, 9 Oct 2026: on a desktop the frame "can't be
+ * seen at all", and a third-party frame that a browser blocks fails silently, so the block
+ * has to be visible even when nothing loads inside it).
+ *
+ * The box is the bundle's own card surface: the hairline `--rule`, the `--paper` surface
+ * the cards use inside a `.section--alt`, the `--r-md` corner and a little `--s-2` padding.
+ * Those are the bundle's tokens rather than new ones — this page invents no design of its
+ * own. The frame inside keeps `border:0`, so the only edge a visitor sees is this box.
+ */
+export const FRAME_BOX_CLASS = "booking-comparison-frame";
+/**
+ * The frame's inline style: the three declarations that never vary with the screen size.
+ * The height deliberately is **not** here — an inline style cannot carry a breakpoint, and
+ * the height has to answer to the screen in both views (see `comparisonStyleBlock`).
+ */
+export const FRAME_INLINE_STYLE = "display:block;width:100%;border:0";
+/**
+ * The frame's height, measured out in the brief of 9 Oct 2026 after the page was looked at
+ * on a phone and on a desktop. The frame now sits in an uninterrupted block, so it can
+ * afford to be most of the screen instead of a fixed height that clipped Google's wide
+ * desktop layout inside its own inner scrollbar. The phone view and the desktop view get
+ * different answers, and both are relative to the screen rather than a guess about a device.
+ *
+ * No `100vh` and nothing `svh`-only: `vh` inside `min()`/`max()` with a pixel bound keeps
+ * the box usable when a phone's own chrome or an on-screen keyboard changes the viewport.
+ */
+export const FRAME_PHONE_HEIGHT = "max(520px, 72vh)";
+export const FRAME_DESKTOP_HEIGHT = "min(760px, 78vh)";
+/**
+ * The bundle's own breakpoint, read off its stylesheet: `styles.css` is mobile-first and
+ * switches at 48rem (the phone menu, the privacy footer link and the two-column sections
+ * all turn there), so this page turns there too.
+ */
+export const FRAME_BREAKPOINT = "48rem";
+/**
+ * The plain fallback anchor directly under the box (owner, 9 Oct 2026), so a blocked frame
+ * is never a dead end: the same address, a new tab, `rel="noopener noreferrer"`. The label
+ * is a **proposal** in the page's own vocabulary — the demonstration's other control reads
+ * `Book a demonstration time`, and the notice under that link says what the address is, so
+ * this one only has to say that it opens the same page away from the frame.
+ */
+export const FRAME_FALLBACK_LABEL = "Open the booking page on its own";
+/**
+ * The `id` of the block that gathers what is left of option 3's prose after the
+ * explanation. One block, not loose paragraphs, so the option cannot drift back into "our
+ * text between the heading and the frame".
+ */
+export const FRAME_NOTES_ID = "option-3-notes";
+/**
+ * The one option-3 sentence a taller frame made false. The page used to say the box was
+ * "a box 600 pixels tall" and it is no longer that size, so the measurement is replaced by
+ * the idea of most of the screen (the lead's wording, 9 Oct 2026). Every other word of the
+ * sentence is the copy document's, byte for byte.
+ */
+export const OPTION3_BOX_SENTENCE =
+  "The booking page itself, loaded inside this page in a box that takes up most of your screen, with no border.";
+/** The stale measurement, in the words the page used to print, so a check can refuse it. */
+export const OPTION3_STALE_MEASUREMENT = "600 pixels";
+/**
+ * The frame's caption. It was the visible caption **above** the frame; the owner's 9 Oct
+ * reading ("split between your text") and the brief's "nothing of ours may sit between the
+ * heading and the frame" moved it below the fallback anchor. Re-ordered, never re-worded:
+ * the string is the copy document's, byte for byte, colon and all.
+ */
+export const FRAME_CAPTION = "The demonstration booking page, shown inside this page:";
+/**
+ * Option 3's explanation: what this option does, in the copy document's words. It sits
+ * **after** the box and the fallback anchor now, not above the frame.
+ */
+export const OPTION3_LOAD_EXPLANATION =
+  "This option loads Google's booking page inside this page when the page opens, so the browser contacts Google before anything is tapped, and what appears in the box is Google's own page.";
+/** The first of the two notes: what the box holds, and what to do if it stays empty. */
+export const OPTION3_NOTES_IF_LOADS =
+  "If it loads, Google's booking page appears in that box. Google can change or withdraw that page at any time and Site Sourced would not know; what the box holds is Google's page, not a page Site Sourced draws. If the box stays empty, or the page or the browser refuses to be shown inside another page, use option 1.";
+/** The second note: what happens with JavaScript turned off. */
+export const OPTION3_NOTES_NO_JS =
+  "With JavaScript turned off, the frame still asks Google for the page, and what it then shows has not been tested and is not claimed here.";
+/**
+ * Every option-3 sentence the copy document fixes, so a re-ordering that drops one is a
+ * build failure rather than a quiet loss. The measurements the document fixes for the page
+ * as a whole (the disclosure, the notice, the two labels, the frame's title) are checked
+ * separately above.
+ */
+export const OPTION3_MANDATED_STRINGS: readonly string[] = [
+  FRAME_CAPTION,
+  OPTION3_BOX_SENTENCE,
+  OPTION3_LOAD_EXPLANATION,
+  OPTION3_NOTES_IF_LOADS,
+  OPTION3_NOTES_NO_JS,
+];
+/**
+ * The fallback anchor under the box, as the page writes it. A blocked third-party frame
+ * fails silently, so the way out has to be a plain anchor beside it — the same address, a
+ * new tab, `rel="noopener noreferrer"`, and the same class the other control wears (the
+ * one the 44 px audit measures).
+ */
+export function frameFallbackAnchor(url: string): string {
+  return `<a class="${BOOKING_ANCHOR_CLASS}" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(FRAME_FALLBACK_LABEL)}&nbsp;${BOOKING_ARROW}</a>`;
+}
+/**
+ * The comparison page's own CSS, inline in the page, because `styles.css` is shared by all
+ * ten pages of the bundle and may not change for one of them. Two rules and a breakpoint:
+ *
+ *   1. the box that makes the frame visible even when nothing loads inside it;
+ *   2. the frame's height — most of the screen, measured separately for the phone view and
+ *      the desktop view, since the frame is now an uninterrupted block with room to be big.
+ */
+export function comparisonStyleBlock(): string {
+  return `  <style>
+    /* The comparison page's own rules. They are here, inline, because styles.css serves
+       all ten pages of this bundle and may not change for one of them. */
+    .${FRAME_BOX_CLASS} {
+      border: var(--rule);
+      background: var(--paper);
+      border-radius: var(--r-md);
+      padding: var(--s-2);
+    }
+    .${FRAME_BOX_CLASS} iframe { height: ${FRAME_PHONE_HEIGHT}; }
+    @media (min-width: ${FRAME_BREAKPOINT}) {
+      .${FRAME_BOX_CLASS} iframe { height: ${FRAME_DESKTOP_HEIGHT}; }
+    }
+  </style>`;
+}
 
 export interface ComparisonRenderVars {
   record: BusinessRecord;
@@ -218,30 +342,49 @@ function optionTwo(vars: { url: string }): string {
     </section>`;
 }
 /**
- * Option 3 — the booking page in a frame.
+ * Option 3 — the booking page in a frame, as **one uninterrupted block** (owner, 9 Oct
+ * 2026: the look was liked, but the frame was "coded poorly … split between your text" and
+ * on a desktop it "can't be seen at all").
  *
- * Three deliberate details, all of them the lead's rulings: **no `loading="lazy"`**, because
- * the page's own words say the frame asks Google for the page when the page opens and a
- * lazy attribute would make that false; the frame is **600 px tall and borderless**, as the
- * wording states, through an inline style rather than a stylesheet rule, because
- * `styles.css` is shared by all ten pages and a shared file may not change for this page;
- * and it carries a **`title`**, which is the frame's accessible name — an untitled frame is
- * a nameless region to a screen reader.
+ * The order below is the brief's, and every part of it is checked: the heading; the frame
+ * inside a visible container, with **nothing of ours between the heading and the frame**;
+ * the plain fallback anchor, so a blocked frame is never a dead end; the caption; the
+ * explanation; and then everything left over gathered into one block. Nothing here was
+ * re-worded — the caption and the two notes moved, and one measurement sentence changed
+ * (see `OPTION3_BOX_SENTENCE`).
  *
- * The caption above the frame and the paragraph below it do not promise that anything
- * loads: a blank box is one of the outcomes the page already describes.
+ * Three deliberate details, all of them the lead's rulings: **`loading="eager"`**, never
+ * lazy, because the page's own words say the frame asks Google for the page when the page
+ * opens and a lazy attribute would make that false; the frame keeps **`border:0`**, so the
+ * edge a visitor sees is the container's hairline and not the frame's; and it carries a
+ * **`title`**, which is the frame's accessible name — an untitled frame is a nameless
+ * region to a screen reader. Its height comes from the page's own `<style>` block, because
+ * a height that answers to the screen needs a breakpoint and an inline style cannot carry
+ * one.
+ *
+ * The explanation and the notes do not promise that anything loads: a blank box is one of
+ * the outcomes the page already describes.
+ *
+ * Exported for `test/booking-comparison.test.ts`, which reads the rendered section: the
+ * order this function composes is the thing the owner asked for, and it is worth a test
+ * rather than a comment.
  */
-function optionThree(vars: { url: string }): string {
+export function optionThreeSection(vars: { url: string }): string {
   const { url } = vars;
   return `    <section class="section section--alt" id="option-3">
       <div class="wrap">
         <h2>Option 3 — the booking page in a frame</h2>
-        <p>The booking page itself, loaded inside this page in a box 600 pixels tall, with no border.</p>
-        <p>This option loads Google's booking page inside this page when the page opens, so the browser contacts Google before anything is tapped, and what appears in the box is Google's own page.</p>
-        <p class="muted">The demonstration booking page, shown inside this page:</p>
-        <iframe src="${esc(url)}" title="${esc(FRAME_TITLE)}" style="display:block;width:100%;height:600px;border:0"></iframe>
-        <p>If it loads, Google's booking page appears in that box. Google can change or withdraw that page at any time and Site Sourced would not know; what the box holds is Google's page, not a page Site Sourced draws. If the box stays empty, or the page or the browser refuses to be shown inside another page, use option 1.</p>
-        <p>With JavaScript turned off, the frame still asks Google for the page, and what it then shows has not been tested and is not claimed here.</p>
+        <div class="${FRAME_BOX_CLASS}">
+          <iframe src="${esc(url)}" title="${esc(FRAME_TITLE)}" loading="eager" style="${FRAME_INLINE_STYLE}"></iframe>
+        </div>
+        <p>${frameFallbackAnchor(url)}</p>
+        <p class="muted">${FRAME_CAPTION}</p>
+        <p>${OPTION3_BOX_SENTENCE}</p>
+        <p>${OPTION3_LOAD_EXPLANATION}</p>
+        <div id="${FRAME_NOTES_ID}">
+          <p>${OPTION3_NOTES_IF_LOADS}</p>
+          <p>${OPTION3_NOTES_NO_JS}</p>
+        </div>
       </div>
     </section>`;
 }
@@ -278,7 +421,7 @@ ${optionOne({ url, business })}
 
 ${optionTwo({ url })}
 
-${optionThree({ url })}
+${optionThreeSection({ url })}
 
 ${limits({ business })}`;
 }
@@ -294,6 +437,10 @@ export function renderBookingComparison(ctx: RenderContext, url: string): string
     title: `${BOOKING_COMPARISON_TITLE} — ${ctx.record.name}`,
     description:
       "A demonstration-page-only comparison of three ways to reach the same booking page, added at the request of Site Sourced's own owner.",
+    // The page's own CSS, in the page: the frame's visible box and its height, which needs
+    // a breakpoint and so cannot be an inline style. `styles.css` is shared by all ten
+    // pages and stays byte-identical for this one.
+    style: comparisonStyleBlock(),
     body: comparisonBody(ctx, url),
   });
 }
@@ -423,6 +570,7 @@ export function bookingComparisonProblems(vars: {
       `${on}: option 2's load call does not set the label ${JSON.stringify(OPTION2_LABEL)}. That wording is fixed by the owner, byte-exact, and it is one of the three things being compared.`,
     );
   }
+  const frameBoxOpen = `<div class="${FRAME_BOX_CLASS}">`;
   const frames = [...html.matchAll(/<iframe\b[^>]*>/gi)].map((m) => m[0]!);
   if (frames.length !== 1) {
     problems.push(`${on}: carries ${frames.length} frames, not one. One booking page is being compared inside a frame, and a second frame would be a second third-party load nobody asked to measure.`);
@@ -436,14 +584,157 @@ export function bookingComparisonProblems(vars: {
     if (!frame.includes(`src="${esc(url)}"`)) {
       problems.push(`${on}: the frame does not point at the configured address ("${url}"). Option 3 is the same booking page the other two options reach.`);
     }
-    if (/\bloading\s*=/i.test(frame)) {
+    // `loading="eager"` outright, not merely the absence of `lazy`: the page's own words
+    // say the browser contacts Google as soon as this page opens, and the owner's brief of
+    // 9 Oct 2026 asks for the attribute so a later edit cannot flip it to lazy and quietly
+    // make that sentence false.
+    if (!frame.includes('loading="eager"')) {
       problems.push(
-        `${on}: the frame carries a loading attribute. The page's own words say the browser contacts Google when the page opens; a lazy frame would make that sentence false (lead ruling D, design/booking-comparison-copy.md).`,
+        `${on}: the frame does not carry loading="eager". The page's own words say the browser contacts Google as soon as this page opens, and a brief of 9 Oct 2026 fixes the frame as eager so a later edit cannot make it lazy — and so make the page's own sentence false (lead ruling D, design/booking-comparison-copy.md).`,
       );
     }
-    if (!/height:\s*600px/.test(frame)) {
-      problems.push(`${on}: the frame is not the 600-pixel-tall box the page's own sentence describes.`);
+    if (!frame.includes(`style="${FRAME_INLINE_STYLE}"`)) {
+      problems.push(
+        `${on}: the frame's inline style is not ${JSON.stringify(FRAME_INLINE_STYLE)}. display:block stops the frame being an inline box with a baseline gap under it, width:100% makes it the box's width on every screen, and border:0 keeps the only visible edge the container's hairline. The height is deliberately not here: it needs a breakpoint, and an inline style cannot carry one.`,
+      );
     }
+  }
+
+  /*
+   * 4c. **option 3 is one uninterrupted block, and nothing of ours sits between the heading
+   * and the frame.** The owner looked at the page on a phone and on a desktop and reported
+   * the frame "coded poorly … split between your text" and, at 1440×900, "can't be seen at
+   * all". The brief of 9 Oct 2026 fixes the order — heading, frame in its visible box,
+   * fallback anchor, caption, explanation, notes — and this reads that order off the page.
+   */
+  const optionThree = /<section class="section section--alt" id="option-3">([\s\S]*?)<\/section>/.exec(html)?.[1];
+  if (optionThree === undefined) {
+    problems.push(
+      `${on}: there is no option-3 section. Option 3 is the frame, and the page is a comparison of three options; without this section two of the three are missing.`,
+    );
+  } else {
+    const heading = `<h2>Option 3 — the booking page in a frame</h2>`;
+    const headingAt = optionThree.indexOf(heading);
+    const boxAt = optionThree.indexOf(frameBoxOpen);
+    const frameAt = optionThree.indexOf("<iframe");
+    const anchorAt = optionThree.indexOf(frameFallbackAnchor(url));
+    const captionAt = optionThree.indexOf(`<p class="muted">${FRAME_CAPTION}</p>`);
+    const boxSentenceAt = optionThree.indexOf(`<p>${OPTION3_BOX_SENTENCE}</p>`);
+    const explanationAt = optionThree.indexOf(`<p>${OPTION3_LOAD_EXPLANATION}</p>`);
+    const notesAt = optionThree.indexOf(`<div id="${FRAME_NOTES_ID}">`);
+    for (const [what, at] of [
+      ["the option-3 heading", headingAt],
+      ["the frame's visible box", boxAt],
+      ["the frame", frameAt],
+      ["the fallback anchor under the box", anchorAt],
+      ["the frame's caption", captionAt],
+      ["the sentence that describes the box", boxSentenceAt],
+      ["the explanation of what the option loads", explanationAt],
+      ["the notes block", notesAt],
+    ] as const) {
+      if (at < 0) {
+        problems.push(
+          `${on}: option 3 is missing ${what}. Re-ordering may move a mandated sentence, never drop it (design/booking-comparison-copy.md §2, option 3; owner's brief, 9 Oct 2026).`,
+        );
+      }
+    }
+    if (headingAt >= 0 && boxAt > headingAt) {
+      const between = optionThree.slice(headingAt + heading.length, boxAt).trim();
+      if (between !== "") {
+        problems.push(
+          `${on}: ${JSON.stringify(between.slice(0, 90))} sits between option 3's heading and the frame. "Nothing of ours may sit between the heading and the frame" (owner's brief, 9 Oct 2026 — the frame was "split between your text"); the heading is followed by the box, and everything else comes below it.`,
+        );
+      }
+    }
+    if (boxAt >= 0 && frameAt > boxAt) {
+      const inBox = optionThree.slice(boxAt + frameBoxOpen.length, frameAt).trim();
+      if (inBox !== "") {
+        problems.push(
+          `${on}: ${JSON.stringify(inBox.slice(0, 90))} sits inside the frame's box, before the frame. The box holds the frame and nothing else; the container exists so the block is visible even when a browser blocks the frame and nothing loads inside it (owner's brief, 9 Oct 2026).`,
+        );
+      }
+    }
+    const order: [string, number][] = [
+      ["the frame", frameAt],
+      ["the fallback anchor", anchorAt],
+      ["the caption", captionAt],
+      ["the box sentence", boxSentenceAt],
+      ["the explanation", explanationAt],
+      ["the notes", notesAt],
+    ];
+    if (order.every(([, at]) => at >= 0)) {
+      for (let i = 1; i < order.length; i += 1) {
+        const [beforeName, beforeAt] = order[i - 1]!;
+        const [afterName, afterAt] = order[i]!;
+        if (!(beforeAt < afterAt)) {
+          problems.push(
+            `${on}: option 3's ${afterName} comes before its ${beforeName}. The order the owner asked for is: the frame in its box, the fallback anchor directly under it, then the caption, the sentence about the box, the explanation, and the notes in one block (owner's brief, 9 Oct 2026).`,
+          );
+        }
+      }
+    }
+    if (frameAt >= 0 && anchorAt >= 0) {
+      // The anchor may follow the box's closing tag and nothing else.
+      const boxThenAnchor = optionThree.slice(frameAt, anchorAt);
+      if (!/^<iframe[\s\S]*?<\/iframe>\s*<\/div>\s*<p>\s*$/.test(boxThenAnchor)) {
+        problems.push(
+          `${on}: something sits between the frame's box and the fallback anchor. The anchor comes directly under the container, so the way out is the next thing a visitor reads when the frame stays empty (owner's brief, 9 Oct 2026).`,
+        );
+      }
+    }
+  }
+  /* The one measurement a taller frame made false, and the sentences that must survive. */
+  if (html.includes(OPTION3_STALE_MEASUREMENT)) {
+    problems.push(
+      `${on}: the page still says ${JSON.stringify(OPTION3_STALE_MEASUREMENT)}. The frame is no longer that height — it is ${JSON.stringify(FRAME_PHONE_HEIGHT)} on a phone and ${JSON.stringify(FRAME_DESKTOP_HEIGHT)} on a desktop — so the sentence would be describing a box that is not there (owner's brief, 9 Oct 2026).`,
+    );
+  }
+  for (const sentence of OPTION3_MANDATED_STRINGS) {
+    if (!html.includes(sentence)) {
+      problems.push(
+        `${on}: the option-3 wording ${JSON.stringify(sentence.slice(0, 70))}… is missing from the page. Every sentence design/booking-comparison-copy.md fixes for option 3 must stay on the page, whatever its position (owner's brief, 9 Oct 2026).`,
+      );
+    }
+  }
+  /*
+   * 4d. **the frame's visible box, and its height.** The box is what makes the block
+   * visible when a browser blocks a third-party frame; the height has to answer to the
+   * screen in both views, which is why it lives in the page's own `<style>` block rather
+   * than in an inline style or in the shared stylesheet. Measured brief (9 Oct 2026):
+   * desktop about min(760px, 78vh), phones about max(520px, 72vh).
+   */
+  if (!html.includes(frameBoxOpen)) {
+    problems.push(
+      `${on}: the frame is not inside a visible container (${JSON.stringify(frameBoxOpen)}). A third-party frame that a browser blocks fails silently, so the block has to be visible even when nothing loads inside it (owner's brief, 9 Oct 2026).`,
+    );
+  }
+  const boxRule = new RegExp(`\\.${FRAME_BOX_CLASS} \\{[^}]*\\}`).exec(html)?.[0] ?? "";
+  for (const declaration of ["border: var(--rule)", "background: var(--paper)", "padding: var(--s-2)"]) {
+    if (!boxRule.includes(declaration)) {
+      problems.push(
+        `${on}: the frame's container does not carry ${JSON.stringify(declaration)}. The box is the bundle's own card surface — a hairline edge, the paper background and a little padding — so it is visible with nothing loaded inside it (owner's brief, 9 Oct 2026).`,
+      );
+    }
+  }
+  for (const [view, height] of [
+    ["a phone", FRAME_PHONE_HEIGHT],
+    ["a desktop", FRAME_DESKTOP_HEIGHT],
+  ] as const) {
+    if (!html.includes(`.${FRAME_BOX_CLASS} iframe { height: ${height}; }`)) {
+      problems.push(
+        `${on}: the frame's height on ${view} is not ${JSON.stringify(height)}. The frame now sits in an uninterrupted block, so it is measured against the screen instead of a fixed height that clipped Google's wide desktop layout inside its own inner scrollbar (owner's brief, 9 Oct 2026).`,
+      );
+    }
+  }
+  if (!html.includes(`@media (min-width: ${FRAME_BREAKPOINT})`)) {
+    problems.push(
+      `${on}: the page carries no ${FRAME_BREAKPOINT} breakpoint, so the phone height and the desktop height cannot both be in force. ${FRAME_BREAKPOINT} is the bundle's own turn — styles.css is mobile-first and switches there — and the breakpoint has to live in the page because an inline style cannot carry one.`,
+    );
+  }
+  if (/\b100(?:vh|svh|dvh)\b/i.test(html)) {
+    problems.push(
+      `${on}: the page sizes something at the whole viewport (a 100vh-style unit). A frame at the full viewport height is unusable on a phone, where the browser's own chrome and the on-screen keyboard change the height as it opens (owner's brief, 9 Oct 2026: no 100vh, nothing svh-only).`,
+    );
   }
   /*
    * 4b. **the address must be able to wrap.** A narrow phone must not have to scroll

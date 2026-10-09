@@ -1079,7 +1079,7 @@ export function renderIndex(ctx: RenderContext): string {
  */
 export function renderComparisonPage(
   ctx: RenderContext,
-  vars: { title: string; description: string; body: string },
+  vars: { title: string; description: string; body: string; style?: string },
 ): string {
   return `<!doctype html>
 <html lang="en-CA" class="page page--comparison">
@@ -1090,7 +1090,7 @@ ${robotsMeta(ctx)}  <title>${esc(vars.title)}</title>
   <meta name="description" content="${esc(vars.description)}">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
-</head>
+${vars.style ? `${vars.style}\n` : ""}</head>
 <body>
   <a class="skip-link" href="#main">${esc(ctx.copy.ui.skip)}</a>
 ${ctx.copy.banner ? `  <!-- Compliance: the proposal banner sits above everything, in normal flow, so it
