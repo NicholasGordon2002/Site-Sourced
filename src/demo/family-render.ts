@@ -36,7 +36,6 @@
 
 import type { BusinessRecord, FormDeliveryMode } from "./types.ts";
 import { familyHonestyProblems, serviceActionLabel, type ConversionFamily } from "./family.ts";
-import { notificationSubject } from "./forms.ts";
 
 /** One block of a page. `render.ts` owns how each one is drawn. */
 export type SectionId =
@@ -167,6 +166,31 @@ export function extrasLines(vars: {
 
 /* ------------------------------------------------------------------- the checks */
 
+/**
+ * The notification email's title, **stated here rather than asked of `forms.ts`** — and that
+ * is the whole point of the clause that reads it back off the page.
+ *
+ * `forms.ts` (`notificationSubject`) writes the title the form carries. If this check called
+ * that same function for its expectation, the two would agree even when the derivation is
+ * wrong: doctoring `notificationSubject` to drop the demonstration suffix moved the page and
+ * the expectation together, and the build passed — the check proved nothing (measured
+ * 2026-10-09). These two literals are the page's contract; the function produces it. A
+ * reword moves both in one change, and that friction is deliberate.
+ */
+export const NOTIFICATION_TITLE_FAMILY_TERM: Record<ConversionFamily, string> = {
+  appointment: "Appointment request",
+  inquiry: "Quote request",
+};
+/**
+ * The demonstration phase names us: nobody at the business has seen the message, so the
+ * notification that reaches us may not read as one they already have. A delivered bundle
+ * carries the plain title, because there the message really does reach the business.
+ */
+export const NOTIFICATION_TITLE_DEMO_SUFFIX = " (Site Sourced demo)";
+/** The title those two facts compose, for one business. */
+function notificationTitle(business: string, family: ConversionFamily, phase: FormDeliveryMode): string {
+  return `${NOTIFICATION_TITLE_FAMILY_TERM[family]} from ${business}${phase === "demo" ? NOTIFICATION_TITLE_DEMO_SUFFIX : ""}`;
+}
 /** Every value a page prints for `field="…"`, escaped as `render.ts` escapes it. */
 function esc(s: string): string {
   return s
@@ -287,11 +311,11 @@ export function familyRenderingProblems(vars: {
       // `resolveForm` knows neither. A page rendered from a bare `resolveForm` therefore
       // carries no title at all, and a check that ran against such a page would either fail
       // the harness or — worse — be written to tolerate the absence and prove nothing.
-      // The expected value is re-derived here from the three facts behind it (the business's
-      // own name, this build's family, this build's phase), never handed over ready-made, so
-      // the check disagrees with the build whenever the build's own derivation is wrong.
+      // The expectation is composed here from the contract's own words, never by calling
+      // `notificationSubject` — a check that asks the producer what it meant agrees with a
+      // broken producer (see `NOTIFICATION_TITLE_FAMILY_TERM`).
       const printedTitle = hidden.get(esc(subjectField));
-      const expectedTitle = esc(notificationSubject(record.name, family, phase));
+      const expectedTitle = esc(notificationTitle(record.name, family, phase));
       if (printedTitle === undefined) {
         problems.push(
           `${contact.file}: the form carries no hidden "${subjectField}" field, so the provider has no title for the notification it sends and a message from this page arrives looking like any other email. The title is set by the build once the family and the phase are known (build.ts \`resolveBuildParts\`); a page rendered from a bare \`resolveForm\` never has it.`,
