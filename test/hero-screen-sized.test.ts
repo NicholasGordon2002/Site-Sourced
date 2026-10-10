@@ -323,3 +323,37 @@ test("a caller with no stylesheet gets the markup clause and no stylesheet claim
   expect(fired(pageWith(broken.pages, moved), "")).toContain("the illustration label is outside the hero figure");
   expect(fired(broken.pages, "")).toBe("");
 });
+
+test("a sized box with no min-height of its own is refused", async () => {
+  const { pages, css } = await of("maple-avenue-barber-shop");
+  const doctored = cssDoctor(css, FALLBACK_MIN_HEIGHT, "");
+  expect(fired(pages, doctored)).toContain("declares no `min-height` at all");
+});
+test("a stylesheet that gives the room no value on the figure is refused", async () => {
+  const { pages, css } = await of("maple-avenue-barber-shop");
+  const doctored = cssDoctor(css, "  --hero-above: 0rem;\n", "");
+  expect(fired(pages, doctored)).toContain("nothing in the stylesheet gives `--hero-above` a value on `.hero-figure` itself");
+});
+test("a home page without exactly one <main> is refused", async () => {
+  const { pages, css, home } = await of("maple-avenue-barber-shop");
+  expect(home.split('  <main id="main">').length - 1).toBe(1);
+  const doctored = doctor(pageWith(pages, home), HOME, '  <main id="main">', '  <mainx id="main">');
+  expect(fired(doctored, css)).toContain("carries 1 `<figure class=\"hero-figure\">` elements and 0 `<main>` elements");
+});
+test("a figure outside <main> is refused — the scoping loses the room it subtracts", async () => {
+  const { pages, css, home } = await of("maple-avenue-barber-shop");
+  const open = '  <main id="main">\n';
+  const withoutOpen = home.replace(open, "");
+  const at = withoutOpen.indexOf("</figure>") + "</figure>".length;
+  const moved = withoutOpen.slice(0, at) + `\n${open}` + withoutOpen.slice(at);
+  expect(fired(pageWith(pages, moved), css)).toContain("the hero figure is not inside `<main>`");
+});
+test("a picture outside the sized figure is refused", async () => {
+  const { pages, css, home } = await of("maple-avenue-barber-shop");
+  const picture = home.slice(home.indexOf(PICTURE), home.indexOf('decoding="async">', home.indexOf(PICTURE)) + 'decoding="async">'.length);
+  const figure = `<figure class="${HERO_FIGURE_SELECTOR.slice(1)}">`;
+  const withoutPicture = home.replace(picture, "");
+  const at = withoutPicture.indexOf(figure);
+  const moved = withoutPicture.slice(0, at) + picture + `\n    ` + withoutPicture.slice(at);
+  expect(fired(pageWith(pages, moved), css)).toContain("the hero picture is outside the figure that is sized to the screen");
+});
