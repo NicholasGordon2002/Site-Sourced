@@ -16,8 +16,9 @@
  *   1. the opt-in, both directions — a stylesheet carrying the marker while
  *      `DEMO_GHOST_CONTROLS` is unset is refused, and an opt-in whose build wrote the filled
  *      buttons is refused;
- *   2. a switch value this build cannot read is refused rather than guessed at, and the refusal
- *      names every value it accepts;
+ *   2. a switch value this build cannot read is refused rather than guessed at — refused as a
+ *      **problem that fails the build**, not a warning that exits 0 — and the refusal names
+ *      every value it accepts;
  *   3. the delivered phase refuses the treatment outright, whatever the switch says;
  *   4. every record except the one the treatment is scoped to refuses it;
  *   5. the surfaces are scoped — a `white` ghost outside `.page--index`, an `ink` ghost inside
@@ -269,10 +270,36 @@ test("a switch value this build cannot read is refused rather than guessed at, a
     expect(decision.basis).toContain("a white ghost on every header is 1.00:1 on the paper-surfaced pages");
   }
 
-  // And a build that *guessed* — painted the ghost for a value it could not read — is refused
-  // by the gate by name, which is the shape the "rather than guessed at" promise protects.
+  /* And the value itself is refused by the gate — clause 0a of `ghostControlsProblems`, the
+     same mistake its sibling `serviceCardActionProblems` clause 0a refuses on
+     `DEMO_SERVICE_CARD_ACTION_BAR`. Until 10 Oct 2026 this build printed
+     `! ghost controls refused: …`, wrote the filled buttons and exited 0, which is exactly the
+     outcome `ghost-controls.ts` says must never happen. What makes that impossible is the
+     gate's own problem list, because that list — not the decision — is what `buildBundle`
+     turns into a failed build: the assertions below fail the moment clause 0a stops pushing
+     for a value the switch cannot read. */
   const refused = build({ value: "white" });
   expect(refused.decision.enabled).toBe(false);
+  // Nothing was rendered for it: the stylesheet this build would ship is the published one.
+  expect(refused.css).toBe(stylesheet({}).css);
+  const problems = list(refused);
+  expect(problems.length).toBe(1);
+  expect(problems[0]).toContain(`${GHOST_CONTROLS_VAR} is set to "white", which names no treatment this build paints`);
+  expect(problems[0]).toContain("The switch is value-addressed");
+  expect(problems[0]).toContain("refused rather than guessed at");
+  expect(problems[0]).toContain("a review copy that lies about what it shows");
+  for (const accepted of ACCEPTED_VALUES) expect(problems[0]).toContain(`"${accepted}"`);
+
+  // Every value it cannot read fails the same way, not only the `white` the brief named —
+  // including a near-miss of an accepted spelling, which is how the hole was found.
+  for (const value of ["white", "dark", "maybe", "2", "follow surface", "surfce"]) {
+    const one = list(build({ value }));
+    expect(one.length).toBe(1);
+    expect(one[0]).toContain(`${GHOST_CONTROLS_VAR} is set to "${value}", which names no treatment this build paints`);
+  }
+
+  // The typo and the smuggled treatment are two different failures, and the gate refuses the
+  // value even when a stylesheet also paints the ghost: neither is traded for the other.
   expect(refusal(refused, { css: stylesheet({ ghost: true }).css })).toContain(
     `while ${GHOST_CONTROLS_VAR} is not in force for this build`,
   );
@@ -613,19 +640,10 @@ test("clause 6: the last rule carrying a state's own selector must declare its o
 /* ------------------------------------------------------------------------------- limits */
 
 /**
- * **Two things this file cannot assert, written down where the clauses live** rather than left
- * for the next reader to rediscover.
+ * **The one thing this file cannot assert, written down where the clauses live** rather than
+ * left for the next reader to rediscover.
  *
- *   1. **The build does not fail on a switch value it cannot read.** `buildBundle` prints
- *      `! ghost controls refused: …` and exits 0: the refusal lives in `ghostControlsDecision`
- *      and in that warning, and only the *smuggled* treatment (the block painted for a value
- *      the decision refused) reaches `complianceChecks`. Its sibling is stricter —
- *      `serviceCardActionProblems` clause 0a pushes a problem for an unrecognised
- *      `DEMO_SERVICE_CARD_ACTION_BAR`, so that build fails. This file asserts what the ghost's
- *      switch actually does (clause 2 above) and does not assert the sibling's shape, which
- *      would be a claim about code that is not there. Recorded for the lead, not fixed here:
- *      a change to a check is not this session's work.
- *   2. **The documents this module cites are not all in the repository.** `ghost-controls.ts`,
+ *   1. **The documents this module cites are not all in the repository.** `ghost-controls.ts`,
  *      the manifest's own note and the branch's commit messages point at
  *      `docs/ghost-controls.md` for the before/after table, the measured numbers and the two
  *      refused resolutions of the contrast problem; there is no such file in the tree, and the

@@ -83,6 +83,7 @@ import {
 import {
   GHOST_CONTROLS_MARKER,
   GHOST_CONTROLS_SLUG,
+  GHOST_CONTROLS_SURFACES,
   GHOST_HEADER_ACTION_SELECTOR,
   GHOST_HOME_ACTION_SELECTOR,
   GHOST_CONTROLS_VAR,
@@ -1239,9 +1240,19 @@ export function headerOverlayProblems(
  * actually ships — never against the renderer's intent.
  *
  * The treatment is one system — *the ghost is drawn in the colour of the surface it sits
- * on* — and six clauses keep it that way:
+ * on* — and eight clauses keep it that way:
  *
- *   0. **the treatment is CSS only** — no page carries the marker, because with the opt-in
+ *   0a. **the switch names a treatment this build paints** — `DEMO_GHOST_CONTROLS` is
+ *      value-addressed: its value names which resolution of the contrast problem to write, so
+ *      a value this build cannot read is refused here rather than rendered as the filled
+ *      buttons a reviewer did not ask for (the decision records the value in `unrecognised`).
+ *      It is the same mistake `serviceCardActionProblems` clause 0a refuses on
+ *      `DEMO_SERVICE_CARD_ACTION_BAR`, refused the same way — as a problem that fails the
+ *      build. It is read first, before the stylesheet, because a build whose switch this build
+ *      cannot read must not exit 0 however its stylesheet came out: until 10 Oct 2026 this one
+ *      printed `! ghost controls refused: …`, wrote the filled buttons and exited 0, which is
+ *      the one outcome `ghost-controls.ts` says must never happen;
+ *   0b. **the treatment is CSS only** — no page carries the marker, because with the opt-in
  *      set `styles.css` changes and not one page does. A page carrying it has stopped being
  *      the copy signed off on 7 Oct 2026, and this is the clause that says so;
  *   1. **the marker appears only when the opt-in is in force** — a stylesheet that paints the
@@ -1284,7 +1295,19 @@ export function ghostControlsProblems(vars: {
   const css = vars.css ?? "";
   const { decision } = vars;
 
-  /* 0. the treatment never reaches a page. */
+  /* 0a. the value names no treatment this build paints: refused, never guessed at, and read
+        before the stylesheet — so a build whose switch this build cannot read fails whichever
+        stylesheet it wrote. The sibling of `serviceCardActionProblems` clause 0a. */
+  if (decision.unrecognised !== null) {
+    problems.push(
+      `${GHOST_CONTROLS_VAR} is set to "${decision.unrecognised}", which names no treatment this build paints, so nothing was rendered for it and the stylesheet this bundle ships is the published one. The switch is value-addressed: its value names which treatment to write, and a value this build cannot read is refused rather than guessed at — rendering the filled buttons while a reviewer asked for the ghost is a review copy that lies about what it shows. The accepted values are ${Object.keys(
+        GHOST_CONTROLS_SURFACES,
+      )
+        .map((key) => `"${key}"`)
+        .join(", ")}. ${decision.basis}`,
+    );
+  }
+  /* 0b. the treatment never reaches a page. */
   for (const page of vars.pages) {
     if (page.html.includes(GHOST_CONTROLS_MARKER)) {
       problems.push(
@@ -3019,9 +3042,11 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
     warnings.push(
       `ghost controls: the stylesheet carries the outlined header action and the outlined card CTA (owner direction 10 Oct 2026) — a review treatment, not part of the design signed off on 7 Oct. No page of this bundle changes; styles.css is the only file it touches. ${ghost.basis}`,
     );
-  } else if (ghost.unrecognised !== null) {
-    warnings.push(`ghost controls refused: ${ghost.basis}`);
   }
+  /* A value this switch cannot read is no longer warned about here. It is refused as a
+     problem by `ghostControlsProblems` clause 0a, so the build fails and the refusal is what
+     the run prints — and a warning pushed above `fail()` is never printed by anything, which
+     would leave two accounts of one event with only one of them ever reaching a reader. */
   if (cardAction.enabled) {
     warnings.push(
       cardAction.shape === "nested-cta"
