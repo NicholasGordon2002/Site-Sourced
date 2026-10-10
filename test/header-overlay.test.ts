@@ -395,5 +395,9 @@ test("the manifest records the scrim and the absence of rules, and refuses a bun
 
 test("the check is wired into the build's own self-check, not merely defined", async () => {
   const source = await Bun.file(new URL("../src/demo/build.ts", import.meta.url)).text();
-  expect(source).toContain('...headerOverlayProblems(pages, vars.css ?? "")');
+  // The call carries the build's own ghost-controls decision as its third argument (owner
+  // direction, 10 Oct 2026): clause 6 reads the transparent control's boundary from its
+  // outline instead of its fill, and it can only do that when it is told this build paints
+  // the ghost. The decision is passed, never re-read from the environment here.
+  expect(source).toContain('...headerOverlayProblems(pages, vars.css ?? "", vars.ghostControls ?? null)');
 });

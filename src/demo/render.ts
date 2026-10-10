@@ -49,6 +49,7 @@ import type { FormDelivery } from "./delivery.ts";
 import type { FieldGroup, FieldSpec } from "./fields.ts";
 import { SECTION_ORDER, extrasLines, type SectionId, type ServiceCardShape } from "./family-render.ts";
 import { serviceActionLabel } from "./family.ts";
+import { ghostControlsCss } from "./ghost-controls.ts";
 import {
   SERVICE_CARD_ACTION_BODY_CLASS,
   SERVICE_CARD_ACTION_CARD_CLASS,
@@ -1236,6 +1237,13 @@ export function renderCss(
      * block; `nested-cta` writes the 10 Oct CTA's block.
      */
     serviceCardAction?: ServiceCardShape;
+    /**
+     * Paint the **ghost controls** (`ghost-controls.ts`, owner direction 10 Oct 2026).
+     * Absent — the default, and every published build — writes the stylesheet byte for
+     * byte as it is, so the opt-in changes no file of any bundle at all: the treatment is
+     * CSS-only, and not one page moves even when it is on.
+     */
+    ghostControls?: boolean;
   } = {},
 ): string {
   return `/* Site Sourced demo stylesheet — ${slug}
@@ -2127,7 +2135,7 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
   html { scroll-behavior: auto; }
   * { transition: none !important; animation: none !important; }
 }
-${options.serviceCardAction ? serviceCardActionCss(options.serviceCardAction) : ""}`;
+${options.serviceCardAction ? serviceCardActionCss(options.serviceCardAction) : ""}${options.ghostControls ? ghostControlsCss() : ""}`;
 }
 
 /**

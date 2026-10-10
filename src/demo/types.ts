@@ -266,6 +266,32 @@ export interface DemoManifest {
   /** The header's action slot and the touch controls beside it (owner, 6 Oct 2026). */
   header_action: ManifestHeaderAction;
   /**
+   * The **ghost controls** (owner direction, 10 Oct 2026): the outlined button treatment
+   * tried on the Maple Avenue review copy — the header's action drawn in the surface's own
+   * colour, and the nested card CTA in ink. Recorded so a reviewer reads what the
+   * stylesheet carries, on which surfaces, and that **no page** of the bundle moved for it.
+   */
+  ghost_controls: {
+    enabled: boolean;
+    /** The treatment this build knows, when it is on. */
+    treatment: "follow-surface" | null;
+    /** Where it lands when it is on. */
+    scope: string | null;
+    /** Why — the same basis the warning and the refusal carry. */
+    basis: string;
+    /** The custom property the treatment declares in the stylesheet, so it can be found. */
+    marker: string;
+    /** The two selectors the marker is declared on, one per surface. */
+    selectors: { photo_header: string; paper_header: string };
+    /** What each surface's ghost is drawn in, in words and in the stylesheet's own values. */
+    surfaces: { photo_header: string; paper_header: string; card_cta: string };
+    /** The measure of the treatment, read off the stylesheet this bundle ships. */
+    numbers: { outline_px: number; state_outline_px: number; min_height_px: number };
+    /** Every file the treatment changes. Empty on purpose: it is a stylesheet treatment. */
+    pages_changed: string[];
+    note: string;
+  };
+  /**
    * The booking link, if this bundle has one: which of the three modes it resolved to and
    * the rule that decided it (`booking.ts`), where the anchor points, the exact words it
    * carries, which pages carry it and which deliberately do not, and the privacy

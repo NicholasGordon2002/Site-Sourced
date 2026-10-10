@@ -81,10 +81,11 @@
  * and the action's words are the **family's** derived label. The bar's chevron is a text
  * glyph after a non-breaking space (the grammar `BOOKING_ARROW` uses): 0 new assets, 0
  * requests on load, and it survives the stylesheet not loading at all. The nested CTA carries
- * no glyph at all — it is the label, a button's fill, and nothing else.
+ * no glyph at all — it is the label and an outline, and nothing else.
  */
 import { serviceActionLabel, type ConversionFamily } from "./family.ts";
 import { serviceCardMeasure, type ServiceCardShape } from "./family-render.ts";
+import { GHOST_PAPER_FILL_ACTIVE, GHOST_PAPER_FILL_HOVER, GHOST_PAPER_INK } from "./ghost-controls.ts";
 import type { BusinessRecord, FormDeliveryMode } from "./types.ts";
 
 /** The configuration switch that opts this variant in. It carries no content. */
@@ -261,10 +262,17 @@ export function serviceCardActionDecision(vars: {
 }
 
 /**
- * The nested-CTA shape's rules. Every value is a token the published stylesheet already
- * defines (`--ink`, `--line`, `--r-md`, `--s-*`), and the button's own numbers are the
- * site's own `.button`: 2.75rem tall, 0.7rem/1.15rem of padding, 600 weight, 12px radius,
- * ink fill, white text. Nothing here is a second design system.
+ * The shape's own rules. Every value is a token the published stylesheet already defines
+ * (`--ink`, `--line`, `--r-md`, `--s-*`), and the button's own numbers are the site's own
+ * `.button`: 2.75rem tall, 0.7rem/1.15rem of padding, 600 weight, 12px radius. Nothing here
+ * is a second design system.
+ *
+ * Its colours are the **ghost treatment's** (owner direction, 10 Oct 2026): the CTA is
+ * transparent with ink text and an ink outline — the same treatment the header action wears
+ * on the paper-surfaced pages, from the same vocabulary (`ghost-controls.ts`), so the two
+ * controls cannot drift apart. It was the site's filled primary button (ink fill, white
+ * text, 17.79:1) until the owner asked to see the outlined version; the numbers for both are
+ * in `docs/ghost-controls.md`.
  *
  * `outline: 2px solid var(--accent)` with a 2px offset is the site's `:focus-visible` ring,
  * drawn on the button because the button is the tab stop; the `:visited` state cannot
@@ -276,9 +284,11 @@ const SERVICE_CARD_ACTION_NESTED_CSS = `
    Owner direction, 10 Oct 2026: each service card gets its own CTA button nested at the
    bottom of the card, rather than the whole card being the tap target. The card is a
    container — its body is inert text — and the one control on it is a real anchor at the
-   foot, drawn as the site's own primary button. DEMO_SERVICE_CARD_ACTION_BAR is unset in
-   the repository, so this block is absent from the published stylesheet: it is written
-   only for a build that opts in (src/demo/service-card-action.ts). */
+   foot, drawn as a ghost button: transparent, ink text, ink outline (the owner's second
+   instruction the same day: "the same transparent/outlined treatment with black text and a
+   black outline"). DEMO_SERVICE_CARD_ACTION_BAR is unset in the repository, so this block is
+   absent from the published stylesheet: it is written only for a build that opts in
+   (src/demo/service-card-action.ts). */
 .services .service-tile--cta { padding: 0; }
 .services .service-tile--cta .${SERVICE_CARD_ACTION_BODY_CLASS} {
   display: flex; flex-direction: column; flex: 1;
@@ -299,10 +309,10 @@ const SERVICE_CARD_ACTION_NESTED_CSS = `
   min-height: 2.75rem;
   margin: 0 var(--s-5) var(--s-5);
   padding: 0.7rem 1.15rem;
-  border: 1px solid transparent;
+  border: 1px solid ${GHOST_PAPER_INK};
   border-radius: var(--r-md);
-  background: var(--ink);
-  color: #fff;
+  background: transparent;
+  color: ${GHOST_PAPER_INK};
   font-family: var(--font-body);
   font-size: 0.9375rem;
   font-weight: 600;
@@ -311,16 +321,18 @@ const SERVICE_CARD_ACTION_NESTED_CSS = `
   text-decoration: none;
   transition: background-color .15s ease, box-shadow .15s ease, transform .05s ease;
 }
+/* The states deepen the ink rather than filling the button: the ghost's own outline doubles
+   with an inset ring, which is 2px of line and no change to the control's box. */
 .services .service-tile--cta .${SERVICE_CARD_ACTION_CTA_CLASS}:hover {
-  background: #000;
-  color: #fff;
-  box-shadow: 0 2px 10px rgba(16, 18, 20, .18);
+  background: ${GHOST_PAPER_FILL_HOVER};
+  color: ${GHOST_PAPER_INK};
+  box-shadow: inset 0 0 0 1px ${GHOST_PAPER_INK}, 0 2px 10px rgba(16, 18, 20, .10);
 }
 .services .service-tile--cta .${SERVICE_CARD_ACTION_CTA_CLASS}:active {
-  background: #000;
-  color: #fff;
+  background: ${GHOST_PAPER_FILL_ACTIVE};
+  color: ${GHOST_PAPER_INK};
   transform: translateY(1px);
-  box-shadow: inset 0 2px 6px rgba(0, 0, 0, .4);
+  box-shadow: inset 0 0 0 1px ${GHOST_PAPER_INK};
 }
 .services .service-tile--cta .${SERVICE_CARD_ACTION_CTA_CLASS}:focus-visible {
   outline: 2px solid var(--accent);
@@ -343,11 +355,15 @@ const SERVICE_CARD_ACTION_NESTED_CSS = `
  *
  * **The nested-CTA shape's block** (owner direction, 10 Oct 2026) is written the same way:
  * the card keeps the design system's surface and tokens, and the CTA is the site's own
- * primary button — ink fill, white text, `--r-md`, 2.75rem — made the full width of the
- * card. It is the **only** control on the card, so it carries the contrast obligation the
- * whole-card shape put on the card surface: `--ink` on `#fff` is 17.8:1, and 21:1 at the
- * pure-black hover the rest of the site's buttons use. `overflow: hidden` is deliberately
- * absent: the card must never clip the CTA's own focus ring.
+ * button geometry — `--r-md`, 2.75rem, 0.9375rem/600 — drawn as a **ghost**: transparent,
+ * `var(--ink)` text, `var(--ink)` outline, with ink washes for its hover and active states
+ * (the owner's second instruction the same day). It is the **only** control on the card, so
+ * it carries the contrast obligation the whole-card shape put on the card surface:
+ * `--ink` on `#fff` is 16.9:1 for the text and for the outline, and the hover/active washes
+ * measure 15.6:1 and 14.3:1 (`docs/ghost-controls.md` carries the measured numbers, and
+ * `ghostControlsProblems` clause 4 refuses a fill that would lighten the surface instead).
+ * `overflow: hidden` is deliberately absent: the card must never clip the CTA's own focus
+ * ring.
  */
 export function serviceCardActionCss(shape: ServiceCardShape = "whole-card"): string {
   if (shape === "nested-cta") return SERVICE_CARD_ACTION_NESTED_CSS;

@@ -80,6 +80,17 @@ import {
   serviceCardActionProblems,
   type ServiceCardActionDecision,
 } from "./service-card-action.ts";
+import {
+  GHOST_CONTROLS_MARKER,
+  GHOST_CONTROLS_SLUG,
+  GHOST_HEADER_ACTION_SELECTOR,
+  GHOST_HOME_ACTION_SELECTOR,
+  GHOST_CONTROLS_VAR,
+  GHOST_SURFACE_INK,
+  GHOST_SURFACE_WHITE,
+  ghostControlsDecision,
+  type GhostControlsDecision,
+} from "./ghost-controls.ts";
 import { currentRetentionPractice, PRACTICE_FILE, readRetentionPractice, type RetentionPractice } from "./retention.ts";
 import type { FormDelivery } from "./delivery.ts";
 import { formDeliveryProblems, resolveDelivery, type FormDeliveryMode } from "./delivery.ts";
@@ -549,6 +560,13 @@ const LABEL_CONTRAST = 4.5;
 
 type Rgb = [number, number, number];
 
+/**
+ * Whether a colour is the **ink** these treatments are mixed from: a near-black, the way
+ * the header's own scrim test reads "the hero's ink is ink". Used by the header's scrim
+ * clauses and by the ghost treatment's state fills, so one threshold serves both.
+ */
+const isInk = (rgb: Rgb): boolean => relativeLuminance(rgb) <= 0.05;
+
 /** WCAG relative luminance of an 8-bit sRGB colour. */
 function relativeLuminance(rgb: Rgb): number {
   const [r, g, b] = rgb.map((value) => {
@@ -633,6 +651,40 @@ function overlayRuleDeclarations(
   }
   return out;
 }
+
+/**
+ * The declarations that reach a control **in one interaction state**, resolved the way the
+ * browser resolves them: a rule whose selector names `:hover` or `:active` applies only in
+ * that state, and every other matching rule applies in all of them, later rules winning the
+ * property. Reading the rules one at a time instead is how a treatment gets refused for a
+ * declaration the cascade has already overridden — a review treatment is painted by rules
+ * appended at the end of the stylesheet, on purpose, so it wins by order and not by weight.
+ */
+function stateDeclarations(
+  rules: { selector: string; body: string }[],
+  state: "rest" | "hover" | "active" | "focus-visible",
+): Map<string, string> {
+  const STATES = ["hover", "active", "focus-visible"] as const;
+  return overlayRuleDeclarations(
+    rules.filter((rule) => {
+      const named = STATES.filter((one) => rule.selector.includes(`:${one}`));
+      return named.length === 0 || (state !== "rest" && named.includes(state));
+    }),
+    () => true,
+  );
+}
+
+/**
+ * The colour inside a `border` shorthand: the width and the style come off, and what is left
+ * is the colour (`1px solid var(--ink)` → `var(--ink)`). A shorthand is how the stylesheet
+ * declares a control's outline, so the checks read it rather than requiring a longhand no
+ * rule here writes.
+ */
+const borderColour = (shorthand: string): string =>
+  shorthand
+    .replace(/^\s*[\d.]+(?:px|rem)\s+/, "")
+    .replace(/^(?:solid|dashed|dotted|double|none)\s+/i, "")
+    .trim();
 
 /** The selectors in one rule's list, trimmed. */
 const selectorList = (selector: string): string[] => selector.split(",").map((part) => part.trim());
@@ -721,7 +773,16 @@ function overlayColour(value: string, tokens: Map<string, string>): Rgb | null {
  * a browser at 320/360/390/420px and reported with the change; this pins the mechanism
  * that produces them, and the CSS-derived contrast of the scrim.
  */
-export function headerOverlayProblems(pages: RenderedPage[], css = ""): string[] {
+export function headerOverlayProblems(
+  pages: RenderedPage[],
+  css = "",
+  /**
+   * What this build decided about the **ghost controls** (`ghost-controls.ts`, owner
+   * direction 10 Oct 2026). Absent — the default, and every published build — means the
+   * header's action is the filled pill and clause 6 below is the clause it always was.
+   */
+  ghost: GhostControlsDecision | null = null,
+): string[] {
   const problems: string[] = [];
   const overlay = `.${HEADER_OVERLAY_CLASS}`;
   const white: Rgb = [255, 255, 255];
@@ -833,7 +894,7 @@ export function headerOverlayProblems(pages: RenderedPage[], css = ""): string[]
     merged.get("background-color") ?? (/gradient\(/.test(shorthand) ? "transparent" : shorthand)
   ).trim();
   /** The ink the hero's own scrim is mixed from is near-black; anything lighter is a veil. */
-  const inkIsInkish = (rgb: Rgb) => relativeLuminance(rgb) <= 0.05;
+  const inkIsInkish = isInk;
   const whiteOn = (stop: { rgb: Rgb; alpha: number }) => contrastRatio(white, overOpaque(stop, white));
   /** The last 30% of the box is the fade into the picture. */
   const TYPE_BAND = 0.7;
@@ -1003,6 +1064,8 @@ export function headerOverlayProblems(pages: RenderedPage[], css = ""): string[]
     return declared.has("background") || declared.has("background-color");
   };
   const resting = actionRules.filter((rule) => !/:hover/.test(rule.selector));
+  /** Whether this build paints the ghost controls (owner direction, 10 Oct 2026). */
+  const ghostOn = ghost?.enabled === true;
   // The chip exemption that used to live here (`:not(.call-button--muted)`) has moved to
   // where the thing it protected lives: there is no second .call-button in the header to
   // exempt any more, and `headerActionProblems` now refuses one in the markup — the place
@@ -1010,7 +1073,71 @@ export function headerOverlayProblems(pages: RenderedPage[], css = ""): string[]
   const painted = resting.filter(paint);
   const ink = overlayColour(tokens.get("--ink") ?? "", tokens) ?? ([22, 24, 27] as Rgb);
   const inkOnWash = washOverWhite ? contrastRatio(ink, washOverWhite) : null;
-  if (painted.length === 0) {
+  if (ghostOn) {
+    /* The **ghost** action (owner direction, 10 Oct 2026): transparent, so its boundary is
+       its own outline rather than a fill, and its label sits straight on the wash. The
+       standards do not move — 3:1 for the boundary, 4.5:1 for the text — only the
+       declaration each is read from: `border-color` instead of the fill for the boundary,
+       and the text colour instead of the label-inside-the-fill pair. */
+    const atRest = actionRules.filter((rule) => !/:(hover|active|focus-visible)/.test(rule.selector));
+    const declared = overlayRuleDeclarations(atRest, () => true);
+    const restFill = (declared.get("background") ?? declared.get("background-color") ?? "").trim();
+    if (!/^(transparent|none|rgba\(\s*0\s*,\s*0\s*,\s*0\s*,\s*0\s*\))$/i.test(restFill)) {
+      problems.push(
+        `the home header's action is not transparent at rest (background: ${restFill || "nothing declared"}): the ghost the owner asked for on 10 Oct 2026 is a control with no fill, and its boundary is its outline.`,
+      );
+    }
+    const boundary = overlayColour(declared.get("border-color") ?? "", tokens);
+    const ghostLabel = overlayColour(declared.get("color") ?? "", tokens);
+    if (!boundary) {
+      problems.push(
+        `the home header's ghost declares an outline colour this build cannot read (border-color: ${declared.get("border-color") ?? "nothing"}), so its own boundary against the wash is unknown. A transparent control has no fill to measure: the outline is the boundary.`,
+      );
+    } else if (washOverWhite && contrastRatio(boundary, washOverWhite) < WASH_CONTROL_CONTRAST) {
+      problems.push(
+        `the home header's ghost reaches only ${contrastRatio(boundary, washOverWhite).toFixed(2)}:1 against the wash (its outline rgb(${boundary.join(", ")}) on rgb(${washOverWhite.join(", ")})), under the ${WASH_CONTROL_CONTRAST}:1 a control's own boundary needs.`,
+      );
+    }
+    if (!ghostLabel) {
+      problems.push(
+        `the home header's ghost declares no readable label colour, so its words are unchecked against the wash they sit on: a transparent control has no fill for the label to be measured inside.`,
+      );
+    } else if (washOverWhite && contrastRatio(ghostLabel, washOverWhite) < LABEL_CONTRAST) {
+      problems.push(
+        `the home header's ghost's label reaches only ${contrastRatio(ghostLabel, washOverWhite).toFixed(2)}:1 on the wash (rgb(${ghostLabel.join(", ")}) on rgb(${washOverWhite.join(", ")})), under the ${LABEL_CONTRAST}:1 text needs.`,
+      );
+    }
+    if (boundary && ghostLabel && boundary.join(",") !== ghostLabel.join(",")) {
+      problems.push(
+        `the home header's ghost draws its outline in rgb(${boundary.join(", ")}) and its words in rgb(${ghostLabel.join(", ")}) — two colours on one control. The treatment is one system: the outline is the words' own colour, which is what makes it follow the surface the control sits on.`,
+      );
+    }
+    /* Every fill a state lands on must be ink, and must keep the label legible on it: the
+       one thing a ghost cannot do is lighten the surface under its own words. Read per state
+       through the cascade, so the pill this treatment overrides is not read as the ghost's
+       own hover. */
+    for (const state of ["rest", "hover", "active"] as const) {
+      const stateDecls = stateDeclarations(actionRules, state);
+      const stateFill = (stateDecls.get("background") ?? stateDecls.get("background-color") ?? "").trim();
+      if (stateFill === "" || /^(transparent|none)$/i.test(stateFill)) continue;
+      const stops = rgbaStops(stateFill);
+      const translucent = stops.length > 0 ? stops[stops.length - 1]! : null;
+      const solid = translucent ? translucent.rgb : overlayColour(stateFill, tokens);
+      const words = overlayColour(stateDecls.get("color") ?? "", tokens) ?? ghostLabel;
+      if (!solid || !inkIsInkish(solid)) {
+        problems.push(
+          `the ghost action in its ${state} state fills itself with ${stateFill}, which is not ink: a light veil darkens nothing and drops the label's contrast — a 16% white veil over the wash leaves white text about 4.2:1 over the lightest pixel a photograph can hold, under the ${LABEL_CONTRAST}:1 text needs. The ghost's states deepen the ink.`,
+        );
+        continue;
+      }
+      const over = translucent ? overOpaque(translucent, washOverWhite ?? [255, 255, 255]) : solid;
+      if (words && contrastRatio(words, over) < LABEL_CONTRAST) {
+        problems.push(
+          `the ghost action in its ${state} state leaves its label ${contrastRatio(words, over).toFixed(2)}:1 against its own fill (${stateFill} over the wash), under the ${LABEL_CONTRAST}:1 text needs.`,
+        );
+      }
+    }
+  } else if (painted.length === 0) {
     problems.push(
       `the home header's action is not switched off the ink pill: on the wash the ink pill's own edge is ${inkOnWash ? inkOnWash.toFixed(2) : "3.09"}:1, a control boundary that only just clears the 3:1 it needs, and it is judged on every photograph. Give it a white fill with an ink label (${overlay} .site-header .call-button).`,
     );
@@ -1101,6 +1228,280 @@ export function headerOverlayProblems(pages: RenderedPage[], css = ""): string[]
     );
   }
 
+  return problems;
+}
+
+/**
+ * **The ghost controls are painted here, on the record the treatment is scoped to, and
+ * nothing else in the bundle moved** (owner direction, 10 Oct 2026; the lead's ruling the
+ * same day: handle the contrast reality, do not paper over it). Run from
+ * `complianceChecks` on every bundle, against the stylesheet and the pages the bundle
+ * actually ships — never against the renderer's intent.
+ *
+ * The treatment is one system — *the ghost is drawn in the colour of the surface it sits
+ * on* — and five clauses keep it that way:
+ *
+ *   0. **the treatment is CSS only** — no page carries the marker, because with the opt-in
+ *      set `styles.css` changes and not one page does. A page carrying it has stopped being
+ *      the copy signed off on 7 Oct 2026, and this is the clause that says so;
+ *   1. **the marker appears only when the opt-in is in force** — a stylesheet that paints the
+ *      ghost while the switch is unset, refused by name (`headerOverlayProblems` cannot see
+ *      this: it reads the treatment as a broken pill);
+ *   2. **the opt-in painted something** — the other direction: a build that asked for the
+ *      ghost and wrote the filled buttons is refused rather than quietly shipped;
+ *   3. **both surfaces are covered and each ghost claims the one it is scoped to** — exactly
+ *      two marked rules, one claiming `ink` and one claiming `white`; the `white` one must be
+ *      scoped to the home page's overlay class and the `ink` one must not, because the other
+ *      way round is white type and a white outline on the paper headers: **1.00:1**;
+ *   4. **the numbers** — text and outline are one colour, an ink ghost is ink and clears
+ *      4.5:1 (text) and 3:1 (outline) against `--paper`, a white ghost is white, and every
+ *      state the ghost fills must fill with ink and keep its label above 4.5:1 on that fill;
+ *   5. **the nested card CTA is the same treatment** — its own rules, whenever the stylesheet
+ *      carries them: transparent at rest, an ink text/outline pair, and ink-family state
+ *      fills. This half is *not* behind the ghost switch, on purpose: the CTA's ghost rides
+ *      the nested card shape (`DEMO_SERVICE_CARD_ACTION_BAR`), which is its own review-only
+ *      opt-in, so the clause runs whenever the CTA's rules exist.
+ *
+ * The wash-side numbers for the home page's ghost — its outline and label against the
+ * hero's scrim, and every state fill on it — live in `headerOverlayProblems` clause 6,
+ * where the wash is already computed. Neither clause repeats the other: one measures the
+ * paper, the other the photograph.
+ */
+export function ghostControlsProblems(vars: {
+  pages: RenderedPage[];
+  css?: string;
+  /** What this build decided (`ghostControlsDecision`). */
+  decision: GhostControlsDecision;
+}): string[] {
+  const problems: string[] = [];
+  const css = vars.css ?? "";
+  const { decision } = vars;
+
+  /* 0. the treatment never reaches a page. */
+  for (const page of vars.pages) {
+    if (page.html.includes(GHOST_CONTROLS_MARKER)) {
+      problems.push(
+        `${page.file}: carries the ghost treatment's own marker (${GHOST_CONTROLS_MARKER}) in its markup. The treatment is a stylesheet treatment: with ${GHOST_CONTROLS_VAR} set, styles.css changes and not one page does, so a page carrying it is a page that stopped being the copy the owner signed off on 7 Oct 2026.`,
+      );
+    }
+  }
+  if (css === "") return problems;
+
+  const all = overlayStyleRules(css);
+  const base = all.filter((rule) => rule.at === "");
+  const tokens = overlayRuleDeclarations(base, (one) => one === ":root");
+  const paper = overlayColour(tokens.get("--paper") ?? "", tokens) ?? ([255, 255, 255] as Rgb);
+  const declared = (rule: { body: string }) => overlayDeclarations(rule.body);
+  const marked = all.filter((rule) => declared(rule).has(GHOST_CONTROLS_MARKER));
+  const selectorOf = (rule: { selector: string }) => rule.selector.replace(/\s+/g, " ").trim();
+
+  /* 1 and 2. the opt-in, in both directions. */
+  if (marked.length === 0 && decision.enabled) {
+    problems.push(
+      `the stylesheet this bundle ships paints no ghost controls while ${GHOST_CONTROLS_VAR} is set and this record is the ${GHOST_CONTROLS_SLUG} demonstration: the build asked for the treatment and wrote the filled buttons instead. ${decision.basis}`,
+    );
+  } else if (marked.length > 0 && !decision.enabled) {
+    problems.push(
+      `the stylesheet this bundle ships paints the ghost controls (${marked.map(selectorOf).join(", ")}) while ${GHOST_CONTROLS_VAR} is not in force for this build. The treatment is an opt-in: with the variable unset no file changes, and every bundle is the copy signed off on 7 Oct 2026, byte for byte. ${decision.basis}`,
+    );
+  }
+
+  /* 3. both surfaces, each ghost scoped to the surface it claims. */
+  const homeClass = `.${HEADER_OVERLAY_CLASS}`;
+  const forHeader = (rule: { selector: string }) => rule.selector.includes(".site-header") && rule.selector.includes(".call-button");
+  const claims = marked.map((rule) => (declared(rule).get(GHOST_CONTROLS_MARKER) ?? "").trim());
+  if (decision.enabled || marked.length > 0) {
+    for (const [index, rule] of marked.entries()) {
+      const claim = claims[index]!;
+      if (!forHeader(rule)) {
+        problems.push(
+          `"${selectorOf(rule)}" declares ${GHOST_CONTROLS_MARKER} but is not the header's action. The treatment is two controls — the header's action on both surfaces, and the nested card CTA — and a marker on anything else is a ghost drawn somewhere the owner did not ask for.`,
+        );
+        continue;
+      }
+      if (claim !== GHOST_SURFACE_INK && claim !== GHOST_SURFACE_WHITE) {
+        problems.push(
+          `"${selectorOf(rule)}" declares ${GHOST_CONTROLS_MARKER}: "${claim}", which names no surface this build knows (${GHOST_SURFACE_INK}, ${GHOST_SURFACE_WHITE}).`,
+        );
+        continue;
+      }
+      const scopedToHome = rule.selector.includes(homeClass);
+      if (claim === GHOST_SURFACE_WHITE && !scopedToHome) {
+        problems.push(
+          `"${selectorOf(rule)}" claims the photograph surface (${GHOST_CONTROLS_MARKER}: ${GHOST_SURFACE_WHITE}) but is not scoped to the home page (${homeClass}), so it also paints the paper-surfaced headers — where a white ghost is 1.00:1 and invisible. The white ghost belongs to the one header with a photograph behind it.`,
+        );
+        continue;
+      }
+      if (claim === GHOST_SURFACE_INK && scopedToHome) {
+        problems.push(
+          `"${selectorOf(rule)}" claims the paper surface (${GHOST_CONTROLS_MARKER}: ${GHOST_SURFACE_INK}) but is scoped to the home page (${homeClass}), where the header sits on the hero photograph: the ink ghost belongs to the paper-surfaced headers and to the service card.`,
+        );
+        continue;
+      }
+    }
+    const surfaces = new Set(claims);
+    if (marked.length > 0 && decision.enabled && (surfaces.size !== 2 || !surfaces.has(GHOST_SURFACE_INK) || !surfaces.has(GHOST_SURFACE_WHITE))) {
+      problems.push(
+        `the ghost treatment covers ${surfaces.size === 2 ? "both surfaces" : `${surfaces.size} surface${surfaces.size === 1 ? "" : "s"}`} while the header's action exists on two: the home page's header sits on the hero photograph and every other page's header sits on --paper. A treatment applied to one and not the other leaves half the site with the filled pill and half with the ghost, which is the half-applied state this clause refuses.`,
+      );
+    }
+
+    /* 4. the numbers, off the stylesheet the way the gate reads the rest of it. */
+    for (const rule of marked) {
+      const body = declared(rule);
+      const claim = (body.get(GHOST_CONTROLS_MARKER) ?? "").trim();
+      if (!forHeader(rule) || (claim !== GHOST_SURFACE_INK && claim !== GHOST_SURFACE_WHITE)) continue;
+      const text = overlayColour(body.get("color") ?? "", tokens);
+      const outline = overlayColour(body.get("border-color") ?? "", tokens);
+      const fill = (body.get("background") ?? body.get("background-color") ?? "").trim();
+      if (!/^(transparent|none)$/i.test(fill)) {
+        problems.push(
+          `"${selectorOf(rule)}" declares a fill (background: ${fill || "nothing"}) on the ghost. The owner's direction is a control with **no fill**, and the fill is also the thing that stops an outline from being the boundary: a filled ghost is the pill this treatment replaces.`,
+        );
+      }
+      if (!text || !outline) {
+        problems.push(
+          `"${selectorOf(rule)}" declares ${!text ? "no readable text colour" : "a readable text colour but no readable outline colour"}, so the ghost's two halves cannot be measured against the surface it claims.`,
+        );
+        continue;
+      }
+      if (text.join(",") !== outline.join(",")) {
+        problems.push(
+          `"${selectorOf(rule)}" draws its outline in rgb(${outline.join(", ")}) and its words in rgb(${text.join(", ")}) — two colours on one control. The treatment is one system: the outline is the words' own colour.`,
+        );
+      }
+      if (claim === GHOST_SURFACE_WHITE) {
+        if (!/^255,255,255$/.test(text.join(","))) {
+          problems.push(
+            `"${selectorOf(rule)}" claims the photograph surface but draws its ghost in rgb(${text.join(", ")}). Over the home header's scrim the type is white: the white ghost is what clears 6.0:1 there, and any other colour is a different treatment wearing the marker.`,
+          );
+        }
+        continue;
+      }
+      if (!isInk(text)) {
+        problems.push(
+          `"${selectorOf(rule)}" claims the paper surface but draws its ghost in rgb(${text.join(", ")}) — not the bundle's ink. On --paper the ghost is the ink ghost: the black outline and black words the owner asked for.`,
+        );
+      }
+      const textOn = contrastRatio(text, paper);
+      if (textOn < LABEL_CONTRAST) {
+        problems.push(
+          `the paper-surface ghost (${selectorOf(rule)}) reaches only ${textOn.toFixed(2)}:1 for its words against --paper (rgb(${text.join(", ")}) on rgb(${paper.join(", ")})), under the ${LABEL_CONTRAST}:1 text needs.`,
+        );
+      }
+      const outlineOn = contrastRatio(outline, paper);
+      if (outlineOn < WASH_CONTROL_CONTRAST) {
+        problems.push(
+          `the paper-surface ghost's outline (${selectorOf(rule)}) reaches only ${outlineOn.toFixed(2)}:1 against --paper (rgb(${outline.join(", ")}) on rgb(${paper.join(", ")})), under the ${WASH_CONTROL_CONTRAST}:1 a control's own boundary needs.`,
+        );
+      }
+    }
+  }
+  /* 4b. every state fill the treatment declares must be ink, and must keep the words legible.
+        Read only when the treatment is in force: with it off, the home header's own white
+        pill (`.page--index .site-header .call-button { background: #fff }`) is a fill on this
+        control, and it is the design every published build carries. */
+  /* The paper-surfaced headers only: the rules scoped to the home page's overlay class paint
+     the one header with a photograph behind it, and are measured against the wash in
+     `headerOverlayProblems`. Reading them here would measure a dark active state against
+     `--paper` and call it a failure the page never renders. */
+  const headerGhostRules = (decision.enabled || marked.length > 0 ? all.filter((one) => forHeader(one)) : []).filter(
+    (rule) => !rule.selector.includes(homeClass),
+  );
+  for (const state of ["rest", "hover", "active"] as const) {
+    const stateDecls = stateDeclarations(headerGhostRules, state);
+    const stateFill = (stateDecls.get("background") ?? stateDecls.get("background-color") ?? "").trim();
+    if (stateFill === "" || /^(transparent|none)$/i.test(stateFill)) continue;
+    const stops = rgbaStops(stateFill);
+    const translucent = stops.length > 0 ? stops[stops.length - 1]! : null;
+    const solid = translucent ? translucent.rgb : overlayColour(stateFill, tokens);
+    const words = overlayColour(stateDecls.get("color") ?? "", tokens);
+    if (!solid || !isInk(solid)) {
+      problems.push(
+        `the ghost's ${state} state fills the header's action with ${stateFill}, which is not ink: a light veil darkens nothing, and on the paper-surfaced headers it would lift the ink words' backdrop instead of deepening it. The ghost's states deepen the ink.`,
+      );
+      continue;
+    }
+    if (words && translucent) {
+      const over = overOpaque(translucent, paper);
+      const ratio = contrastRatio(words, over);
+      if (ratio < LABEL_CONTRAST) {
+        problems.push(
+          `the ghost's ${state} state leaves its words ${ratio.toFixed(2)}:1 against its own fill (${stateFill} over --paper), under the ${LABEL_CONTRAST}:1 text needs.`,
+        );
+      }
+    }
+  }
+
+  /* 5. the nested card CTA, the same treatment in the card's own block. Not behind the ghost
+        switch: the CTA's ghost rides the nested card shape, whose own opt-in keeps it off
+        every published build (service-card-action.ts). */
+  const ctaRules = all.filter((rule) => rule.selector.includes(`.${SERVICE_CARD_ACTION_CTA_CLASS}`));
+  const ctaRest = ctaRules.find((rule) => !/:(hover|active|focus-visible)/.test(rule.selector));
+  if (ctaRest) {
+    const body = stateDeclarations(ctaRules, "rest");
+    const fill = (body.get("background") ?? body.get("background-color") ?? "").trim();
+    const text = overlayColour(body.get("color") ?? "", tokens);
+    const outline = overlayColour(borderColour(body.get("border") ?? ""), tokens) ?? overlayColour(body.get("border-color") ?? "", tokens);
+    if (!/^(transparent|none)$/i.test(fill)) {
+      problems.push(
+        `the card CTA (${selectorOf(ctaRest)}) declares a fill (background: ${fill || "nothing"}). The owner's second direction of 10 Oct 2026 is the same transparent treatment on the card: no fill, black words, black outline.`,
+      );
+    }
+    if (!text) {
+      problems.push(`the card CTA (${selectorOf(ctaRest)}) declares no readable text colour, so its contrast on the card's own surface is unknown.`);
+    } else {
+      if (!isInk(text)) {
+        problems.push(
+          `the card CTA draws its words in rgb(${text.join(", ")}) — not the bundle's ink. On the card's paper surface the CTA is the ink ghost: the black words and black outline the owner asked for.`,
+        );
+      }
+      const on = contrastRatio(text, paper);
+      if (on < LABEL_CONTRAST) {
+        problems.push(
+          `the card CTA's words reach only ${on.toFixed(2)}:1 against the card's surface (rgb(${text.join(", ")}) on rgb(${paper.join(", ")})), under the ${LABEL_CONTRAST}:1 text needs.`,
+        );
+      }
+      if (outline) {
+        if (outline.join(",") !== text.join(",")) {
+          problems.push(
+            `the card CTA draws its outline in rgb(${outline.join(", ")}) and its words in rgb(${text.join(", ")}) — two colours on one control. The outline is the words' own colour, which is what makes the two controls one treatment.`,
+          );
+        }
+        const edge = contrastRatio(outline, paper);
+        if (edge < WASH_CONTROL_CONTRAST) {
+          problems.push(
+            `the card CTA's outline reaches only ${edge.toFixed(2)}:1 against the card's surface, under the ${WASH_CONTROL_CONTRAST}:1 a control's own boundary needs. A transparent control has no fill to give it an edge.`,
+          );
+        }
+      } else {
+        problems.push(`the card CTA (${selectorOf(ctaRest)}) declares no readable outline colour, so its own boundary against the card is unknown. A transparent control has no fill to give it an edge.`);
+      }
+    }
+  }
+  for (const state of ["rest", "hover", "active"] as const) {
+    const stateDecls = stateDeclarations(ctaRules, state);
+    const stateFill = (stateDecls.get("background") ?? stateDecls.get("background-color") ?? "").trim();
+    if (stateFill === "" || /^(transparent|none)$/i.test(stateFill)) continue;
+    const stops = rgbaStops(stateFill);
+    const translucent = stops.length > 0 ? stops[stops.length - 1]! : null;
+    const solid = translucent ? translucent.rgb : overlayColour(stateFill, tokens);
+    const words = overlayColour(stateDecls.get("color") ?? "", tokens);
+    if (!solid || !isInk(solid)) {
+      problems.push(
+        `the card CTA's ${state} state fills itself with ${stateFill}, which is not ink: the ghost's states deepen the ink, and a light veil on the card's own surface is the fill this treatment replaced.`,
+      );
+      continue;
+    }
+    if (words && translucent) {
+      const ratio = contrastRatio(words, overOpaque(translucent, paper));
+      if (ratio < LABEL_CONTRAST) {
+        problems.push(
+          `the card CTA's ${state} state leaves its words ${ratio.toFixed(2)}:1 against its own fill (${stateFill} over the card's surface), under the ${LABEL_CONTRAST}:1 text needs.`,
+        );
+      }
+    }
+  }
   return problems;
 }
 
@@ -1873,6 +2274,12 @@ export function complianceChecks(vars: {
    * every published build renders.
    */
   cardShape?: ServiceCardShape;
+  /**
+   * What this build decided about the **ghost controls** (`ghost-controls.ts`, owner
+   * direction 10 Oct 2026). Absent means the treatment is not in force, which is the state
+   * of every published build: the clause then refuses a stylesheet that carries it anyway.
+   */
+  ghostControls?: GhostControlsDecision | null;
   /** The bundle's only script, so the no-tracking sentence can be checked, not asserted. */
   js?: string;
   /**
@@ -2066,6 +2473,22 @@ export function complianceChecks(vars: {
   }
   // A service card is one link, one action, carrying its own recorded service to a
   // page whose form already has that service chosen (owner revision #4, 6 Oct).
+  // The ghost controls: the treatment only when the build opted in, both header surfaces
+  // covered, ink on paper and white over the photograph, and the card CTA's own numbers —
+  // read off the stylesheet and the pages the bundle ships (owner direction, 10 Oct 2026).
+  problems.push(
+    ...ghostControlsProblems({
+      pages,
+      css: vars.css,
+      decision: vars.ghostControls ?? {
+        enabled: false,
+        surface: null,
+        raw: "",
+        unrecognised: null,
+        basis: `the caller passed no ${GHOST_CONTROLS_VAR} decision, so this check makes no claim about the treatment.`,
+      },
+    }),
+  );
   problems.push(
     ...serviceCardProblems({
       pages,
@@ -2090,7 +2513,9 @@ export function complianceChecks(vars: {
   // The home header on the hero photograph (owner retouch, 6 Oct): the overlay class on
   // the home page alone, every overlay rule scoped to it, and the wash's contrast over
   // the lightest pixel a photograph can hold — measured, not asserted.
-  problems.push(...headerOverlayProblems(pages, vars.css ?? ""));
+  // The home header on the hero photograph, and — when this build paints them — the
+  // ghost controls' own numbers against the wash (owner direction, 10 Oct 2026).
+  problems.push(...headerOverlayProblems(pages, vars.css ?? "", vars.ghostControls ?? null));
   // The header's action slot (owner-approved 6 Oct): exactly one page's primary action
   // where it belongs, that label, that destination, a class the stylesheet shows is 44px,
   // and none at all on the privacy notice or the contact section.
@@ -2482,6 +2907,13 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
    * re-deriving it in four places.
    */
   const cardShape: ServiceCardShape = cardAction.enabled ? cardAction.shape : "whole-card";
+  /**
+   * The **ghost controls** (owner direction, 10 Oct 2026) — the second button treatment
+   * tried on this one review copy. It is a stylesheet treatment: the decision changes what
+   * `renderCss` writes and nothing else, so no page of any bundle moves whether it is on or
+   * off (docs/ghost-controls.md carries the before/after table).
+   */
+  const ghost: GhostControlsDecision = ghostControlsDecision({ slug, phase: delivery.mode });
   const ctx: RenderContext = {
     record,
     copy,
@@ -2527,11 +2959,21 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
       `comparison page: ${comparisonPage.file} is in this bundle — ${comparison.basis} It is not one of the nine pages and it is not part of the proposal's design.`,
     );
   }
-  const css = renderCss(profile, slug, cardAction.enabled ? { serviceCardAction: cardAction.shape } : {});
+  const css = renderCss(profile, slug, {
+    ...(cardAction.enabled ? { serviceCardAction: cardAction.shape } : {}),
+    ...(ghost.enabled ? { ghostControls: true } : {}),
+  });
   const js = renderJs();
   const favicon = renderFavicon(record, profile);
   const readme = renderEditingReadme(ctx, pages);
 
+  if (ghost.enabled) {
+    warnings.push(
+      `ghost controls: the stylesheet carries the outlined header action and the outlined card CTA (owner direction 10 Oct 2026) — a review treatment, not part of the design signed off on 7 Oct. No page of this bundle changes; styles.css is the only file it touches. ${ghost.basis}`,
+    );
+  } else if (ghost.unrecognised !== null) {
+    warnings.push(`ghost controls refused: ${ghost.basis}`);
+  }
   if (cardAction.enabled) {
     warnings.push(
       cardAction.shape === "nested-cta"
@@ -2543,7 +2985,7 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   const problems = [
     ...problemsBeforeWrite,
     ...practiceRead.problems,
-    ...complianceChecks({ pages, record, copy, form, delivery, images, privacy, practice, css, js, readme, demoBookingUrl, cardShape }),
+    ...complianceChecks({ pages, record, copy, form, delivery, images, privacy, practice, css, js, readme, demoBookingUrl, cardShape, ghostControls: ghost }),
     // The comparison page's own checks, including the carve-out that keeps the exception to
     // one file: a remote script, frame or embed on any OTHER page is refused here by name,
     // and the page is refused outright in the delivered phase and on any other record.
@@ -2678,6 +3120,18 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   const narrativeCount = narrativeParagraphs(record).length;
   const firstService = normaliseServices(record)[0]?.name;
 
+  /* The ghost treatment's own numbers, read off the stylesheet this bundle ships rather
+     than restated from the module that wrote it: the outline the resting rule declares, the
+     doubled outline a state draws with an inset ring, and the height the action's own class
+     is held to. Off, they are the numbers of a treatment that is not in the file. */
+  const ghostResting = overlayStyleRules(css).find(
+    (rule) => rule.selector.includes(".site-header") && rule.selector.includes(".call-button") && !/:/.test(rule.selector),
+  );
+  const ghostBorder = ghostResting ? (overlayDeclarations(ghostResting.body).get("border") ?? "") : "";
+  const ghostOutlinePx = Number(/border[^;]*?([\d.]+)px/.exec(`${ghostBorder}; ${ghostResting ? overlayDeclarations(ghostResting.body).get("border-width") ?? "" : ""}`)?.[1] ?? NaN);
+  const ghostStateRing = overlayStyleRules(css).some(
+    (rule) => /:hover|:active/.test(rule.selector) && /box-shadow\s*:\s*inset\s+0\s+0\s+0\s+1px/.test(rule.body),
+  );
   const manifest: DemoManifest = {
     generator: GENERATOR,
     generated_at: ctx.generatedAt,
@@ -2702,6 +3156,32 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
        it — read from the stylesheet the bundle ships, so a reviewer reads the numbers
        rather than inferring them. */
     header: headerOverlayMeasure(css),
+    /* The ghost controls (owner direction, 10 Oct 2026): the treatment the stylesheet
+       carries, the two surfaces it is drawn on, the marker it declares and — the point of
+       the row — the fact that no page moved for it. Everything here is false in every
+       published build. */
+    ghost_controls: {
+      enabled: ghost.enabled,
+      treatment: ghost.enabled ? ghost.surface : null,
+      scope: ghost.enabled
+        ? "the header's action on every page that carries one — white over the home page's photograph, ink on the paper-surfaced headers — and the nested service-card CTA, which is the same treatment in the card's own block"
+        : null,
+      basis: ghost.basis,
+      marker: GHOST_CONTROLS_MARKER,
+      selectors: { photo_header: GHOST_HOME_ACTION_SELECTOR, paper_header: GHOST_HEADER_ACTION_SELECTOR },
+      surfaces: {
+        photo_header: "white words and a white outline, transparent fill, over the home header's scrim (measured 5.9:1 for both against the lightest pixel a photograph can hold)",
+        paper_header: "--ink words and an --ink outline on --paper (16.9:1 for both), transparent fill",
+        card_cta: "--ink words and an --ink outline on the card's own --paper surface (16.9:1 for both) — the nested-CTA shape, which rides DEMO_SERVICE_CARD_ACTION_BAR",
+      },
+      numbers: {
+        outline_px: Number.isFinite(ghostOutlinePx) ? ghostOutlinePx : 0,
+        state_outline_px: ghostStateRing ? 2 : 0,
+        min_height_px: declaredHeightPx(css, "call-button") ?? 0,
+      },
+      pages_changed: [],
+      note: "The treatment is written in styles.css alone: with the opt-in set, not one page of this bundle changes, which is why `pages_changed` is empty by design and not by omission. The wash-side numbers for the home page's ghost are in `header.surface`, and the two refused resolutions of the contrast problem (a white ghost everywhere at 1.00:1, and dark inner-page headers) are named in docs/ghost-controls.md.",
+    },
     /* The header's action slot and the touch controls beside it: what the action says,
        where it points and why, which pages omit it, and how big every thumb target is. */
     header_action: headerActionMeasure({
