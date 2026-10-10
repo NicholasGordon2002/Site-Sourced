@@ -1239,7 +1239,7 @@ export function headerOverlayProblems(
  * actually ships — never against the renderer's intent.
  *
  * The treatment is one system — *the ghost is drawn in the colour of the surface it sits
- * on* — and five clauses keep it that way:
+ * on* — and six clauses keep it that way:
  *
  *   0. **the treatment is CSS only** — no page carries the marker, because with the opt-in
  *      set `styles.css` changes and not one page does. A page carrying it has stopped being
@@ -1261,6 +1261,13 @@ export function headerOverlayProblems(
  *      fills. This half is *not* behind the ghost switch, on purpose: the CTA's ghost rides
  *      the nested card shape (`DEMO_SERVICE_CARD_ACTION_BAR`), which is its own review-only
  *      opt-in, so the clause runs whenever the CTA's rules exist.
+ *
+ *   6. **every state rule declares its own colour** — the clause added the same day, after the
+ *      first draft shipped unreadable hover and active states on the photograph: a state rule
+ *      that leaves `color` to the cascade is painted by the page's own rule for that state
+ *      (`.page--index .site-header .call-button:hover { color: var(--ink) }`, same weight,
+ *      earlier), which is what rendered white words as ink at 1.00:1. Read on the last rule
+ *      carrying the state's own selector; it covers the header's two surfaces and the card CTA.
  *
  * The wash-side numbers for the home page's ghost — its outline and label against the
  * hero's scrim, and every state fill on it — live in `headerOverlayProblems` clause 6,
@@ -1502,6 +1509,47 @@ export function ghostControlsProblems(vars: {
       }
     }
   }
+
+  /* 6. **every state rule declares its own colour.** Added on 10 Oct 2026, the day the
+        treatment's own first draft shipped a state that could not be read: the photograph
+        ghost's hover and active rules declared a fill and a ring but no `color`, so the words
+        were painted by `.page--index .site-header .call-button:hover { color: var(--ink) }` —
+        the page's own rule for that exact state, at the same weight and earlier in the file —
+        and rendered white words as ink at 1.00-1.53:1 on the hero picture. Nothing in this gate
+        saw it, because `stateDeclarations` merges declarations in document order and the
+        ghost's *resting* rule (which does declare `color: #fff`) is later than that rule: the
+        check agreed with the broken cascade. The page rule is not at fault and is not moved —
+        a ghost rule overrides a page rule by declaring the same property itself, so a state
+        rule that leaves `color` to the cascade is refused. Read on the **last** rule carrying
+        the state's own selector, because that is the declaration the browser uses. The nested
+        card CTA already writes its states this way; this clause is what keeps the two halves of
+        the treatment, and every later state, the same. */
+  const stateRuled: { resting: string; what: string }[] = [];
+  if (decision.enabled || marked.length > 0) {
+    for (const rule of marked) {
+      if (forHeader(rule)) stateRuled.push({ resting: selectorOf(rule), what: `the header's ghost (${selectorOf(rule)})` });
+    }
+  }
+  if (ctaRest) stateRuled.push({ resting: selectorOf(ctaRest), what: `the card CTA (${selectorOf(ctaRest)})` });
+  for (const control of stateRuled) {
+    for (const state of ["hover", "active"] as const) {
+      const wanted = `${control.resting}:${state}`;
+      const owners = all.filter((rule) => selectorOf(rule) === wanted);
+      if (owners.length === 0) {
+        problems.push(
+          `${control.what} declares no :${state} rule at all, so the control has no ${state} state: every state the treatment paints deepens the surface's own colour and thickens the control's own outline — the cue the owner's brief of 10 Oct 2026 asked for ("clear hover, active, keyboard-focus") — and a treatment without it is the state this clause was added for.`,
+        );
+        continue;
+      }
+      const last = owners[owners.length - 1]!;
+      if (!declared(last).has("color")) {
+        problems.push(
+          `${control.what} leaves its ${state} colour to the cascade: the last rule for "${wanted}" declares no color, so whichever earlier rule matches paints the words — on the home header that is .page--index .site-header .call-button:hover { color: var(--ink) }, which rendered white words as ink at 1.00-1.53:1 on the hero picture (measured 10 Oct 2026). A state rule of the treatment declares the surface's own colour itself; the nested card CTA's two states already do.`,
+        );
+      }
+    }
+  }
+
   return problems;
 }
 
@@ -3132,6 +3180,20 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   const ghostStateRing = overlayStyleRules(css).some(
     (rule) => /:hover|:active/.test(rule.selector) && /box-shadow\s*:\s*inset\s+0\s+0\s+0\s+1px/.test(rule.body),
   );
+  /* The outline one state renders, read off the last rule carrying that state's own selector:
+     the resting outline plus the inset ring the state draws (a box-shadow, so the box itself
+     never moves). 0 when the rule or its ring is missing — the same "not in the file" answer
+     the resting number gives. */
+  const ghostStateOutline = (state: "hover" | "active"): number => {
+    const rules = overlayStyleRules(css).filter(
+      (rule) => rule.selector.includes(".site-header") && rule.selector.includes(".call-button") && rule.selector.includes(`:${state}`),
+    );
+    const last = rules[rules.length - 1];
+    if (!last) return 0;
+    const ring = /inset\s+0\s+0\s+0\s+([\d.]+)px/.exec(overlayDeclarations(last.body).get("box-shadow") ?? "")?.[1];
+    const base = Number.isFinite(ghostOutlinePx) ? ghostOutlinePx : 0;
+    return base + (ring === undefined ? 0 : Number(ring));
+  };
   const manifest: DemoManifest = {
     generator: GENERATOR,
     generated_at: ctx.generatedAt,
@@ -3176,7 +3238,10 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
       },
       numbers: {
         outline_px: Number.isFinite(ghostOutlinePx) ? ghostOutlinePx : 0,
-        state_outline_px: ghostStateRing ? 2 : 0,
+        state_outline_px: ghostStateRing ? ghostStateOutline("hover") : 0,
+        state_outline_px_active: ghostStateRing ? ghostStateOutline("active") : 0,
+        state_cue:
+          "On the photograph the states' cue is the control's own outline, not the fill: the scrim already paints that band at rgb(22, 17, 14), so an ink veil moves the surface by only a couple of RGB there and no alpha can change that (an opaque ink fill moves it by (-12, -5, 0)). The states therefore deepen the veil AND thicken the outline (the numbers above) with a white halo around the box, which is what a visitor sees on the darkened band. Each state rule declares its own color, so the words stay the surface's own colour: white on the photograph (measured 12.4:1 over the lightest pixel a photograph can hold in hover, 17.0:1 in active), ink on paper. Measured deltas for both halves are in design/ghost-controls-measurements.md.",
         min_height_px: declaredHeightPx(css, "call-button") ?? 0,
       },
       pages_changed: [],

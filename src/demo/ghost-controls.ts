@@ -27,6 +27,25 @@
  *     block (`service-card-action.ts`), and it takes its colours from this module so the
  *     two cannot drift.
  *
+ * ## The states, and the defect they were fixed for (10 Oct 2026, later the same day)
+ *
+ * The owner's brief asked the ghost to keep "clear hover, active, keyboard-focus, thumb-friendly
+ * sizing, and accessible contrast states". The first draft did not: on the home header's white
+ * ghost, hover and active rendered the words in **ink** — 1.00–1.53:1 on the photograph. The
+ * cause was a missing declaration, not a colour choice: the ghost's state rules declared
+ * `background` and `box-shadow` but not `color`, and
+ * `.page--index .site-header .call-button:hover { background: #F1EEE8; color: var(--ink) }`
+ * — the page's own rule for that exact state, at the same weight — painted the words. So:
+ *
+ *   1. **every state rule declares its own `color`** (the nested CTA already did), which is
+ *      what makes the words the surface's colour in the states as well as at rest, and
+ *      `ghostControlsProblems` clause 6 now refuses a state rule that does not;
+ *   2. **the state cue on the photograph is the outline**, not the fill: the veil deepens (it
+ *      shows in the picture's lighter bands) and the outline thickens to 2px/3px with a white
+ *      halo around the box, which is what a visitor sees on the darkened band where the fill
+ *      cannot show. The measurement is in `design/ghost-controls-measurements.md`; the numbers
+ *      for the alphas are on `GHOST_SCRIM_FILL_HOVER` below.
+ *
  * ## Why this is CSS only — and why every page stays byte-identical
  *
  * Nothing about the treatment is markup: the header's action is the same
@@ -114,8 +133,36 @@ export const GHOST_PAPER_FILL_HOVER = "rgba(22, 24, 27, .08)";
 export const GHOST_PAPER_FILL_ACTIVE = "rgba(22, 24, 27, .16)";
 /** The photograph-surface ghost: white, and the ink wash it deepens by. */
 export const GHOST_SCRIM_COLOUR = "#fff";
-export const GHOST_SCRIM_FILL_HOVER = "rgba(10, 12, 14, .18)";
-export const GHOST_SCRIM_FILL_ACTIVE = "rgba(10, 12, 14, .34)";
+/**
+ * **The photograph-surface states, and why the fill alone cannot carry them** (the defect of
+ * 10 Oct 2026, measured in `design/ghost-controls-measurements.md`).
+ *
+ * On paper a state fill is a cue a visitor sees: the surface is white and the fill is ink, so
+ * the step is 1.17:1 and 1.40:1 of *visible* change. Over the home photograph it is not. The
+ * scrim already paints the header's band at rgb(22, 17, 14) where the action sits, which is
+ * ink itself — so deepening the ink there moves the surface by −2 RGB at 1440px and −9 at
+ * 360px, and no alpha can fix that: an *opaque* ink fill at that spot moves it by (−12, −5, 0).
+ * The veil is still worth keeping (it is what the states are, and it does show in the lighter
+ * bands of the picture), but on this surface the cue that a visitor actually sees has to be the
+ * control's own **outline**: the states thicken it and light a white halo around the box, which
+ * is high-contrast against the photograph wherever the photograph is dark, exactly where the
+ * fill cannot show. Measured deltas for both halves are in the measurements document.
+ *
+ * The alphas are set by the text, not by taste: white words must clear 4.5:1 against the fill
+ * over the *lightest* pixel a photograph can hold (the scrim's own worst case, rgb(93, 94, 96)):
+ * .55 gives 12.4:1 and .8 gives 17.0:1, where the old .18/.34 were chosen for a fill that was
+ * never meant to be the cue.
+ */
+export const GHOST_SCRIM_FILL_HOVER = "rgba(10, 12, 14, .55)";
+export const GHOST_SCRIM_FILL_ACTIVE = "rgba(10, 12, 14, .8)";
+/**
+ * The state cue on the photograph: an inset ring that doubles the 1px outline without moving a
+ * pixel of the box, plus an outside halo in the ghost's own colour that lights the edge on a
+ * dark picture. Both are `box-shadow`: no border-width (which would grow the 44px box) and no
+ * layout change between states.
+ */
+export const GHOST_SCRIM_CUE_HOVER = "inset 0 0 0 1px #fff, 0 0 0 3px rgba(255, 255, 255, .4)";
+export const GHOST_SCRIM_CUE_ACTIVE = "inset 0 0 0 2px #fff, 0 0 0 5px rgba(255, 255, 255, .6)";
 
 /** The header action's own selectors, the two surfaces apart. */
 export const GHOST_HEADER_ACTION_SELECTOR = ".site-header .call-button";
@@ -243,13 +290,24 @@ ${GHOST_HEADER_ACTION_SELECTOR} {
 }
 /* The states deepen the ink rather than lightening the surface: a light veil on hover would
    drop the *text's* contrast, which is the one thing a ghost cannot afford. The inset ring
-   doubles the outline to 2px without touching the control's box. */
+   doubles the outline to 2px without touching the control's box.
+
+   Each state rule declares its own color, and it has to: a state that leaves the colour to
+   the cascade is painted by whatever earlier rule matches, and an earlier rule at the same
+   weight does match — .page--index .site-header .call-button:hover carries color: var(--ink),
+   and .button:hover, .call-button:hover carries color: #fff. Declaring the colour here is what
+   makes the control's words the surface's own colour in every state: the defect of 10 Oct 2026
+   was exactly this declaration missing on the photograph surface, where the earlier rule's ink
+   won and rendered white words at 1.00:1 on the picture. The nested card CTA writes its states
+   the same way, and ghostControlsProblems clause 6 refuses a state rule that does not. */
 ${GHOST_HEADER_ACTION_SELECTOR}:hover {
   background: ${GHOST_PAPER_FILL_HOVER};
+  color: ${GHOST_PAPER_INK};
   box-shadow: inset 0 0 0 1px ${GHOST_PAPER_INK};
 }
 ${GHOST_HEADER_ACTION_SELECTOR}:active {
   background: ${GHOST_PAPER_FILL_ACTIVE};
+  color: ${GHOST_PAPER_INK};
   box-shadow: inset 0 0 0 1px ${GHOST_PAPER_INK};
 }
 /* The home page alone: the header sits on the hero photograph's scrim, so the same ghost is
@@ -260,13 +318,19 @@ ${GHOST_HOME_ACTION_SELECTOR} {
   color: ${GHOST_SCRIM_COLOUR};
   border-color: ${GHOST_SCRIM_COLOUR};
 }
+/* The photograph-surface states: the veil deepens, the words stay WHITE (declared here for the
+   reason above — the page's own .call-button:hover rule sets ink at the same weight, which is
+   what made hover and active unreadable), and the outline carries the cue a dark photograph
+   cannot show through a fill: it thickens, and a halo in the ghost's own colour lights the edge. */
 ${GHOST_HOME_ACTION_SELECTOR}:hover {
   background: ${GHOST_SCRIM_FILL_HOVER};
-  box-shadow: inset 0 0 0 1px ${GHOST_SCRIM_COLOUR};
+  color: ${GHOST_SCRIM_COLOUR};
+  box-shadow: ${GHOST_SCRIM_CUE_HOVER};
 }
 ${GHOST_HOME_ACTION_SELECTOR}:active {
   background: ${GHOST_SCRIM_FILL_ACTIVE};
-  box-shadow: inset 0 0 0 1px ${GHOST_SCRIM_COLOUR};
+  color: ${GHOST_SCRIM_COLOUR};
+  box-shadow: ${GHOST_SCRIM_CUE_ACTIVE};
 }
 `;
 }

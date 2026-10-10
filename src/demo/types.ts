@@ -285,8 +285,19 @@ export interface DemoManifest {
     selectors: { photo_header: string; paper_header: string };
     /** What each surface's ghost is drawn in, in words and in the stylesheet's own values. */
     surfaces: { photo_header: string; paper_header: string; card_cta: string };
-    /** The measure of the treatment, read off the stylesheet this bundle ships. */
-    numbers: { outline_px: number; state_outline_px: number; min_height_px: number };
+    /**
+     * The measure of the treatment, read off the stylesheet this bundle ships: the resting
+     * outline, the outline each state renders (base + the inset ring that state draws), the
+     * action's declared height, and the cue the states carry on the photograph — which is the
+     * outline, not the fill, with the numbers that decided it (10 Oct 2026 fix).
+     */
+    numbers: {
+      outline_px: number;
+      state_outline_px: number;
+      state_outline_px_active: number;
+      min_height_px: number;
+      state_cue: string;
+    };
     /** Every file the treatment changes. Empty on purpose: it is a stylesheet treatment. */
     pages_changed: string[];
     note: string;
