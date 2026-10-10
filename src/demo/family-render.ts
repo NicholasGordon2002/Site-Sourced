@@ -510,6 +510,25 @@ export function serviceCardMeasure(css: string, classes: string[]): {
 }
 
 /**
+ * **Which of the two card shapes a build renders** — the one place both the renderer and
+ * the gate name them, so a page cannot be checked for a shape it does not render.
+ *
+ *   - `whole-card` (the default, and every published build): the `<a>` *is* the card —
+ *     surface, heading, note and action line inside one link, nothing interactive nested
+ *     inside it (owner text, 6 Oct 2026);
+ *   - `nested-cta` (owner direction, 10 Oct 2026): the card is an inert container — its
+ *     body is text — and its **one** action is the anchor at its foot, labelled by the
+ *     family's own composed label. An interactive element inside `<a>` is invalid HTML, so
+ *     this shape cannot also be one wrapping link: the two shapes are alternatives, never a
+ *     card wearing half of each.
+ *
+ * `serviceCardProblems` reads the shape the build says it rendered (it is passed in, never
+ * guessed from the markup): a check that inferred the shape from the page would accept a
+ * card whose renderer changed under it.
+ */
+export type ServiceCardShape = "whole-card" | "nested-cta";
+
+/**
  * **A service card is one link covering the whole card, and nothing interactive is
  * nested inside it** (owner text, 6 October 2026: "Remove the nested service action
  * button. Make each entire service card one accessible keyboard/touch-safe interactive
@@ -559,6 +578,20 @@ export function serviceCardMeasure(css: string, classes: string[]): {
  *   9. **the registry holds** — every recorded service is one card on each page that
  *      lists them, every per-service page is some card's destination, and a page that
  *      starts rendering the list declares its cards' heading level.
+ *
+ * **The `nested-cta` shape reads the same card the other way round** (owner direction, 10
+ * Oct 2026: "each service card gets its own CTA button nested at the bottom of the card,
+ * rather than the whole card being the tap target"). Clause 1 becomes: the card carries
+ * **exactly one** interactive element and it is the anchor at the card's foot — no second
+ * control, no `<button>` (which cannot navigate with JavaScript off), no `tabindex`;
+ * clause 2 inverts — the card's body (the heading and the note) is inert text **outside**
+ * the anchor, so a thumb landing on the body lands on nothing and the card is not one
+ * wrapping link; clause 4 moves onto the anchor — the CTA's own visible text is exactly
+ * the family's composed label, so a typed "Book Now" is refused by the same clause that
+ * refuses it on the bar; and clauses 6–7 measure the **anchor's** classes, because the
+ * CTA is the target now, not the card. The shape is passed in (`cardShape`), never
+ * inferred: a whole-card card that grows a button must fail, and a nested-CTA card with
+ * no CTA, two controls, or a label the family did not compose must fail.
  */
 export function serviceCardProblems(vars: {
   pages: { file: string; html: string }[];
@@ -568,16 +601,30 @@ export function serviceCardProblems(vars: {
   pageForService: (service: string) => string;
   /** The stylesheet this bundle ships, for clause 6. Absent means clause 6 is skipped. */
   css?: string;
+  /**
+   * Which shape this build renders the cards in (`ServiceCardShape`). Absent means
+   * `whole-card` — the shape every published build renders, and the one this check
+   * belonged to before the 10 Oct direction. A build that renders the other shape says
+   * so, or its cards are read against the wrong clauses.
+   */
+  cardShape?: ServiceCardShape;
 }): string[] {
   const { pages, record, family, pageForService, css } = vars;
+  const cardShape: ServiceCardShape = vars.cardShape ?? "whole-card";
   const problems: string[] = [];
   const visible = (html: string) => html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
   // The recorded service names, escaped exactly as the page writes them, so the
   // comparison is between what the record says and what a visitor reads.
   const recorded = new Map<string, string>();
+  /** The same services' recorded notes, escaped, so the nested-CTA clause can read them
+   *  off the card's own body: the card keeps the record's note wherever the action sits. */
+  const notes = new Map<string, string>();
   for (const service of Array.isArray(record.services) ? record.services : []) {
     const name = typeof service === "string" ? service.trim() : String((service as { name?: string })?.name ?? "").trim();
-    if (name) recorded.set(esc(name), name);
+    if (!name) continue;
+    recorded.set(esc(name), name);
+    const note = typeof service === "string" ? "" : String((service as { note?: string })?.note ?? "").trim();
+    if (note) notes.set(esc(name), esc(note));
   }
   const cards: RenderedCard[] = [];
   for (const page of pages) {
@@ -599,19 +646,32 @@ export function serviceCardProblems(vars: {
   }
   const destinations = new Set<string>();
   for (const card of cards) {
-    /* 1. the whole card is one link, and nothing interactive is nested inside it */
+    /* 1. the card carries exactly ONE interactive element, and it is the right one for the
+          shape this build renders. Whole-card: that element is an `<a>` that IS the card.
+          Nested-CTA: it is the `<a>` CTA at the card's foot, and the card itself is not a
+          link — an interactive element nested inside `<a>` is invalid HTML, so a card
+          cannot be one wrapping link and carry a button at the same time. */
     const links = card.html.match(/<a\b/gi) ?? [];
+    const controls = card.html.match(/<\/?(a|button|input|select|textarea|details|summary|iframe|object|embed)\b/gi) ?? [];
     const anchor = /<a\b([^>]*)>([\s\S]*?)<\/a>/i.exec(card.html);
     if (!anchor) {
       problems.push(
-        `${card.page}: a service card carries ${links.length} links, not one. The owner's words, 6 October 2026: make each entire service card one interactive target. A card with no link does nothing when a thumb lands on it.`,
+        `${card.page}: a service card carries ${links.length} links, not one. ${
+          cardShape === "whole-card"
+            ? `The owner's words, 6 October 2026: make each entire service card one interactive target. A card with no link does nothing when a thumb lands on it.`
+            : `The nested-CTA shape gives each card exactly one action, an anchor styled as a button at the card's foot. A card with no CTA is a card a visitor cannot act on, and one that carries inert text where the CTA belongs is a button a visitor can see and not press.`
+        }`,
       );
       continue;
     }
     const [, attrs = "", inner = ""] = anchor;
     if (links.length !== 1) {
       problems.push(
-        `${card.page}: a service card carries ${links.length} links, not one. The card and its link are the same thing — one thing to tap, one stop for a keyboard — so a second link on the card is a second promise about what happens next.`,
+        `${card.page}: a service card carries ${links.length} links, not one. ${
+          cardShape === "whole-card"
+            ? `The card and its link are the same thing — one thing to tap, one stop for a keyboard — so a second link on the card is a second promise about what happens next.`
+            : `The nested-CTA shape gives the card one action and no other, so the card's own CTA is the only link on it: a second link is a second place the card asks a visitor to go, beside the button that says where it goes.`
+        }`,
       );
     }
     // A nested interactive element — anything a browser puts in the tab order or that
@@ -635,12 +695,41 @@ export function serviceCardProblems(vars: {
         `${card.page}: a service card puts a tabindex inside its own link, so something inside one target takes a second stop in the tab order. The card is the tab stop; nothing inside it may be one.`,
       );
     }
-    /* 2. the link is the whole card: nothing of the card is left outside it */
-    const outside = card.html.replace(anchor[0], "").trim();
-    if (outside !== "") {
-      problems.push(
-        `${card.page}: the card carries content outside its own link (${outside.slice(0, 80)}). The link is the whole card — a heading or a note left beside it is a dead zone a thumb can land on with nothing happening, which is the half of the card the owner's "entire card" rules out.`,
-      );
+    /* 2. where the action sits. Whole-card: the link is the whole card, and nothing of the
+          card is left outside it. Nested-CTA: the card is an inert container — the heading
+          and the note are outside the CTA — and the CTA is the last thing on the card, so
+          the card's foot is where the action is and nowhere else. */
+    if (cardShape === "whole-card") {
+      const outside = card.html.replace(anchor[0], "").trim();
+      if (outside !== "") {
+        problems.push(
+          `${card.page}: the card carries content outside its own link (${outside.slice(0, 80)}). The link is the whole card — a heading or a note left beside it is a dead zone a thumb can land on with nothing happening, which is the half of the card the owner's "entire card" rules out.`,
+        );
+      }
+    } else {
+      const others = [
+        ...new Set(controls.filter((tag) => !/^<\/?a\b/i.test(tag)).map((tag) => tag.replace(/[</>]/g, "").toLowerCase())),
+      ];
+      if (others.length > 0) {
+        problems.push(
+          `${card.page}: a service card with a CTA at its foot also carries <${others.join(">, <")}>. The nested-CTA shape gives the card exactly one control — the CTA — and nothing else a browser puts in the tab order. A second control is a second promise about what happens next, and a <button> cannot navigate at all with JavaScript off.`,
+        );
+      }
+      const afterCta = card.html
+        .slice(card.html.indexOf(anchor[0]) + anchor[0].length)
+        .replace(/<\/?(?:div|li|p|span|ul|ol|section)\b[^>]*>/gi, "")
+        .trim();
+      if (afterCta !== "") {
+        problems.push(
+          `${card.page}: the CTA is not the card's foot — "${visible(afterCta).slice(0, 60)}" follows it. The nested-CTA shape puts the card's one action at the bottom of the card, under the heading and the note: content below the button is content the card's action does not cover.`,
+        );
+      }
+      const body = card.html.replace(anchor[0], "");
+      if (body.replace(/<[^>]*>/g, "").trim() === "") {
+        problems.push(
+          `${card.page}: the card the CTA sits in carries no body of its own — nothing but the CTA. A card that is only its own button is the whole card as the tap target again, with the record's own name and note dropped from it, which is the shape this variant exists to change.`,
+        );
+      }
     }
     const handlers = [
       ...new Set(
@@ -654,14 +743,22 @@ export function serviceCardProblems(vars: {
         `${card.page}: a service card carries an inline event handler (${handlers.join(", ")}). The bundle's only script is site.js and every page works unchanged with JavaScript off — a card that needs an ${handlers[0]} does nothing for a visitor whose browser does not run it, and nothing in the page says so.`,
       );
     }
-    /* 3. the heading is inside the link — the whole card is the tap target — and is the
-          record's own name for the service at the level its page uses */
+    /* 3. the heading is the record's own name for the service at the level its page uses,
+          and it sits where this shape puts it: inside the link when the link is the whole
+          card, outside the CTA when the card is a container. */
     const headingMatch = /<(h[1-6])\b[^>]*>([\s\S]*?)<\/\1>/i.exec(card.html);
     const headingTag = headingMatch?.[1]?.toLowerCase() ?? "";
     const heading = headingMatch?.[2]?.trim() ?? "";
-    if (headingTag && !new RegExp(`<${headingTag}\\b`, "i").test(inner)) {
+    const headingInsideLink = headingTag ? new RegExp(`<${headingTag}\\b`, "i").test(inner) : false;
+    if (cardShape === "whole-card") {
+      if (headingTag && !headingInsideLink) {
+        problems.push(
+          `${card.page}: the card's heading (<${headingTag}>) sits outside its link. The link is the whole card, so the heading is part of what a thumb taps and part of what a screen reader reads out — a heading beside the link is a dead zone and a link whose name says nothing about which service it opens.`,
+        );
+      }
+    } else if (headingInsideLink) {
       problems.push(
-        `${card.page}: the card's heading (<${headingTag}>) sits outside its link. The link is the whole card, so the heading is part of what a thumb taps and part of what a screen reader reads out — a heading beside the link is a dead zone and a link whose name says nothing about which service it opens.`,
+        `${card.page}: the card's heading (<${headingTag}>) sits inside the CTA. In the nested-CTA shape the card is not a link: the heading and the note are the card's inert body, and the CTA is one control at the card's foot. A heading inside the anchor makes the anchor wrap the card again — the shape this variant replaces — and an interactive element inside a link is invalid HTML.`,
       );
     }
     if (!heading) {
@@ -679,21 +776,41 @@ export function serviceCardProblems(vars: {
         `${card.page}: a service card's heading is a <${headingTag}>; this page's service names are <${wantTag}>. A card heading at the wrong level is a page whose headings skip or repeat a level for a screen reader.`,
       );
     }
-    /* 4. the card's visible action line names that same service, in the family's own
-          words — the words the owner's rejected button used to carry, kept as text */
+    /* 4. the words on the card's action are the family's own, composed from the recorded
+          name — the action line inside the whole-card link, or the CTA's own visible text
+          in the nested-CTA shape, where the CTA is both the label a visitor reads and the
+          name a screen reader announces. */
     const name = recorded.get(heading);
     const label = name ? serviceActionLabel(family, name) : "";
-    const actionEl = /<p class="service-action"[^>]*>([\s\S]*?)<\/p>/i.exec(inner);
-    if (!actionEl) {
-      problems.push(
-        `${card.page}: the card's link carries no action line ("Request <service>" / "Ask about <service>"). The whole card is the target, so the words inside it are the only thing that says what tapping it does — a card with a heading and a note and no action is a target whose promise a visitor has to guess.`,
-      );
-    } else if (name && actionEl[1]!.trim() !== esc(label)) {
-      problems.push(
-        `${card.page}: the card's action line reads "${visible(actionEl[1]!)}" while the ${family} family's label for "${name}" is "${label}". The line is named after the service the card opens ("${
-          family === "appointment" ? "Request <service>" : "Ask about <service>"
-        }"), and the words come from copy.ts/family.ts — so four identical labels cannot stand in for a list of services.`,
-      );
+    if (cardShape === "whole-card") {
+      const actionEl = /<p class="service-action"[^>]*>([\s\S]*?)<\/p>/i.exec(inner);
+      if (!actionEl) {
+        problems.push(
+          `${card.page}: the card's link carries no action line ("Request <service>" / "Ask about <service>"). The whole card is the target, so the words inside it are the only thing that says what tapping it does — a card with a heading and a note and no action is a target whose promise a visitor has to guess.`,
+        );
+      } else if (name && actionEl[1]!.trim() !== esc(label)) {
+        problems.push(
+          `${card.page}: the card's action line reads "${visible(actionEl[1]!)}" while the ${family} family's label for "${name}" is "${label}". The line is named after the service the card opens ("${
+            family === "appointment" ? "Request <service>" : "Ask about <service>"
+          }"), and the words come from copy.ts/family.ts — so four identical labels cannot stand in for a list of services.`,
+        );
+      }
+    } else {
+      const ctaText = visible(inner);
+      if (name && inner.trim() !== esc(label)) {
+        problems.push(
+          `${card.page}: the card's CTA reads "${ctaText}" while the ${family} family's label for "${name}" is "${label}". The nested-CTA shape carries the family's own words on the button itself — "${
+            family === "appointment" ? "Request <service>" : "Ask about <service>"
+          }", composed by copy.ts/family.ts — so a typed "Book Now", a price, a duration or a generic "Request this" is exactly what this clause refuses, and the button carries no markup of its own.`,
+        );
+      }
+      const note = notes.get(heading);
+      const body = card.html.replace(anchor[0], "");
+      if (note && !body.includes(note)) {
+        problems.push(
+          `${card.page}: the card for "${name}" no longer carries the record's own note in its body ("${note}"). The nested-CTA shape changes where the action sits and nothing else: the record's name and note stay on the card as text, and a card that drops its note is a card a visitor has to open to find out what the service is.`,
+        );
+      }
     }
     if (/\baria-label(?:ledby)?\s*=/.test(attrs)) {
       problems.push(
@@ -743,24 +860,36 @@ export function serviceCardProblems(vars: {
         );
       }
     }
-    /* 6. the whole card is a target of at least 44px, per the stylesheet the bundle
-          ships — and 7. the card itself, not the site at large, is given a focus ring */
+    /* 6. the card's target — the whole card, or the CTA at its foot — is at least 44px,
+          per the stylesheet the bundle ships — and 7. that target, not the site at large,
+          is given a focus ring. `classes` are the classes the anchor wears: the card's own
+          in the whole-card shape, the CTA's in the nested-CTA shape, because that is the
+          element the shape makes the target. */
     const classes = (/\bclass="([^"]*)"/.exec(attrs)?.[1] ?? "").split(/\s+/).filter(Boolean);
     const ring = focusRingPx(css ?? "", classes);
+    const targetName = cardShape === "whole-card" ? "the whole-card target" : "the card's CTA (the card's only control)";
+    const targetWhy =
+      cardShape === "whole-card"
+        ? "The card is the target now, so the class it wears has to declare the size — a card whose target is a bare text line is a 24px touch target."
+        : "The CTA is the target now, so the class it wears has to declare the size — a button a thumb has to aim at is not the thumb-friendly control the owner asked for.";
     if (css) {
       const minHeight = actionMinHeightPx(css, classes);
       if (minHeight === null || minHeight < 44) {
         problems.push(
-          `${card.page}: the whole-card target (class="${classes.join(" ")}") is ${minHeight === null ? "given no min-height by any rule naming its own classes" : `at most ${minHeight}px tall`} in the stylesheet this bundle ships; the owner asked for at least 44px (2.75rem). The card is the target now, so the class it wears has to declare the size — a card whose target is a bare text line is a 24px touch target.`,
+          `${card.page}: ${targetName} (class="${classes.join(" ")}") is ${minHeight === null ? "given no min-height by any rule naming its own classes" : `at most ${minHeight}px tall`} in the stylesheet this bundle ships; the owner asked for at least 44px (2.75rem). ${targetWhy}`,
         );
       }
       if (ring === null) {
         problems.push(
-          `${card.page}: no rule naming the card's own classes (class="${classes.join(" ")}") matches :focus or :focus-visible. The whole card is the tab stop, so the ring the site draws for a link in running text says nothing about the card: a keyboard visitor moving through a grid of identical cards cannot see which one has focus.`,
+          `${card.page}: no rule naming ${targetName}'s own classes (class="${classes.join(" ")}") matches :focus or :focus-visible. ${
+            cardShape === "whole-card"
+              ? "The whole card is the tab stop, so the ring the site draws for a link in running text says nothing about the card: a keyboard visitor moving through a grid of identical cards cannot see which one has focus."
+              : "The CTA is the tab stop, so the ring the site draws for a link in running text says nothing about it: a keyboard visitor moving through a grid of identical buttons cannot see which one has focus."
+          }`,
         );
       } else if (ring < 2) {
         problems.push(
-          `${card.page}: the focus ring the stylesheet gives the card (class="${classes.join(" ")}") is ${ring}px, which is not a ring a visitor can see. The owner asked for a visible keyboard focus state on the card that is now the target.`,
+          `${card.page}: the focus ring the stylesheet gives ${targetName} (class="${classes.join(" ")}") is ${ring}px, which is not a ring a visitor can see. The owner asked for a visible keyboard focus state on ${cardShape === "whole-card" ? "the card that is now the target" : "the CTA that is now the target"}.`,
         );
       }
     }
