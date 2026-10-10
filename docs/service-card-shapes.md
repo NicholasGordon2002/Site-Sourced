@@ -62,8 +62,18 @@ the repository itself.
 ```
 
 - **The card is a container, not a link.** Its body — the record's name and note — is inert text;
-  its **one** control is the anchor at its foot, drawn as the site's own primary button
-  (`--ink` on `#fff`, 44px, `--r-md`, 2px `--accent` focus ring).
+  its **one** control is the anchor at its foot, drawn as the site's **ink ghost**: transparent,
+  `var(--ink)` words and a `1px var(--ink)` outline that steps to a 2px line on hover and active
+  without changing the box, 44px floor, `--r-md`, the same 2px `--accent` focus ring.
+  *(Corrected 10 Oct 2026: this read "drawn as the site's own primary button (`--ink` on `#fff`,
+  44px, `--r-md`, 2px `--accent` focus ring)" — an ink-filled button with white words. The owner's
+  second direction of the same day is the transparent treatment with black words and a black
+  outline, and the code followed it the same day: `SERVICE_CARD_ACTION_NESTED_CSS` in
+  `src/demo/service-card-action.ts` declares `background: transparent`, `color: var(--ink)`,
+  `border: 1px solid var(--ink)`, hover/active `box-shadow: inset 0 0 0 1px var(--ink)`. The colours
+  are no longer written in that file at all — they are `GHOST_PAPER_INK`,
+  `GHOST_PAPER_FILL_HOVER` and `GHOST_PAPER_FILL_ACTIVE` from `src/demo/ghost-controls.ts`, so the
+  button and the paper header's action cannot drift apart.)*
 - The CTA is an **`<a>`, never a `<button>`**: a button cannot navigate with JavaScript off, and
   every page here works with the scripts off.
 - The label is the family's own composed one (`Request <service>` / `Ask about <service>`) and the
@@ -76,9 +86,13 @@ the repository itself.
 - `overflow: hidden` is **deliberately absent** on the variant card: the focus ring is drawn 2px
   outside the button's box, and a card that clips its overflow clips the ring. This is a clause in
   the build, not a comment — `nestedCtaActionProblems` clause 5 refuses a rule that reintroduces it.
-- Two consequences worth knowing before choosing it: the visible action on each card is a filled
-  button (heavier than the current underlined line, and four of them in one list is a wall of
-  buttons), and the home page's cards change too, not just `services.html`.
+- Two consequences worth knowing before choosing it: the visible action on each card is a **second
+  boxed control** where the published card has an underlined text line — four boxes in one list of
+  four — and the home page's cards change too, not just `services.html`. *(Corrected 10 Oct 2026:
+  this read "the visible action on each card is a filled button (heavier than the current underlined
+  line, and four of them in one list is a wall of buttons)". The weight is still the honest warning,
+  but the fill is gone: the CTA is the outlined ink ghost above
+  (`SERVICE_CARD_ACTION_NESTED_CSS`, `src/demo/service-card-action.ts`).)*
 
 ## What a future demo author must not do
 
@@ -98,6 +112,7 @@ markup.
 | piece | file |
 |---|---|
 | the switch, both card markups, both CSS blocks, both clause sets | `src/demo/service-card-action.ts` |
+| the colours the nested CTA's ghost is drawn in (words, outline, the two washes) | `src/demo/ghost-controls.ts` — `GHOST_PAPER_INK`, `GHOST_PAPER_FILL_HOVER`, `GHOST_PAPER_FILL_ACTIVE` |
 | the shape type and the 6 Oct card check that reads it | `src/demo/family-render.ts` |
 | the renderer that takes the shape as an argument | `src/demo/render.ts` (`servicesBlock`, `cardShapeFor`, `renderCss`) |
 | the build's decision, wiring and the manifest's `card_variant` record | `src/demo/build.ts` |
