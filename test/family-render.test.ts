@@ -35,10 +35,14 @@ import { join } from "node:path";
 import { complianceChecks, resolveBuildParts } from "../src/demo/build.ts";
 import { composeCopy, composePrivacy, familyFields, profileFor, UI } from "../src/demo/copy.ts";
 import { resolveDelivery } from "../src/demo/delivery.ts";
-import { extrasLines, SECTION_ORDER, inquirySteps, serviceCardProblems } from "../src/demo/family-render.ts";
+import { extrasLines, SECTION_ORDER, inquirySteps, serviceCardProblems, type ServiceCardShape } from "../src/demo/family-render.ts";
 import { serviceActionLabel } from "../src/demo/family.ts";
 import { resolveForm } from "../src/demo/forms.ts";
 import { renderCss, renderPages, servicePageFile, type RenderContext, type RenderedPage } from "../src/demo/render.ts";
+import {
+  SERVICE_CARD_ACTION_NESTED_CARD_CLASS,
+  type ServiceCardActionDecision,
+} from "../src/demo/service-card-action.ts";
 import type { BusinessRecord, ManifestImage } from "../src/demo/types.ts";
 
 const SLUG = "family-render-test";
@@ -371,6 +375,95 @@ test("every clause of the service-card check can fail, and says what broke", () 
   const renamed = barber.pages.map((p) => (p.file === "services.html" ? { ...p, file: "offerings.html" } : p));
   expect(cardProblems(barber, renamed).join(" | ")).toContain("renders the service list at a heading level this check does not know");
 });
+/* ------------------------------- 3b. the nested-CTA card shape (owner, 10 Oct 2026) */
+/**
+ * The same clauses, read the other way round. The shape is **passed in** — the decision
+ * below is handed to the renderer and to the check, exactly as `build.ts` hands it — so this
+ * test proves two things at once: each nested clause can fail, and a build that renders one
+ * shape cannot be checked against the other shape's clauses. The nested shape's page-level
+ * clauses (a page that renders a list without the cards, a page that wears them without a
+ * list, one card per recorded service) live with the switch that turns the shape on, in
+ * `service-card-action.test.ts`.
+ */
+test("the nested-CTA shape's clauses can fail too, and the shape is passed in rather than inferred", () => {
+  const SHAPE: ServiceCardShape = "nested-cta";
+  const base = render(BARBER);
+  const decision: ServiceCardActionDecision = {
+    enabled: true,
+    shape: SHAPE,
+    raw: "nested",
+    unrecognised: null,
+    page: "services.html",
+    basis: "test",
+  };
+  const nested: Rendered = { ...base, pages: renderPages({ ...base.ctx, serviceCardAction: decision }) };
+  const CSS = renderCss(profileFor(BARBER), SLUG, { serviceCardAction: SHAPE });
+  const problems = (pages = nested.pages, css = CSS) =>
+    serviceCardProblems({
+      pages,
+      record: nested.record,
+      family: "appointment",
+      pageForService: servicePageFile,
+      css,
+      cardShape: SHAPE,
+    });
+  const every = (file: string, from: string | RegExp, to: string): RenderedPage[] =>
+    nested.pages.map((p) => (p.file === file ? { ...p, html: p.html.replaceAll(from, to) } : p));
+  const CTA = `<a class="service-cta" href="contact-haircut.html#form">Request Haircut</a>`;
+
+  // The honest page renders the shape on both pages that list services, and passes every
+  // clause — measured on the CTA, not on the card.
+  expect(nested.pages.filter((p) => p.html.includes(SERVICE_CARD_ACTION_NESTED_CARD_CLASS)).map((p) => p.file).sort()).toEqual([
+    "index.html",
+    "services.html",
+  ]);
+  expect(problems()).toEqual([]);
+
+  // 1. exactly one control, and it is the anchor at the card's foot.
+  const ctaless = every("services.html", CTA, `<span class="service-cta">Request Haircut</span>`);
+  expect(problems(ctaless).join(" | ")).toContain("carries 0 links, not one");
+  // A second link on the card, and any other control beside the CTA, are refused.
+  const twoLinks = every("services.html", CTA, `${CTA}<a href="contact.html#form">More</a>`);
+  expect(problems(twoLinks).join(" | ")).toContain("carries 2 links, not one");
+  const secondControl = every("services.html", "</a></div>", "</a><button>Book</button></div>");
+  expect(problems(secondControl).join(" | ")).toContain("with a CTA at its foot also carries <button>");
+  const notAtFoot = every("services.html", "</a></div>", "</a><p>Extra</p></div>");
+  expect(problems(notAtFoot).join(" | ")).toContain("the CTA is not the card's foot");
+  const bodyless = every("services.html", `<div class="service-tile-body"><h2>Haircut</h2></div>`, "");
+  expect(problems(bodyless).join(" | ")).toContain("carries no body of its own");
+  // 2. the body is inert text: a heading that moves inside the anchor makes the anchor the
+  //    card again, which is the shape this variant replaces.
+  const wrapped = every("services.html", CTA, `<a class="service-cta" href="contact-haircut.html#form"><h2>Haircut</h2>${CTA}</a>`);
+  expect(problems(wrapped).join(" | ")).toContain("sits inside the CTA");
+  // ...and a control inside an anchor is what that shape would look like: refused by name.
+  expect(problems(wrapped).join(" | ")).toContain("nests an interactive element (<a>) inside its own link");
+  // 3 and 4. the words are the family's own, and the destination is derived from the name.
+  const typed = every("services.html", ">Request Haircut</a>", ">Book Now</a>");
+  expect(problems(typed).join(" | ")).toContain(
+    'the card\'s CTA reads "Book Now" while the appointment family\'s label for "Haircut" is "Request Haircut"',
+  );
+  const wrongWay = every("services.html", CTA, `<a class="service-cta" href="contact-kids-cut.html#form">Request Haircut</a>`);
+  expect(problems(wrongWay).join(" | ")).toContain("the page built for that recorded service is contact-haircut.html");
+  // 6 and 7. the CTA, not the card, is the target — its own 44px floor and its own ring.
+  expect(problems(nested.pages, `${CSS}\n.service-cta { min-height: 1rem; }\n`).join(" | ")).toContain(
+    'the card\'s CTA (the card\'s only control) (class="service-cta") is at most 16px tall',
+  );
+  expect(
+    problems(nested.pages, `${CSS}\n.services .service-tile--cta .service-cta:focus-visible { outline: none; }\n`).join(" | "),
+  ).toContain('the focus ring the stylesheet gives the CTA (class="service-cta") is 0px');
+  // The shape is passed in, never inferred: the same pages read as the whole-card shape —
+  // which is what a check that sniffed the markup would do — are refused outright.
+  expect(
+    serviceCardProblems({
+      pages: nested.pages,
+      record: nested.record,
+      family: "appointment",
+      pageForService: servicePageFile,
+      css: CSS,
+    }).length,
+  ).toBeGreaterThan(0);
+});
+
 test("a card's destination has the card's service chosen, and no JavaScript takes part", () => {
   const rendered = render(BARBER);
   const mine = page(rendered, "contact-kids-cut.html");
