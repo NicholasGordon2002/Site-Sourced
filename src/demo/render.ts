@@ -1715,25 +1715,58 @@ a:hover { text-decoration-thickness: 2px; }
 
 /* ------------------------------------------------------------------- hero */
 
-/* The hero is a real <img> filling a grid cell the copy sits in: the row is as tall
-   as the taller of the two, so the picture never decides where the words go. The
-   background below is the fallback — a bundle where no photograph passed the licence
-   check gets this ink gradient and nothing else. */
+/* The first screen belongs to the business: the hero is as tall as the screen the
+   visitor is on, less the proposal banner above it (owner direction, 9 Oct 2026 — "the
+   home-page hero should fit the size of the screen the visitor is on", with a phone
+   equivalent of the same idea). The **figure** is the sized box, not the picture,
+   because the figure is also what carries the illustration label: its two rows are the
+   photograph (1fr) and the label (auto), so the picture takes exactly what the label
+   leaves and the label can never be pushed off the first screen by a taller screen.
+   --hero-above is the one number here that is a token rather than a measurement: the
+   banner is the only block above the figure and its height is where its own sentence
+   wraps (three lines on a phone, two from 48rem, one from 64rem), which CSS cannot
+   measure. The 22rem line is the fallback for a browser without svh; the 60rem cap
+   keeps a tall monitor at a generous band rather than a wall of photograph, and it is
+   the only screen tall enough for the cap to bind. Height only — the bytes the hero
+   costs are set by its srcset and the per-page weight budget. */
+.hero-figure {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  /* Nothing sits above the hero on a delivered site, so the first screen starts at the
+     top of the page there. On a demonstration the proposal banner is above it and the
+     room it takes is subtracted (the rule below); the two are told apart by the markup
+     the build already writes, not by a switch, because the banner is a sibling of the
+     page body on the home page and is absent in the business phase. */
+  --hero-above: 0rem;
+  min-height: 22rem;
+  min-height: min(calc(100svh - var(--hero-above)), 60rem);
+}
+/* The proposal banner, three lines at 400px wide and two at 480px, one from 64rem. */
+.page--index .proposal-banner ~ main .hero-figure { --hero-above: 6.25rem; }
+/* The hero is a real <img> behind two grid items: the scrim and the copy column. The
+   picture is out of the flow so it can never decide where the words go — it fills the
+   box the figure sized, at whatever height that is and whatever the photograph's own
+   proportions are. The background below is the fallback — a bundle where no photograph
+   passed the licence check gets this ink gradient and nothing else. */
 .hero {
   display: grid;
+  position: relative;
+  /* z-index: 0 makes the hero a stacking context, which is what lets the picture sit at
+     z-index: -1: out of the flow (so it can never size the box) yet behind the scrim and
+     the copy rather than over them. An absolutely placed picture with no z-index paints
+     last — over the words — because a positioned box is painted after in-flow content. */
+  z-index: 0;
   background: linear-gradient(140deg, var(--ink), #2C323A 70%);
   color: #fff;
 }
 .hero > * { grid-area: 1 / 1; }
 .hero--photo { background: #1A1D21; }
-/* The picture fills the first screen on a phone and is bounded on a tall desktop
-   monitor: the 22rem line is the fallback for a browser without svh. Height only —
-   the bytes the hero costs are set by its srcset and the per-page weight budget. */
 .hero-img {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
   width: 100%;
   height: 100%;
-  min-height: 22rem;
-  min-height: min(78svh, 34rem);
   object-fit: cover;
   object-position: center;
 }
@@ -2057,10 +2090,10 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 
 @media (min-width: 48rem) {
   :root { --gutter: 2rem; }
-  /* The hero's min-height — min(78svh, 34rem) — is the same at every width: from 48rem
-     up, the viewport-height term exceeds the 34rem cap on any screen taller than about
-     700px, so a desktop hero is capped at 34rem and a phone hero fills what it can. No
-     separate upper bound is needed: the 34rem in the min() is it. */
+  /* The hero fills the screen at every width. What changes up here is only the room it
+     leaves for the banner above it, which is two lines from 48rem and one from 64rem, and
+     the copy column's own padding, which steps up with the band. */
+  .page--index .proposal-banner ~ main .hero-figure { --hero-above: 5rem; }
   .hero-inner { padding: var(--s-9) 0 var(--s-8); }
   /* Level rows: a card whose service has a recorded note and one without end at the
      same height instead of leaving the shorter card floating. The grid has no height of
@@ -2127,6 +2160,8 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 @media (min-width: 64rem) {
   /* CANDIDATE A: steps up from the phone's 1.25rem, so the wide header keeps its gain. */
   .wordmark { font-size: 1.4rem; }
+  /* The proposal banner is one line from here, so the hero leaves it one line's room. */
+  .page--index .proposal-banner ~ main .hero-figure { --hero-above: 3.5rem; }
 }
 
 /* ------------------------------------------------------------ preferences */

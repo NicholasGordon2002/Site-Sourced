@@ -224,10 +224,17 @@ the phone menu panel. Depth is not used for decoration.
 - Services are a one-column list of cards on a phone and a two-column grid at `48rem` and up,
   where `grid-auto-rows: 1fr` levels the rows so a card with a note and one without end at the
   same height. On a phone unequal heights are honest: nothing is written to fill the gap.
-- The hero is sized by `min-height: min(78svh, 34rem)` (`22rem` as the fallback line for a
-  browser without `svh`), so it fills the first screen on a phone and is capped on a tall
-  desktop monitor; cards size to content. There are exactly two breakpoints, `48rem` and
-  `64rem`; a third would mean the layout was fighting the content.
+- The hero is sized to the screen: the figure that carries it is
+  `min-height: min(calc(100svh - var(--hero-above)), 60rem)` (`22rem` as the fallback line for
+  a browser without `svh`), and inside it the picture is the figure's `1fr` row while the
+  illustration label is its `auto` row — so the hero fills the first screen on a phone and on
+  an ordinary laptop, less the proposal banner above it, and only a screen taller than `60rem`
+  sees the cap bind. `--hero-above` is the banner's own height, which CSS cannot measure
+  (three lines on a phone, two from `48rem`, one from `64rem`); it is a token in the same
+  three bands as the rest of the layout. The picture is absolutely placed inside the hero so
+  its own proportions never decide where the words go. Cards size to content. There are
+  exactly two breakpoints, `48rem` and `64rem`; a third would mean the layout was fighting the
+  content.
 - The home page's header is surface-less (`background: transparent; border-bottom: 0`) and the
   photograph starts directly under it, so the home page reads as one surface. Inner pages keep
   the header's own surface and hairline, which is what gives `.page-head` a top edge. The page
