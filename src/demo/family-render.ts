@@ -867,7 +867,13 @@ export function serviceCardProblems(vars: {
           element the shape makes the target. */
     const classes = (/\bclass="([^"]*)"/.exec(attrs)?.[1] ?? "").split(/\s+/).filter(Boolean);
     const ring = focusRingPx(css ?? "", classes);
+    /* One name per message, because the whole-card shape's four messages are the ones the
+       6 Oct check already carried and a test quotes: "the whole-card target" where the
+       master text says that, "the card's" / "the card" where it says those. The nested
+       shape's messages say "the CTA" — the element the shape makes the target. */
     const targetName = cardShape === "whole-card" ? "the whole-card target" : "the card's CTA (the card's only control)";
+    const targetPossessive = cardShape === "whole-card" ? "the card's" : "the CTA's";
+    const targetShort = cardShape === "whole-card" ? "the card" : "the CTA";
     const targetWhy =
       cardShape === "whole-card"
         ? "The card is the target now, so the class it wears has to declare the size — a card whose target is a bare text line is a 24px touch target."
@@ -881,7 +887,7 @@ export function serviceCardProblems(vars: {
       }
       if (ring === null) {
         problems.push(
-          `${card.page}: no rule naming ${targetName}'s own classes (class="${classes.join(" ")}") matches :focus or :focus-visible. ${
+          `${card.page}: no rule naming ${targetPossessive} own classes (class="${classes.join(" ")}") matches :focus or :focus-visible. ${
             cardShape === "whole-card"
               ? "The whole card is the tab stop, so the ring the site draws for a link in running text says nothing about the card: a keyboard visitor moving through a grid of identical cards cannot see which one has focus."
               : "The CTA is the tab stop, so the ring the site draws for a link in running text says nothing about it: a keyboard visitor moving through a grid of identical buttons cannot see which one has focus."
@@ -889,7 +895,7 @@ export function serviceCardProblems(vars: {
         );
       } else if (ring < 2) {
         problems.push(
-          `${card.page}: the focus ring the stylesheet gives ${targetName} (class="${classes.join(" ")}") is ${ring}px, which is not a ring a visitor can see. The owner asked for a visible keyboard focus state on ${cardShape === "whole-card" ? "the card that is now the target" : "the CTA that is now the target"}.`,
+          `${card.page}: the focus ring the stylesheet gives ${targetShort} (class="${classes.join(" ")}") is ${ring}px, which is not a ring a visitor can see. The owner asked for a visible keyboard focus state on ${cardShape === "whole-card" ? "the card that is now the target" : "the CTA that is now the target"}.`,
         );
       }
     }

@@ -63,6 +63,7 @@ import {
   serviceCardMeasure,
   serviceCardProblems,
   type PageKey,
+  type ServiceCardShape,
 } from "./family-render.ts";
 import { SERVICE_ACTION_LABELS, SERVICE_NAME_SLOT, serviceActionLabel } from "./family.ts";
 import {
@@ -70,7 +71,10 @@ import {
   SERVICE_CARD_ACTION_BODY_CLASS,
   SERVICE_CARD_ACTION_CARD_CLASS,
   SERVICE_CARD_ACTION_CHEVRON_CLASS,
+  SERVICE_CARD_ACTION_CTA_CLASS,
   SERVICE_CARD_ACTION_GLYPH,
+  SERVICE_CARD_ACTION_NESTED_CARD_CLASS,
+  SERVICE_CARD_ACTION_PAGE,
   SERVICE_CARD_ACTION_VAR,
   serviceCardActionDecision,
   serviceCardActionProblems,
@@ -1863,6 +1867,12 @@ export function complianceChecks(vars: {
   practice?: RetentionPractice | null;
   /** The stylesheet, so the check can see whether it loads anything externally. */
   css?: string;
+  /**
+   * Which card shape this bundle renders (`ServiceCardShape`), so the service-card clauses
+   * are the ones for the shape actually on the page. Absent means `whole-card` — the shape
+   * every published build renders.
+   */
+  cardShape?: ServiceCardShape;
   /** The bundle's only script, so the no-tracking sentence can be checked, not asserted. */
   js?: string;
   /**
@@ -2063,6 +2073,7 @@ export function complianceChecks(vars: {
       family: copy.conversion.family,
       pageForService: servicePageFile,
       css: vars.css,
+      cardShape: vars.cardShape ?? "whole-card",
     }),
   );
   problems.push(...privacyLinkProblems(pages));
@@ -2464,6 +2475,13 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
    * both bundles are the pages signed off on 7 Oct 2026, byte for byte.
    */
   const cardAction: ServiceCardActionDecision = serviceCardActionDecision({ slug, phase: delivery.mode });
+  /**
+   * The shape this build really renders. The decision holds both the opt-in and the shape,
+   * but a build that did not opt in renders the published whole-card shape whatever spelling
+   * the variable carried, so the checks and the manifest read this one value rather than
+   * re-deriving it in four places.
+   */
+  const cardShape: ServiceCardShape = cardAction.enabled ? cardAction.shape : "whole-card";
   const ctx: RenderContext = {
     record,
     copy,
@@ -2509,21 +2527,23 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
       `comparison page: ${comparisonPage.file} is in this bundle — ${comparison.basis} It is not one of the nine pages and it is not part of the proposal's design.`,
     );
   }
-  const css = renderCss(profile, slug, { serviceCardAction: cardAction.enabled });
+  const css = renderCss(profile, slug, cardAction.enabled ? { serviceCardAction: cardAction.shape } : {});
   const js = renderJs();
   const favicon = renderFavicon(record, profile);
   const readme = renderEditingReadme(ctx, pages);
 
   if (cardAction.enabled) {
     warnings.push(
-      `service cards: ${cardAction.page} of ${slug} carries Treatment 1 (the action bar at the card's foot) — a review variant the owner asked to see, not part of the design signed off on 7 Oct. ${cardAction.basis} It is one page of this bundle: every other page, and both published bundles, are unchanged.`,
+      cardAction.shape === "nested-cta"
+        ? `service cards: every page of ${slug} that renders the cards carries the nested-CTA shape (each card its own button at the card's foot, owner direction 10 Oct 2026) — a review variant, not part of the design signed off on 7 Oct. ${cardAction.basis} It is this one demonstration: every other bundle, and both published bundles, are unchanged.`
+        : `service cards: ${cardAction.page} of ${slug} carries Treatment 1 (the action bar at the card's foot) — a review variant the owner asked to see, not part of the design signed off on 7 Oct. ${cardAction.basis} It is one page of this bundle: every other page, and both published bundles, are unchanged.`,
     );
   }
 
   const problems = [
     ...problemsBeforeWrite,
     ...practiceRead.problems,
-    ...complianceChecks({ pages, record, copy, form, delivery, images, privacy, practice, css, js, readme, demoBookingUrl }),
+    ...complianceChecks({ pages, record, copy, form, delivery, images, privacy, practice, css, js, readme, demoBookingUrl, cardShape }),
     // The comparison page's own checks, including the carve-out that keeps the exception to
     // one file: a remote script, frame or embed on any OTHER page is refused here by name,
     // and the page is refused outright in the delivered phase and on any other record.
@@ -2780,23 +2800,54 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
           `the label is the family's own template with the recorded service's name in it (\`family.ts\` ` +
           `SERVICE_ACTION_LABELS), so a card reads e.g. "${firstService ? serviceActionLabel(copy.conversion.family, firstService) : "(no recorded service)"}" — ` +
           `never a generic "Request this", which would leave the action line and the heading free to disagree.`,
+        /**
+         * **Shape-aware** (owner direction, 10 Oct 2026): this sentence is the build's own
+         * account of what its cards are, and a whole-card sentence on a nested-CTA page
+         * would be a false statement a reviewer could check and find wrong. The two shapes
+         * are mutually exclusive — neither page carries the other's markup, and the check
+         * refuses it.
+         */
         mechanism:
-          "each card IS one link (owner text, 6 Oct 2026: \"Make each entire service card " +
-          "one accessible keyboard/touch-safe interactive target, with no nested " +
-          "interactive elements\"): the <a> carries the card's surface, the heading, the " +
-          "note and the action line, which is text — the words the rejected nested button " +
-          "used to carry — never a control of its own. It points at the page built for " +
-          "that recorded service (contact-<service-slug>.html#form), whose own service " +
-          "select carries that service's option with `selected` in the HTML — so the " +
-          "choice is there with JavaScript off, on a static host that ignores query " +
-          "strings. No script and no query string takes part, and no <button> is used: a " +
-          "button cannot navigate with JavaScript off.",
+          cardShape === "nested-cta"
+            ? "each card is a CONTAINER, not a link (owner direction, 10 Oct 2026: \"each " +
+              "service card gets its own CTA button nested at the bottom of the card, " +
+              "rather than the whole card being the tap target\"): the card carries the " +
+              "surface, the heading and the note as inert text, and the card's single " +
+              "control is an <a> at its foot, styled as the site's own primary button " +
+              "carrying the family's composed label. It points at the page built for that " +
+              "recorded service (contact-<service-slug>.html#form), whose own service " +
+              "select carries that service's option with `selected` in the HTML — so the " +
+              "choice is there with JavaScript off, on a static host that ignores query " +
+              "strings. No script and no query string takes part, and no <button> is used: " +
+              "a button cannot navigate with JavaScript off, and a control inside an <a> " +
+              "would be invalid HTML."
+            : "each card IS one link (owner text, 6 Oct 2026: \"Make each entire service card " +
+              "one accessible keyboard/touch-safe interactive target, with no nested " +
+              "interactive elements\"): the <a> carries the card's surface, the heading, the " +
+              "note and the action line, which is text — the words the rejected nested button " +
+              "used to carry — never a control of its own. It points at the page built for " +
+              "that recorded service (contact-<service-slug>.html#form), whose own service " +
+              "select carries that service's option with `selected` in the HTML — so the " +
+              "choice is there with JavaScript off, on a static host that ignores query " +
+              "strings. No script and no query string takes part, and no <button> is used: a " +
+              "button cannot navigate with JavaScript off.",
         nested_interactive:
-          "refused: serviceCardProblems rejects a second link on the card, any <a>, <button>, <input>, " +
-          "<select>, <textarea>, <details>, <summary>, <iframe>, <object> or <embed> inside the card's own " +
-          "link, and any tabindex inside it — one target, one tab stop per card. It also rejects content left " +
-          "beside the link (a heading or a note outside it is a dead zone on a card a thumb is meant to hit " +
-          "anywhere) and an inline on* handler anywhere in the card.",
+          cardShape === "nested-cta"
+            ? "refused, in this shape: serviceCardProblems requires each card to carry exactly ONE " +
+              "control — the CTA anchor at the card's foot — and rejects a second <a>, any <button>, " +
+              "<input>, <select>, <textarea>, <details>, <summary>, <iframe>, <object> or <embed> on " +
+              "the card, a heading or a note inside the anchor (the card is not a link in this shape, " +
+              "and a control inside an <a> is invalid HTML), a card that is its own button with no " +
+              "body, the CTA anywhere but the card's foot, a label the family did not compose, a " +
+              "destination that is not that service's own contact page, an inline on* handler anywhere " +
+              "in the card, and anything that costs a request. The 6 Oct whole-card clause (one link " +
+              "covering the card, nothing nested inside it) is the other shape; this build does not " +
+              "render it."
+            : "refused: serviceCardProblems rejects a second link on the card, any <a>, <button>, <input>, " +
+              "<select>, <textarea>, <details>, <summary>, <iframe>, <object> or <embed> inside the card's own " +
+              "link, and any tabindex inside it — one target, one tab stop per card. It also rejects content left " +
+              "beside the link (a heading or a note outside it is a dead zone on a card a thumb is meant to hit " +
+              "anywhere) and an inline on* handler anywhere in the card.",
         target: serviceCardMeasure(
           css,
           classListOf(
@@ -2806,24 +2857,34 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
         default_option: fields.fields.find((f) => f.name === "service")?.preselected ?? null,
         pages: normaliseServices(record).map((service) => ({ service: service.name, file: servicePageFile(service.name) })),
         /**
-         * Treatment 1 — the action bar at the card's foot (owner direction, 9 Oct 2026),
-         * read by a reviewer rather than inferred from the page. Off in every published
-         * build: `enabled: false` and `page: null` mean the cards above are the whole
-         * story and no variant class is on any page.
+         * The **card variant** this build renders, read by a reviewer rather than inferred
+         * from the page: `shape` names it (`whole-card` — Treatment 1, the action bar at the
+         * card's foot, owner direction 9 Oct 2026; or `nested-cta` — each card its own CTA
+         * button, owner direction 10 Oct 2026), `pages` lists every page that carries it,
+         * and the numbers beside it come from the two classes that shape makes its target.
+         * Off in every published build: `enabled: false` and `shape: null` mean the cards
+         * above are the whole story and no variant class is on any page.
          */
-        bar_variant: {
+        card_variant: {
           enabled: cardAction.enabled,
-          page: cardAction.enabled ? cardAction.page : null,
+          shape: cardAction.enabled ? cardAction.shape : null,
+          scope: cardAction.enabled ? (cardAction.shape === "nested-cta" ? "every page of this bundle that renders a service card" : cardAction.page) : null,
           basis: cardAction.basis,
           classes: {
-            card: SERVICE_CARD_ACTION_CARD_CLASS,
+            card: cardShape === "nested-cta" ? SERVICE_CARD_ACTION_NESTED_CARD_CLASS : SERVICE_CARD_ACTION_CARD_CLASS,
             body: SERVICE_CARD_ACTION_BODY_CLASS,
-            bar: SERVICE_CARD_ACTION_BAR_CLASS,
-            chevron: SERVICE_CARD_ACTION_CHEVRON_CLASS,
+            /** The control this shape makes the card's action: the bar's element, or the CTA anchor. */
+            control: cardShape === "nested-cta" ? SERVICE_CARD_ACTION_CTA_CLASS : SERVICE_CARD_ACTION_BAR_CLASS,
+            ...(cardShape === "nested-cta" ? {} : { chevron: SERVICE_CARD_ACTION_CHEVRON_CLASS, chevron_glyph: SERVICE_CARD_ACTION_GLYPH }),
           },
-          chevron_glyph: SERVICE_CARD_ACTION_GLYPH,
-          bar_min_height_px: serviceCardMeasure(css, [SERVICE_CARD_ACTION_BAR_CLASS]).min_height_px,
-          cards: (pages.find((page) => page.file === cardAction.page)?.html.match(/service-tile--bar/g) ?? []).length,
+          /** The numbers the check reads, off the class the control wears — 44px floor, 2px ring. */
+          control_measure: serviceCardMeasure(css, [cardShape === "nested-cta" ? SERVICE_CARD_ACTION_CTA_CLASS : SERVICE_CARD_ACTION_BAR_CLASS]),
+          pages: cardAction.enabled
+            ? pages.filter((page) => page.html.includes(cardShape === "nested-cta" ? SERVICE_CARD_ACTION_NESTED_CARD_CLASS : SERVICE_CARD_ACTION_CARD_CLASS)).map((page) => page.file)
+            : [],
+          cards: cardAction.enabled
+            ? (pages.reduce((total, page) => total + (page.html.match(new RegExp(cardShape === "nested-cta" ? SERVICE_CARD_ACTION_NESTED_CARD_CLASS : SERVICE_CARD_ACTION_CARD_CLASS, "g"))?.length ?? 0), 0))
+            : 0,
         },
       },
       narrative: {

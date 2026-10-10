@@ -338,6 +338,11 @@ export interface DemoManifest {
      * `label_slot` where the recorded service's name goes), why the label is worded
      * that way, the mechanism that carries the service to the form, and every page it
      * produces.
+     *
+     * `mechanism` and `nested_interactive` are **shape-aware** (owner direction, 10 Oct
+     * 2026): they describe the shape `card_variant.shape` names, because a whole-card
+     * sentence on a nested-CTA build would be a false statement about the page a reviewer
+     * is looking at.
      */
     service_action: {
       label: string;
@@ -345,19 +350,40 @@ export interface DemoManifest {
       label_basis: string;
       mechanism: string;
       /**
-       * The clause that refuses the shape the owner rejected on 6 October — a control
-       * nested inside the card — recorded here so a reviewer reads what the gate
-       * rejects, not just what it requires.
+       * The clause that refuses what this shape may not carry: for `whole-card`, the shape
+       * the owner rejected on 6 October — a control nested inside the card; for
+       * `nested-cta`, the clauses that keep the card a container with exactly one control
+       * at its foot. Recorded so a reviewer reads what the gate rejects, not just what it
+       * requires.
        */
       nested_interactive: string;
       /**
-       * The whole-card target as the stylesheet the bundle ships declares it, read the
-       * same way `serviceCardProblems` reads it: the classes the link wears, its
+       * The target as the stylesheet the bundle ships declares it, read the same way
+       * `serviceCardProblems` reads it: the classes the acting element wears — the card's
+       * link in the `whole-card` shape, the CTA anchor in the `nested-cta` shape — its
        * `min-height` in px and the width of its own focus ring.
        */
       target: { class: string; min_height_px: number | null; focus_ring_px: number | null };
       default_option: string | null;
       pages: { service: string; file: string }[];
+      /**
+       * The card variant this build renders and the numbers its own target carries, read
+       * by a reviewer rather than inferred from the page (`card_variant`): which shape,
+       * where it applies, every page that carries it, the control's classes and the
+       * measured floor and ring. Both shapes off in every published build.
+       */
+      card_variant: {
+        enabled: boolean;
+        shape: "whole-card" | "nested-cta" | null;
+        /** The page the variant is scoped to, or "every page of this bundle that renders a service card". */
+        scope: string | null;
+        basis: string;
+        classes: { card: string; body: string; control: string; chevron?: string; chevron_glyph?: string };
+        control_measure: { class: string; min_height_px: number | null; focus_ring_px: number | null };
+        /** Every page this bundle contains that carries the variant's card class. */
+        pages: string[];
+        cards: number;
+      };
     };
     /**
      * Whether the record carries its own About narrative, and how the page uses it —

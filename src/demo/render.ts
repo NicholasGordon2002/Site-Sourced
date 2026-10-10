@@ -47,13 +47,15 @@ import { BOOKING_ANCHOR_CLASS, BOOKING_ARROW, type BookingMode } from "./booking
 import { illustrationLabel, isIllustrativeImage } from "./copy.ts";
 import type { FormDelivery } from "./delivery.ts";
 import type { FieldGroup, FieldSpec } from "./fields.ts";
-import { SECTION_ORDER, extrasLines, type SectionId } from "./family-render.ts";
+import { SECTION_ORDER, extrasLines, type SectionId, type ServiceCardShape } from "./family-render.ts";
 import { serviceActionLabel } from "./family.ts";
 import {
   SERVICE_CARD_ACTION_BODY_CLASS,
   SERVICE_CARD_ACTION_CARD_CLASS,
+  SERVICE_CARD_ACTION_NESTED_CARD_CLASS,
   SERVICE_CARD_ACTION_PAGE,
   serviceActionBarMarkup,
+  serviceActionCtaMarkup,
   serviceCardActionCss,
   type ServiceCardActionDecision,
 } from "./service-card-action.ts";
@@ -72,10 +74,14 @@ export interface RenderContext {
   slug: string;
   generatedAt: string;
   /**
-   * The **action-bar card variant** (`service-card-action.ts`, owner direction 9 Oct 2026),
-   * attached by `build.ts` only when `DEMO_SERVICE_CARD_ACTION_BAR` opts in. Absent — the
-   * repository's state, and every published build — means `servicesBlock` renders the
-   * markup the owner signed off on 7 Oct, byte for byte.
+   * The **service-card action variant** (`service-card-action.ts`), attached by `build.ts`
+   * only when `DEMO_SERVICE_CARD_ACTION_BAR` opts in and names a shape this build reads.
+   * Absent — the repository's state, and every published build — means `servicesBlock`
+   * renders the markup the owner signed off on 7 Oct, byte for byte.
+   *
+   * The decision carries the `shape`: the 9 Oct `whole-card` bar (whose page scope is
+   * `services.html` alone) or the 10 Oct `nested-cta` button, which applies to every page
+   * that renders a card. A decision that is present but not `enabled` changes nothing.
    */
   serviceCardAction?: ServiceCardActionDecision;
 }
@@ -231,7 +237,12 @@ function serviceActionHref(name: string): string {
   return `${servicePageFile(name)}#form`;
 }
 
-function servicesBlock(record: BusinessRecord, level: 2 | 3, copy: DemoCopy, actionBar = false): string {
+function servicesBlock(
+  record: BusinessRecord,
+  level: 2 | 3,
+  copy: DemoCopy,
+  shape: ServiceCardShape | null = null,
+): string {
   const services = normaliseServices(record);
   const heading = `h${level}`;
   if (services.length === 0) {
@@ -247,6 +258,13 @@ function servicesBlock(record: BusinessRecord, level: 2 | 3, copy: DemoCopy, act
   // words are the family's own, composed in `family.ts` (`serviceActionLabel`); nothing
   // here types them. `serviceCardProblems` refuses a second link, a nested control, or a
   // card that leaves anything beside the link.
+  //
+  // **The shape is passed in, never guessed** (`ServiceCardShape`, `family-render.ts`):
+  // `null` is the published card above; `whole-card` is the 9 Oct action bar (the same one
+  // link, with a styled bar at its foot); `nested-cta` is the 10 Oct direction — a card
+  // that is a *container*, its name and note inert text in a body block, with its single
+  // control the CTA anchor at the foot. The two variants render the same recorded name,
+  // the same recorded note and the same derived label; only where the action sits changes.
   return `        <ul class="services">\n${services
     .map((s) => {
       const label = esc(serviceActionLabel(copy.conversion.family, s.name));
@@ -255,15 +273,32 @@ function servicesBlock(record: BusinessRecord, level: 2 | 3, copy: DemoCopy, act
       // Treatment 1 (`service-card-action.ts`): the recorded name and note in a body block,
       // then a full-width action bar at the card's foot — still inside the card's one link,
       // still one target and one tab stop, because the bar is a styled element and not a
-      // control (owner text, 6 Oct 2026). Off unless the build opts in: with the flag false
+      // control (owner text, 6 Oct 2026). Off unless the build opts in: with the shape null
       // this returns the exact bytes of the published card.
-      if (actionBar) {
+      if (shape === "whole-card") {
         return (
           `          <li>\n` +
           `            <a class="card service-tile ${SERVICE_CARD_ACTION_CARD_CLASS}" href="${href}">` +
           `<div class="${SERVICE_CARD_ACTION_BODY_CLASS}">${head}</div>` +
           serviceActionBarMarkup(label) +
           `</a>\n` +
+          `          </li>`
+        );
+      }
+      // Treatment 2 (owner direction, 10 Oct 2026): each service card carries its **own CTA
+      // button nested at the bottom of the card**. The card is a `<div>` — the container —
+      // and it is *not* a link: the name and the note are inert text in the body block, and
+      // the card's one control is the `<a>` the family's label is composed into, at the
+      // card's foot. A control inside `<a>` would be invalid HTML, so the two shapes never
+      // mix. The CTA is an anchor rather than a `<button>` because a button cannot navigate
+      // with JavaScript off, and every page here works with the scripts off.
+      if (shape === "nested-cta") {
+        return (
+          `          <li>\n` +
+          `            <div class="card service-tile ${SERVICE_CARD_ACTION_NESTED_CARD_CLASS}">` +
+          `<div class="${SERVICE_CARD_ACTION_BODY_CLASS}">${head}</div>` +
+          serviceActionCtaMarkup(label, href) +
+          `</div>\n` +
           `          </li>`
         );
       }
@@ -967,6 +1002,22 @@ function sectionHtml(ctx: RenderContext, id: PageId, section: SectionId, variant
   }
 }
 
+/**
+ * The card shape **this page** renders, from the build's own decision — the renderer never
+ * decides for itself which shape the owner asked for.
+ *
+ * `nested-cta` applies to every page of the demonstration that renders a card, the home
+ * page included (owner direction, 10 Oct 2026: the CTA belongs to the card, and the home
+ * page shows the same cards). The 9 Oct `whole-card` bar keeps the page scope the decision
+ * names — `services.html` alone — because that treatment was reviewed as one page.
+ */
+function cardShapeFor(ctx: RenderContext, page: "services" | "home"): ServiceCardShape | null {
+  const action = ctx.serviceCardAction;
+  if (!action || !action.enabled) return null;
+  if (action.shape === "nested-cta") return "nested-cta";
+  return page === "services" && action.page === SERVICE_CARD_ACTION_PAGE ? "whole-card" : null;
+}
+
 /** The services block as the home page shows it: the offering noun as its heading. */
 function servicesHomeSection(ctx: RenderContext): string {
   const { record, copy } = ctx;
@@ -974,7 +1025,7 @@ function servicesHomeSection(ctx: RenderContext): string {
   return `    <section class="section section--alt" id="services">
       <div class="wrap">
         <h2>${esc(title)}</h2>
-${copy.servicesIntro ? `        <p class="muted">${esc(copy.servicesIntro)}</p>\n` : ""}${servicesBlock(record, 3, copy)}
+${copy.servicesIntro ? `        <p class="muted">${esc(copy.servicesIntro)}</p>\n` : ""}${servicesBlock(record, 3, copy, cardShapeFor(ctx, "home"))}
       </div>
     </section>`;
 }
@@ -983,7 +1034,7 @@ ${copy.servicesIntro ? `        <p class="muted">${esc(copy.servicesIntro)}</p>\
 function servicesPageSection(ctx: RenderContext): string {
   return `    <section class="section" id="services">
       <div class="wrap">
-${servicesBlock(ctx.record, 2, ctx.copy, ctx.serviceCardAction?.enabled === true && ctx.serviceCardAction.page === SERVICE_CARD_ACTION_PAGE)}
+${servicesBlock(ctx.record, 2, ctx.copy, cardShapeFor(ctx, "services"))}
       </div>
     </section>`;
 }
@@ -1179,11 +1230,12 @@ export function renderCss(
   slug: string,
   options: {
     /**
-     * Append the action-bar card variant's rules (`service-card-action.ts`). False — the
-     * default, and every published build — writes the stylesheet byte for byte as it is,
-     * so the opt-in changes no page of any bundle.
+     * Append the card variant's rules for this shape (`service-card-action.ts`). Absent —
+     * the default, and every published build — writes the stylesheet byte for byte as it
+     * is, so the opt-in changes no page of any bundle. `whole-card` writes the 9 Oct bar's
+     * block; `nested-cta` writes the 10 Oct CTA's block.
      */
-    serviceCardAction?: boolean;
+    serviceCardAction?: ServiceCardShape;
   } = {},
 ): string {
   return `/* Site Sourced demo stylesheet — ${slug}
@@ -2075,7 +2127,7 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
   html { scroll-behavior: auto; }
   * { transition: none !important; animation: none !important; }
 }
-${options.serviceCardAction ? serviceCardActionCss() : ""}`;
+${options.serviceCardAction ? serviceCardActionCss(options.serviceCardAction) : ""}`;
 }
 
 /**
