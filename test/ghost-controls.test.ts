@@ -609,3 +609,28 @@ test("clause 6: the last rule carrying a state's own selector must declare its o
   expect(absent.join(" | ")).toContain(`the header's ghost (${INK_RULE}) declares no :hover rule at all`);
   expect(absent.join(" | ")).toContain("every state the treatment paints deepens the surface's own colour and thickens the control's own outline");
 });
+
+/* ------------------------------------------------------------------------------- limits */
+
+/**
+ * **Two things this file cannot assert, written down where the clauses live** rather than left
+ * for the next reader to rediscover.
+ *
+ *   1. **The build does not fail on a switch value it cannot read.** `buildBundle` prints
+ *      `! ghost controls refused: …` and exits 0: the refusal lives in `ghostControlsDecision`
+ *      and in that warning, and only the *smuggled* treatment (the block painted for a value
+ *      the decision refused) reaches `complianceChecks`. Its sibling is stricter —
+ *      `serviceCardActionProblems` clause 0a pushes a problem for an unrecognised
+ *      `DEMO_SERVICE_CARD_ACTION_BAR`, so that build fails. This file asserts what the ghost's
+ *      switch actually does (clause 2 above) and does not assert the sibling's shape, which
+ *      would be a claim about code that is not there. Recorded for the lead, not fixed here:
+ *      a change to a check is not this session's work.
+ *   2. **The documents this module cites are not all in the repository.** `ghost-controls.ts`,
+ *      the manifest's own note and the branch's commit messages point at
+ *      `docs/ghost-controls.md` for the before/after table, the measured numbers and the two
+ *      refused resolutions of the contrast problem; there is no such file in the tree, and the
+ *      decision's refusal text therefore contains numbers whose working is not on disk. The
+ *      measurements themselves are in `design/ghost-controls-measurements.md` (outside the
+ *      repository). A regression test cannot assert a document that does not exist; it can
+ *      only say so, which is what this note does.
+ */
