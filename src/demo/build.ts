@@ -544,6 +544,340 @@ export function phoneMenuProblems(pages: RenderedPage[], css = ""): string[] {
   return problems;
 }
 
+/**
+ * **The hero is as tall as the screen the visitor is on** (owner direction, 9 Oct 2026:
+ * "the home-page hero should fit the size of the screen the visitor is on", with a phone
+ * equivalent of the same idea). The layout itself is `render.ts`; this is the rule that
+ * keeps it, and it exists because the mistake it prevents is silent: put a fixed band
+ * back and every page still renders, every other check still passes, and the hero is only
+ * wrong on the screen the owner was talking about.
+ *
+ * What it refuses:
+ *
+ *   1. **a stylesheet with no base `.hero-figure` rule** — that rule is the sized box, and
+ *      without it the first screen is whatever the picture and the copy happen to add up
+ *      to;
+ *   2. **a sized box that is not the two-row grid**: `display: grid` with
+ *      `grid-template-rows: 1fr auto` — the picture's row first and the illustration
+ *      label's own `auto` row second, so a taller screen takes its extra from the picture
+ *      and never from the label, which is the label a phone otherwise pushes off screen;
+ *   3. **a picture back in the flow**: `.hero-img` must be `position: absolute` and pinned
+ *      to all four edges of the box it fills (`.hero`, which is `position: relative`), so
+ *      it fills the height the figure chose instead of choosing it — and an absolute
+ *      picture with no inset is placed at its static position and sized by its own file;
+ *   4. **a hero whose height is a fixed band**: the winning `min-height` on
+ *      `.hero-figure` must name a viewport unit, and the figure may not declare a plain
+ *      `height` at all;
+ *   5. **a hero that does not leave the proposal banner its room**: that `min-height`
+ *      must subtract `var(--hero-above)`, because the banner sits above the hero — a hero
+ *      sized to the whole screen runs past the bottom of the screen by exactly the
+ *      banner's height on every demonstration page;
+ *   6. **the viewport unit with no fallback**: a fixed-length `min-height` must come
+ *      *before* the viewport-unit one. Without it a browser that cannot parse the unit
+ *      drops the only declaration there is and the hero has no height at all; written the
+ *      other way round the fallback never reaches any browser, because a later
+ *      declaration wins;
+ *   7. **banner room reserved where there is no banner**: `.hero-figure`'s own
+ *      `--hero-above` must be zero, at least one other rule must raise it, and every one
+ *      of those must be scoped to the banner's own presence (`.proposal-banner ~`). A
+ *      delivered build has no banner at all and fills from the very top of the page —
+ *      that is the case this clause exists for;
+ *   8. **a page the scoping cannot reach**: on the home page the figure must be inside
+ *      `<main>`, and where a banner is present it must be a *preceding sibling* of
+ *      `<main>`, because the `~` is the whole reason the room is subtracted. A wrapper
+ *      around the two, or a banner placed below `<main>`, turns the subtraction off
+ *      without changing one byte of CSS, and the first screen then runs off the bottom of
+ *      a phone by the banner's height.
+ *
+ * What it deliberately does **not** claim, said here rather than implied:
+ *
+ *   - **the values are not pinned.** 22rem, 60rem, the 34rem the layout replaced, the cap
+ *     inside the `min()` and the three banner heights are this layout's measurements; a
+ *     re-measure that moves one of them must not fail here. What is pinned is the
+ *     mechanism: the viewport unit, the subtraction, the fallback's order, the scoping;
+ *   - **the caption is required only where the page carries one.** A bundle whose hero is
+ *     a licensed photograph has no `<figcaption>`, and that is a different build rather
+ *     than a failure (`page-claims.ts` owns the label's wording and its obligations);
+ *   - **a caller with no stylesheet gets the markup clause alone** — the convention
+ *     `phoneMenuProblems` and `headerOverlayProblems` set, and one the build always
+ *     satisfies (`complianceChecks(…, css, …)` in `buildBundle`);
+ *   - **no box is measured here.** That the hero really ends above the fold at 360, 390,
+ *     768, 1024 and 1440 px is taken in a browser and reported with the change; no
+ *     stylesheet assertion measures a box.
+ */
+/** The figure that is the sized box. */
+export const HERO_FIGURE_SELECTOR = ".hero-figure";
+/** The picture that fills it (`render.ts` writes it inside `.hero`). */
+export const HERO_PICTURE_SELECTOR = ".hero-img";
+/** The token holding the room the proposal banner takes above the hero. */
+export const HERO_ABOVE_TOKEN = "--hero-above";
+/** The two rows of the sized box, in order: the picture's, then the label's. */
+export const HERO_ROWS = ["1fr", "auto"];
+/** The height units that make the hero follow the screen rather than a designer's band. */
+export const HERO_VIEWPORT_UNITS = ["svh", "lvh", "dvh", "vh"];
+/** A length that names one of those units (`100svh`, `100vh`), anywhere in a value. */
+const HERO_VIEWPORT_UNIT = new RegExp(`(?:^|[^\\w-])\\d+(?:\\.\\d+)?(?:${HERO_VIEWPORT_UNITS.join("|")})\\b`);
+/** A selector that can only apply where the proposal banner is there, above the hero. */
+const HERO_BANNER_SIBLING = /\.proposal-banner\s*~/;
+/** Tags that never close, so the walk below cannot wait for an end tag that never comes. */
+const HERO_VOID_TAGS = new Set([
+  "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr",
+]);
+/**
+ * One rule body's declarations **in the order the stylesheet writes them**. `overlayDeclarations`
+ * returns a Map — the right reading for every other clause in this file, and the wrong one for
+ * a fallback, which is two declarations whose *order* is the entire mechanism.
+ */
+function heroOrderedDeclarations(body: string): { property: string; value: string }[] {
+  return body
+    .split(";")
+    .map((chunk) => {
+      const at = chunk.indexOf(":");
+      if (at < 0) return null;
+      const property = chunk.slice(0, at).trim().toLowerCase();
+      const value = chunk.slice(at + 1).trim();
+      return property === "" || value === "" ? null : { property, value };
+    })
+    .filter((declaration): declaration is { property: string; value: string } => declaration !== null);
+}
+/** Whether a `--hero-above` value is a length of zero, however it is spelled. */
+const heroZeroLength = (value: string): boolean => /^0(?:\.0+)?(?:rem|px|em)?$/.test(value.trim());
+/** Whether every one of the four inset sides is zero: the shipped `inset: 0`, or four longs. */
+function heroInsetAllZero(declared: Map<string, string>): boolean {
+  const zero = (value: string | undefined) => (value ?? "").trim() === "0";
+  const sides = ["top", "right", "bottom", "left"];
+  const shorthand = (declared.get("inset") ?? "").split(/\s+/).filter(Boolean);
+  const fromShorthand = shorthand.length > 0 && shorthand.length <= 4 && shorthand.every(zero);
+  const fromLongs = sides.every((side) => zero(declared.get(side)));
+  const contradicts = sides.some((side) => declared.has(side) && !zero(declared.get(side)));
+  return (fromShorthand || fromLongs) && !contradicts;
+}
+/** One element opening tag on a page, with the names of its ancestors. */
+interface HeroTag {
+  name: string;
+  attrs: string;
+  /** Its offset in the page, so two tags can be ordered. */
+  at: number;
+  /** Its offset just past its closing tag, so a tag can be asked whether it holds another. */
+  end: number;
+  /** The names of its ancestors, outermost first — equal paths mean siblings. */
+  path: string[];
+}
+/**
+ * Every element opening tag in a page, with its ancestor chain, comments removed first (the
+ * hero's own comment describes an `<img>` in prose, and a picture read out of a comment is a
+ * picture the check would be measuring that the browser never paints). A tiny reader rather
+ * than a parser: this file has no DOM, and the pages `render.ts` writes are well-formed.
+ */
+function heroTags(html: string): HeroTag[] {
+  // Blanks of the same length, so every offset stays an offset in the page itself.
+  const clean = html.replace(/<!--[\s\S]*?-->/g, (comment) => " ".repeat(comment.length));
+  const tags: HeroTag[] = [];
+  const stack: HeroTag[] = [];
+  const re = /<(\/?)([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^>"'])*)>/g;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(clean)) !== null) {
+    const name = (match[2] ?? "").toLowerCase();
+    if (match[1] === "/") {
+      const open = stack.map((tag) => tag.name).lastIndexOf(name);
+      if (open >= 0) for (const tag of stack.splice(open)) tag.end = match.index;
+      continue;
+    }
+    const attrs = match[3] ?? "";
+    const tag: HeroTag = { name, attrs, at: match.index, end: clean.length, path: stack.map((open) => open.name) };
+    tags.push(tag);
+    if (!HERO_VOID_TAGS.has(name) && !/\/\s*$/.test(attrs)) stack.push(tag);
+  }
+  return tags;
+}
+/**
+ * Clause 8: the home page the stylesheet's scoping is written against. Everything here is
+ * about the *selectors matching* — the CSS can be perfect and subtract nothing at all
+ * because the markup moved, and no stylesheet clause can see that.
+ */
+function heroMarkupProblems(pages: RenderedPage[]): string[] {
+  const problems: string[] = [];
+  const exists = (tag: HeroTag, name: string, cls: string) => tag.name === name && classListOf(tag.attrs).includes(cls);
+  const home = pages.filter((page) => page.file === PAGE_SPECS.index.file);
+  if (home.length === 0) {
+    problems.push(
+      `the bundle carries no ${PAGE_SPECS.index.file}, so the first screen this rule is about is not in it. The sized hero is the home page's (owner direction, 9 Oct 2026); a bundle without that page is refused here rather than passing unexamined.`,
+    );
+    return problems;
+  }
+  for (const page of home) {
+    const tags = heroTags(page.html);
+    const figures = tags.filter((tag) => exists(tag, "figure", HERO_FIGURE_SELECTOR.slice(1)));
+    const mains = tags.filter((tag) => tag.name === "main");
+    const banner = tags.find((tag) => exists(tag, "div", "proposal-banner"));
+    if (figures.length !== 1 || mains.length !== 1) {
+      problems.push(
+        `${page.file}: carries ${figures.length} \`<figure class="${HERO_FIGURE_SELECTOR.slice(1)}">\` elements and ${mains.length} \`<main>\` elements, not one of each. The sized box is that figure inside that main, which is what the stylesheet's scoping rule is written against.`,
+      );
+      continue;
+    }
+    const box = figures[0]!;
+    const main = mains[0]!;
+    /** Whether a tag sits inside the sized figure. */
+    const inside = (tag: HeroTag) => tag.at > box.at && tag.at < box.end;
+    /** Whether a tag sits inside another one — the picture inside the box it fills. */
+    const holds = (outer: HeroTag, inner: HeroTag) => inner.at > outer.at && inner.at < outer.end;
+    if (!box.path.includes("main")) {
+      problems.push(
+        `${page.file}: the hero figure is not inside \`<main>\`. The rule that gives the hero the banner's room is scoped \`.page--index .proposal-banner ~ main ${HERO_FIGURE_SELECTOR}\`, so a figure moved out of \`<main>\` silently loses that room and the first screen runs past the bottom of a phone by the banner's own height.`,
+      );
+    }
+    if (/<figcaption/.test(page.html)) {
+      const caption = tags.find((tag) => tag.name === "figcaption" && inside(tag));
+      const heroBox = tags.find((tag) => exists(tag, "div", "hero") && inside(tag));
+      if (!caption) {
+        problems.push(
+          `${page.file}: the illustration label is outside the hero figure. That figure is the box sized to the screen and its second row is the label's own \`auto\` row — a label outside it is a label a taller screen pushes off the first screen, which is what the two-row grid exists to prevent.`,
+        );
+      } else if (caption.path.at(-1) !== "figure") {
+        problems.push(
+          `${page.file}: the illustration label is nested inside the hero box rather than sitting in the figure's own second row. The figure's \`grid-template-rows: ${HERO_ROWS.join(" ")}\` gives the label its \`auto\` row and the picture everything else; a label inside the picture's row is a label sharing the row it is supposed to be protected from.`,
+        );
+      } else if (!heroBox || caption.at < heroBox.at) {
+        problems.push(
+          `${page.file}: the illustration label comes before the hero box in the sized figure, so it is the picture's row that takes the extra height and the copy column that is squeezed instead — the two rows are positional, and the label's is the second one.`,
+        );
+      }
+    }
+    const picture = tags.find((tag) => exists(tag, "img", HERO_PICTURE_SELECTOR.slice(1)));
+    if (picture) {
+      const heroBox = tags.find((tag) => exists(tag, "div", "hero") && inside(tag));
+      if (!inside(picture)) {
+        problems.push(
+          `${page.file}: the hero picture is outside the figure that is sized to the screen, so it fills the wrong box — the figure is what the visitor's screen measures, and the picture is meant to fill exactly that.`,
+        );
+      } else if (!heroBox || !holds(heroBox, picture)) {
+        problems.push(
+          `${page.file}: the hero picture is not inside the \`.hero\` box whose \`position: relative\` it is measured against. An absolutely positioned picture fills its nearest positioned ancestor — moved out of \`.hero\`, it fills whatever that box belongs to (the page, in a bundle without one) instead of the first screen.`,
+        );
+      }
+    }
+    if (banner && (banner.at > main.at || banner.path.join("/") !== main.path.join("/"))) {
+      problems.push(
+        `${page.file}: the proposal banner and \`<main>\` are not siblings with the banner first, so \`.proposal-banner ~ main ${HERO_FIGURE_SELECTOR}\` does not match and the hero is given no room for the banner. The page then renders exactly as it does today and the first screen runs off the bottom of the screen by the banner's own height — the subtraction is what keeps the hero inside the screen it is sized to.`,
+      );
+    }
+  }
+  return problems;
+}
+/**
+ * Clause by clause, against the stylesheet the bundle ships and the pages it ships beside it
+ * (the doc comment above this function is the list). Every message names the property or the
+ * selector it read, so a refusal can be checked against the file rather than believed.
+ */
+export function heroScreenSizeProblems(vars: { pages: RenderedPage[]; css?: string }): string[] {
+  const problems: string[] = heroMarkupProblems(vars.pages);
+  const css = vars.css ?? "";
+  // The markup clause runs either way; everything below reads the stylesheet, and a caller
+  // with none gets no stylesheet half — the honest limit stated in the doc comment.
+  if (css === "") return problems;
+  const base = overlayStyleRules(css).filter((rule) => rule.at === "");
+  const figureRules = base.filter((rule) => selectorList(rule.selector).includes(HERO_FIGURE_SELECTOR));
+  if (figureRules.length === 0) {
+    problems.push(
+      `the stylesheet ships no base \`${HERO_FIGURE_SELECTOR}\` rule. That rule is where the hero is sized to the visitor's screen (owner direction, 9 Oct 2026); without it the first screen is whatever the picture and the copy add up to.`,
+    );
+    return problems;
+  }
+  const figure = overlayRuleDeclarations(figureRules, () => true);
+  const ordered = figureRules.flatMap((rule) => heroOrderedDeclarations(rule.body));
+  /* 2. The sized box: a two-row grid, the picture's row and the label's. */
+  if (figure.get("display") !== "grid") {
+    problems.push(
+      `\`${HERO_FIGURE_SELECTOR}\` is not a grid in the stylesheet the bundle ships (display: ${figure.get("display") ?? "not declared"}). The figure is the sized box because it has two rows to give away — the picture's and the label's — and a figure that is not a grid has no such rows.`,
+    );
+  }
+  const rows = (figure.get("grid-template-rows") ?? "").split(/\s+/).filter(Boolean);
+  if (rows.join(" ") !== HERO_ROWS.join(" ")) {
+    problems.push(
+      `\`${HERO_FIGURE_SELECTOR}\` declares grid-template-rows: ${figure.get("grid-template-rows") ?? "nothing"}, not the two rows the sized box needs: ${HERO_ROWS.join(" ")} — the picture's row first and the illustration label's \`auto\` row second, so a taller screen takes its extra from the picture and never from the label.`,
+    );
+  }
+  /* 3. The picture out of the flow, filling the box the figure sized. */
+  const pictureRules = base.filter((rule) => selectorList(rule.selector).includes(HERO_PICTURE_SELECTOR));
+  const picture = overlayRuleDeclarations(pictureRules, () => true);
+  if (picture.get("position") !== "absolute") {
+    problems.push(
+      `\`${HERO_PICTURE_SELECTOR}\` is not taken out of the flow in the stylesheet the bundle ships (position: ${picture.get("position") ?? "not declared"}). A picture in the flow is a picture in one of the sized box's rows, deciding how tall the hero is instead of filling the height the figure chose.`,
+    );
+  } else if (!heroInsetAllZero(picture)) {
+    problems.push(
+      `\`${HERO_PICTURE_SELECTOR}\` is out of the flow but not pinned to the box it fills (inset: ${picture.get("inset") ?? "not declared"}; top/right/bottom/left: ${["top", "right", "bottom", "left"].map((side) => picture.get(side) ?? "—").join("/")}). An absolute picture with no inset is placed at its static position and sized by its own file, so it stops filling the box the figure sized.`,
+    );
+  }
+  /* 4. The height comes from the viewport, never from a fixed band. */
+  const minHeights = ordered.filter((declaration) => declaration.property === "min-height");
+  const fixedHeights = ordered.filter((declaration) => declaration.property === "height");
+  const winning = minHeights.at(-1);
+  if (!winning) {
+    problems.push(
+      `\`${HERO_FIGURE_SELECTOR}\` declares no \`min-height\` at all, so nothing in the stylesheet makes the hero as tall as the visitor's screen (owner direction, 9 Oct 2026).`,
+    );
+  } else if (!HERO_VIEWPORT_UNIT.test(winning.value)) {
+    problems.push(
+      `the winning \`min-height\` on \`${HERO_FIGURE_SELECTOR}\` is "${winning.value}", which names no viewport unit, so the hero is a band of a fixed height rather than the screen the visitor is on. The unit is the whole point of the 9 Oct direction: a band is exactly what this clause exists to refuse.`,
+    );
+  }
+  if (fixedHeights.length > 0) {
+    problems.push(
+      `\`${HERO_FIGURE_SELECTOR}\` declares height: ${fixedHeights.at(-1)!.value} — a fixed height on the box that is meant to be the visitor's screen. A \`min-height\` alone would still let the box grow with the screen; a \`height\` does not, and it is the band the owner's direction replaced.`,
+    );
+  }
+  /* 5. The room the proposal banner takes is subtracted. */
+  if (winning && !winning.value.includes(`var(${HERO_ABOVE_TOKEN})`)) {
+    problems.push(
+      `the winning \`min-height\` on \`${HERO_FIGURE_SELECTOR}\` — ${winning.value} — does not subtract \`var(${HERO_ABOVE_TOKEN})\`, the room the proposal banner takes above the hero. The first screen then starts below the banner and runs past the bottom of the screen by the banner's own height on every demonstration page.`,
+    );
+  }
+  /* 6. The fallback a browser without the viewport unit still gets. */
+  const fallback = minHeights.find((declaration) => !HERO_VIEWPORT_UNIT.test(declaration.value));
+  const fromViewport = minHeights.find((declaration) => HERO_VIEWPORT_UNIT.test(declaration.value));
+  if (!fallback) {
+    problems.push(
+      `\`${HERO_FIGURE_SELECTOR}\` sizes the hero with the viewport unit alone (min-height: ${minHeights.map((declaration) => declaration.value).join("; ")}), with no fixed-length declaration in front of it. A browser that cannot parse \`svh\` drops the declaration and the hero is left with no height at all — the fixed length belongs first, the viewport one after it, so the fallback is what such a browser keeps.`,
+    );
+  } else if (fromViewport && minHeights.indexOf(fallback) > minHeights.indexOf(fromViewport)) {
+    problems.push(
+      `\`${HERO_FIGURE_SELECTOR}\` writes its fallback (min-height: ${fallback.value}) after the viewport declaration (min-height: ${fromViewport.value}), where no browser can ever use it: a later declaration wins, so the fallback reaches only a browser that has already dropped the one it was meant to stand in for.`,
+    );
+  }
+  /* 7. The banner's room is scoped to the banner's presence. */
+  const above = overlayStyleRules(css).flatMap((rule) =>
+    heroOrderedDeclarations(rule.body)
+      .filter((declaration) => declaration.property === HERO_ABOVE_TOKEN)
+      .map((declaration) => ({ ...declaration, selector: rule.selector })),
+  );
+  const inFigure = above.filter((declaration) => selectorList(declaration.selector).includes(HERO_FIGURE_SELECTOR));
+  const scoped = above.filter((declaration) => !inFigure.includes(declaration));
+  if (inFigure.length === 0) {
+    problems.push(
+      `nothing in the stylesheet gives \`${HERO_ABOVE_TOKEN}\` a value on \`${HERO_FIGURE_SELECTOR}\` itself, so the room the hero subtracts is only ever set by a scoped rule — a build with no banner has no value to fall back on.`,
+    );
+  } else if (!heroZeroLength(inFigure.at(-1)!.value)) {
+    problems.push(
+      `\`${HERO_FIGURE_SELECTOR}\` declares ${HERO_ABOVE_TOKEN}: ${inFigure.at(-1)!.value}, not zero. The room is reserved for a banner that is not always there: a **delivered** build has no banner at all and fills from the very top of the page, so the default must be zero and only the rules scoped to the banner's presence may raise it (owner direction, 9 Oct 2026).`,
+    );
+  }
+  if (scoped.length === 0) {
+    problems.push(
+      `the stylesheet never raises \`${HERO_ABOVE_TOKEN}\` above its default, so the subtraction in \`${HERO_FIGURE_SELECTOR}\`'s own \`min-height\` always subtracts nothing and the hero sits *under* the banner and past the bottom of the screen. The room belongs on a rule scoped to the banner's presence (\`.proposal-banner ~\`).`,
+    );
+  }
+  for (const declaration of scoped) {
+    if (!HERO_BANNER_SIBLING.test(declaration.selector)) {
+      problems.push(
+        `the stylesheet sets ${HERO_ABOVE_TOKEN} on "${declaration.selector}", which is not scoped to the banner's own presence. Only a selector that names the banner as a preceding sibling (\`.proposal-banner ~\`) can know the banner is there; every other rule reserves the room on the pages that do not have one.`,
+      );
+    }
+  }
+  return problems;
+}
+
 /* ------------------------------------- the home header, sitting on the hero photograph */
 
 /** The class the home page's `html` element carries to put the header on the picture. */
@@ -2581,6 +2915,9 @@ export function complianceChecks(vars: {
   // The phone menu: four named links, a named control, and the privacy link phone-hidden
   // (WORKFLOW.md rule 11).
   problems.push(...phoneMenuProblems(pages, vars.css ?? ""));
+  // The hero sized to the visitor's screen (owner direction, 9 Oct 2026): the stylesheet
+  // half reads the CSS the bundle ships, the markup half the home page it ships beside.
+  problems.push(...heroScreenSizeProblems({ pages, css: vars.css ?? "" }));
   // The home header on the hero photograph (owner retouch, 6 Oct): the overlay class on
   // the home page alone, every overlay rule scoped to it, and the wash's contrast over
   // the lightest pixel a photograph can hold — measured, not asserted.
