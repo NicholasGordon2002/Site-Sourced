@@ -86,6 +86,21 @@ export const DEMO_ONLY_PROSE: [string, RegExp][] = [
   ["the demonstration paragraph", /DEMONSTRATION — not the business's website/],
   ["the demonstration bundle's contact-form paragraph", /This is a demonstration bundle, not a delivered site/],
   ["the demonstration-page sentence", /on a demonstration page\b/i],
+  // The fourth of the family, and the one a visitor reads about their own message:
+  // the demonstration's form-delivery notice, "This is a demonstration site: the form
+  // below sends your message to Site Sourced …". Nothing refused it. The only thing
+  // keeping it off a client's page was the phase ternary in `copy.ts`, and the check
+  // that looks like it covers this pair — `formDeliveryProblems` — compares the mode the
+  // notice was **composed for** (`copy.formNoticeDelivery`) with the resolved delivery,
+  // a tautology on the real path: it reads the composer's intent, never the sentence that
+  // reached the page. Proven 9 Oct 2026 by doctoring that ternary (`businessPhase` →
+  // `false`): a delivered bundle built clean (`Built: 1 / Failed: 0`) with the
+  // demonstration notice on `contact.html`, its form still resolving to `business`.
+  //
+  // The pattern is the notice's own opening clause, colon included: it is a sentence we
+  // compose, not a shape a business's recorded wording arrives in, so a client build
+  // cannot trip it on the client's own copy.
+  ["the demonstration form-delivery notice", /This is a demonstration site:/],
 ];
 
 /** Every sentence the demonstration phase prints, as the prose it is written as. */
@@ -101,6 +116,13 @@ const PHASE_SAMPLES: Record<string, readonly string[]> = {
   "the demonstration paragraph": [DEMO_README_MARKER],
   "the demonstration bundle's contact-form paragraph": ["This is a demonstration bundle, not a delivered site."],
   "the demonstration-page sentence": ["on a demonstration page it says nothing here is booked"],
+  // Hand-written from the notice the demo page carries. It is the real sentence minus the
+  // record's name and the provider's own storage line, so it can drift from `composeCopy`
+  // if that wording is ever re-composed — the refusal, unlike the sample, is enforced
+  // against the rendered page either way.
+  "the demonstration form-delivery notice": [
+    "This is a demonstration site: the form below sends your message to Site Sourced, the company that built it — not to Maple Avenue Barber Shop.",
+  ],
 };
 
 /* --------------------------------------------------------------- what a visitor reads */

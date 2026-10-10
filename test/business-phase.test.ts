@@ -458,6 +458,36 @@ test("the demonstration-page sentence is refused on a delivered page too", async
   expect(furniture(b, b.readme, injected)).toContain("on about.html: carries the demonstration-page sentence");
 });
 
+/**
+ * The same family, one sentence further in: **the form-delivery notice**.
+ *
+ * This is the sentence a visitor reads about their own message, and until 9 Oct 2026
+ * nothing refused it on a delivered page. `formDeliveryProblems` looks like it does — it
+ * is the clause about exactly this claim — but it compares `copy.formNoticeDelivery`, the
+ * mode the notice was *composed for*, with the resolved delivery. Both come from
+ * `delivery.mode`, so on the real build path the comparison cannot fail; the notice's
+ * **rendered** text is read by nothing in the business phase. Reproduced by doctoring the
+ * composer's ternary (`const formNotice = businessPhase ? … : …` → `false`): a delivered
+ * bundle built clean, `Failed: 0`, with "This is a demonstration site: the form below
+ * sends your message to Site Sourced …" on `contact.html` and the manifest still reporting
+ * `delivery.mode: "business"`.
+ *
+ * The demonstration direction has had its half since the four-page audit: `build.ts`
+ * requires the words "demonstration site" on every details-printing page while the phase
+ * is `demo` (build.ts:1916, and `contact.html` is a details page). The delivered direction
+ * had nothing. This test asserts the clause that now covers it, on the notice as the
+ * composer actually writes it.
+ */
+test("the demonstration form-delivery notice is refused on a delivered page", async () => {
+  const b = await delivered();
+  const demo = await render({ ...RECORD_FOR_RENDER, form_recipient: OUR_INBOX, form_delivery: "demo", booking_url: "" });
+  const notice = demo.ctx.copy.formNotice;
+  // The sentence this refusal exists for, verbatim from the demonstration's own build.
+  expect(notice.startsWith("This is a demonstration site:")).toBe(true);
+  const injected = doctored(b, "contact.html", '<p class="form-notice">', `<p class="form-notice">${notice}</p><p>`);
+  expect(furniture(b, b.readme, injected)).toContain("on contact.html: carries the demonstration form-delivery notice");
+});
+
 test("no delivered page or README says anything about a demonstration", async () => {
   const b = await delivered();
   for (const p of b.pages) {
