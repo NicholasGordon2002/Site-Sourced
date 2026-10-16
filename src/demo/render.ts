@@ -1999,6 +1999,17 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 .form-status[data-state="ok"] { color: #1F6B3A; }
 
 .form-privacy { margin: var(--s-4) 0 0; font-size: var(--fs-small); }
+/* The privacy link beside the form is alone in its own paragraph, so it is a control
+   with room rather than a link inside a sentence: like .link-quiet, padding can give it
+   the 44px the design system promises (docs/design-system.md §10, template-system.md
+   line 59) without bursting a line of running text. Measured in a browser it was
+   81.56x20px at 320/360/390/420/1440px before this rule and 81.56x44px after, with the
+   gap up to the submit button 40px — clear of the 8px floor (11 Oct 2026). */
+.form-privacy a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+}
 
 .contact-fallback {
   max-width: 34rem;
