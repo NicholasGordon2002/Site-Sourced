@@ -1,0 +1,20 @@
+# docs/graphics-layer.md section 6: rebuilt fixtures, switches off
+# trees: /tmp/gfx/before (master dd319a5) and /tmp/gfx/after (design/graphics-layer 0b31e2e),
+# built by the previous session with: bun run src/demo/cli.ts -- --record test/fixtures --out <tree>
+# manifest.json is excluded: it carries a generated-at timestamp.
+
+$ cd /tmp/gfx/before && find . -type f ! -name manifest.json | sort | xargs sha256sum > /tmp/gfx/before.norm.sha
+$ cd /tmp/gfx/after  && find . -type f ! -name manifest.json | sort | xargs sha256sum > /tmp/gfx/after.norm.sha
+$ diff /tmp/gfx/before.norm.sha /tmp/gfx/after.norm.sha
+(no output: the two lists are identical)
+
+# files compared: 80 in before, 80 in after
+# per-bundle pages:
+  before king-west-dental
+  before maple-avenue-barber-shop
+  before northshore-garden-works
+  before red-hill-property-care
+  after  king-west-dental
+  after  maple-avenue-barber-shop
+  after  northshore-garden-works
+  after  red-hill-property-care

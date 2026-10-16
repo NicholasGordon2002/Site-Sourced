@@ -1,0 +1,39 @@
+{
+  "version": "s3.1",
+  "parts": [
+    {
+      "name": "icons",
+      "bytes": 5070,
+      "cap": 6144,
+      "ok": true
+    },
+    {
+      "name": "css",
+      "bytes": 3648,
+      "cap": 4096,
+      "ok": true
+    },
+    {
+      "name": "dividers",
+      "bytes": 1298,
+      "cap": 1536,
+      "ok": true
+    },
+    {
+      "name": "map",
+      "bytes": 1468,
+      "cap": 2048,
+      "ok": true
+    },
+    {
+      "name": "wordmark",
+      "bytes": 375,
+      "cap": 768,
+      "ok": true
+    }
+  ],
+  "layerBytes": 11859,
+  "layerCap": 13312,
+  "assets": 0,
+  "requests": 0
+}

@@ -1,0 +1,33 @@
+1a. an unscoped rule at the top level — refused (guarded by clause 5's test):
+  ["graphics layer: its stylesheet writes the rule \".card\", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."]
+
+1b. the SAME rule nested in an @media block — nothing is reported:
+  []
+
+1c. at-rules in the real layer's own stylesheet: none
+    (so the skip is not exercised by the shipped stylesheet either — the branch is untested, not merely unreached)
+
+2a. parts the layer emits:
+  ["icons","css","dividers","map","wordmark","caption"]
+
+2b. parts with no entry in GRAPHICS_BYTE_CAPS (the only names the guard can catch):
+  ["caption"]
+
+3a. the caption part, which the exemption removes from the byte counting:
+  [{"name":"caption","text":"Schematic illustration — not a map of the area, and not to scale.","bytes":67}]
+
+3b. layer bytes counted WITH the caption in `named`:
+  11926
+
+3c. the layer cap it must stay under:
+  13312
+
+3d. margin: 1386 bytes — the exemption is not what keeps the cap passing
+
+4a. a part whose bytes field claims 999,999 with the real text behind it (the label cannot invent a problem):
+  []
+
+4b. a part whose bytes field claims 1 byte with three times the text behind it (the label cannot hide one):
+  ["graphics layer: its icons part is 15210 bytes, over the 6144-byte cap. The layer is an addition to a stylesheet a phone already waits for; the cap is what keeps it an addition.","graphics layer: the whole layer is 15210 bytes, over the 13312-byte cap. It adds no file and no request, but it does add bytes to every page that carries it."]
+
+4c. non-ASCII characters in the icons part: 0 — text length 5070 vs utf8 bytes 5070

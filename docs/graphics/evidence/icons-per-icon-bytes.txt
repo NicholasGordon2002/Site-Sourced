@@ -1,0 +1,15 @@
+# docs/graphics-layer.md section 2: per-icon bytes, straight out of the layer
+  432 services
+  293 hours
+  371 phone
+  346 pin
+  316 directions
+  325 message
+  337 email
+  418 appointment
+  362 info
+  446 gallery
+  377 link
+  400 open-external
+  345 privacy
+  289 arrow-right

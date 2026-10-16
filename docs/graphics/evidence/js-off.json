@@ -1,0 +1,29 @@
+{
+  "resources": [
+    "http://127.0.0.1:8321/styles.css",
+    "http://127.0.0.1:8321/fonts/fraunces-latin-600.woff2",
+    "http://127.0.0.1:8321/fonts/source-sans-3-latin.woff2"
+  ],
+  "scrollWidth": 360,
+  "clientWidth": 360,
+  "scrollHeight": 8432,
+  "svgs": 93,
+  "icons": 84,
+  "dividers": 4,
+  "monograms": 4,
+  "maps": 1,
+  "probes": 99,
+  "scripts": 0,
+  "fontsLoaded": [
+    "Fraunces",
+    "Source Sans 3"
+  ],
+  "headings": [
+    "Graphics layer",
+    "Icons at both sizes, on all three surfac",
+    "Section grounds",
+    "Dividers"
+  ],
+  "scriptRan": "undefined",
+  "h1": "Graphics layer"
+}

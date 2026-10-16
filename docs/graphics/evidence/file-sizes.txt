@@ -1,0 +1,12 @@
+# file sizes behind docs/graphics-layer.md section 2, in bytes (2026-10-16T19:57Z)
+ 59245 docs/graphics/graphics-specimen.html
+ 45657 docs/graphics/styles.css
+ 18096 docs/graphics/fonts/fraunces-latin-600.woff2
+ 28740 docs/graphics/fonts/source-sans-3-latin.woff2
+151738 total
+# the stylesheet a demo already serves, for the comparison in the same sentence
+src/demo/assets/styles.css: not a file in this tree
+# the fonts a demo already ships
+18096 src/demo/assets/fonts/fraunces-latin-600.woff2
+28740 src/demo/assets/fonts/source-sans-3-latin.woff2
+46836 total

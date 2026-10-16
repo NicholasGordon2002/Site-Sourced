@@ -1,0 +1,19 @@
+bun test v1.4.3 (c6da4a4d3)
+
+test/graphics.test.ts:
+(pass) the layer is complete: every name it publishes draws something [0.32ms]
+(pass) every icon is 24px-grid, one stroke weight, and decorative [0.15ms]
+(pass) a meaningful graphic is named, and the initials mark is decorative [0.29ms]
+(pass) the real layer passes all five clauses, and fits its byte caps [1.43ms]
+(pass) clause 1 fires: a layer that reaches the network fails the build [1.48ms]
+(pass) clause 2 fires: an unmarked, doubly-marked or nameless graphic fails [0.65ms]
+(pass) clause 3 fires: a baked-in colour fails, because it cannot follow the surface [0.64ms]
+(pass) clause 4 fires: an icon, the set and the whole layer each have a cap [2.41ms]
+(pass) clause 5 fires: every rule is scoped to a .gfx- class, or it is refused [0.68ms]
+(pass) the clauses are wired into the build itself, not only callable [26.47ms]
+(pass) the layers' own exports do not collide with the template's class names [0.31ms]
+
+ 11 pass
+ 0 fail
+ 236 expect() calls
+Ran 11 tests across 1 file. [58.00ms]

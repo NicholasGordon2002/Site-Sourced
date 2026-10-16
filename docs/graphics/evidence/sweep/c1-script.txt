@@ -1,0 +1,32 @@
+bun test v1.4.3 (c6da4a4d3)
+
+test/graphics.test.ts:
+(pass) the layer is complete: every name it publishes draws something [0.29ms]
+(pass) every icon is 24px-grid, one stroke weight, and decorative [0.14ms]
+(pass) a meaningful graphic is named, and the initials mark is decorative [0.27ms]
+(pass) the real layer passes all five clauses, and fits its byte caps [1.45ms]
+138 |     ['<use href="sprite.svg#pin"/>', "<use> pointing outside this document"],
+139 |     ['<svg src="icons.svg"></svg>', "external resource attribute"],
+140 |   ] as const;
+141 |   for (const [doctor, expected] of remote) {
+142 |     const problems = graphicsProblems(withPart("css", doctor));
+143 |     expect(problems.some((p) => p.includes(expected) && p.includes("graphics layer"))).toBe(true);
+                                                                                             ^
+error: expect(received).toBe(expected)
+
+Expected: true
+Received: false
+
+      at <anonymous> (/tmp/gfx-layer/test/graphics.test.ts:143:88)
+(fail) clause 1 fires: a layer that reaches the network fails the build [1.22ms]
+(pass) clause 2 fires: an unmarked, doubly-marked or nameless graphic fails [1.09ms]
+(pass) clause 3 fires: a baked-in colour fails, because it cannot follow the surface [0.66ms]
+(pass) clause 4 fires: an icon, the set and the whole layer each have a cap [1.85ms]
+(pass) clause 5 fires: every rule is scoped to a .gfx- class, or it is refused [0.45ms]
+(pass) the clauses are wired into the build itself, not only callable [27.25ms]
+(pass) the layers' own exports do not collide with the template's class names [0.25ms]
+
+ 10 pass
+ 1 fail
+ 231 expect() calls
+Ran 11 tests across 1 file. [57.00ms]

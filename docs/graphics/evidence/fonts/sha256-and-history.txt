@@ -1,0 +1,12 @@
+# docs/graphics-layer.md section 3 evidence (2026-10-16T19:57Z)
+# sha256 of the branch's docs copies and the assets every demo bundle already ships
+3a1de7711d147bad4422825045f87597fd77cca72e7c96d3b0a81735d00dda82  docs/graphics/fonts/fraunces-latin-600.woff2
+7a19a7027e125257d310c6dbd78ae3a30b5ea1e3794d60b12bb28227a003bfda  docs/graphics/fonts/source-sans-3-latin.woff2
+253539112d80fde05f90e778d7315ea513681b08b6b83f3f6a9b945dd09cca70  docs/graphics/fonts/OFL.txt
+3a1de7711d147bad4422825045f87597fd77cca72e7c96d3b0a81735d00dda82  src/demo/assets/fonts/fraunces-latin-600.woff2
+7a19a7027e125257d310c6dbd78ae3a30b5ea1e3794d60b12bb28227a003bfda  src/demo/assets/fonts/source-sans-3-latin.woff2
+253539112d80fde05f90e778d7315ea513681b08b6b83f3f6a9b945dd09cca70  src/demo/assets/fonts/OFL.txt
+# the assets' first commit
+0f95864 Design: written design system, token-based stylesheet, and the hero rebuilt on a real <img> (#4)
+# the docs copies' first commit (this branch)
+69fe8fb The graphics layer's specimen page, and the harness that measures it
