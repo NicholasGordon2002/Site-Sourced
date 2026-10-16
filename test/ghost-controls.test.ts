@@ -100,6 +100,11 @@ const SURFACES = [GHOST_SURFACE_INK, GHOST_SURFACE_WHITE];
 
 const INK_RULE = `.site-header .call-button`;
 const HOME_RULE = `.page--index .site-header .call-button`;
+/* The button family's two selectors, likewise stated as literals rather than read off the
+   module: `ghost-controls.ts` exports them, and a test that asked it would agree with whatever
+   it says next. */
+const BUTTON_RULE = `.button`;
+const HOME_BUTTON_RULE = `.page--index .hero-actions .button`;
 
 interface Built {
   record: BusinessRecord;
@@ -225,8 +230,11 @@ test("the opt-in both ways: a stylesheet that paints the ghost with the switch u
 
   /* Direction one (clause 1): the same build's stylesheet carrying the marker anyway — the
      treatment smuggled in behind the opt-in. This is the doctor: the block, not the decision. */
+  /* The marked rules, stated here: the header's action on its two surfaces and the button
+     family's two (owner direction, 16 Oct 2026). The list is asserted whole, so a later
+     treatment that quietly stops marking half of itself fails this line. */
   const smuggled = refusal(off, { css: stylesheet({ ghost: true }).css });
-  expect(smuggled).toContain(`paints the ghost controls (${INK_RULE}, ${HOME_RULE})`);
+  expect(smuggled).toContain(`paints the ghost controls (${INK_RULE}, ${HOME_RULE}, ${BUTTON_RULE}, ${HOME_BUTTON_RULE})`);
   expect(smuggled).toContain(`while ${GHOST_CONTROLS_VAR} is not in force for this build`);
   expect(smuggled).toContain("every bundle is the copy signed off on 7 Oct 2026, byte for byte");
 
@@ -399,7 +407,7 @@ test("the surfaces are scoped: a white ghost outside the home page, an ink ghost
   // not ask for — the third way the surfaces can be wrong.
   const stray = doctor(block, /^\.site-header \.call-button \{/m, `.wordmark {`);
   expect(refusal(on, { css: stylesheet({ ghost: stray }).css })).toContain(
-    `declares ${GHOST_CONTROLS_MARKER} but is not the header's action`,
+    `declares ${GHOST_CONTROLS_MARKER} but is neither the header's action nor a button of the family`,
   );
 
   // A marker naming a surface this build does not know: refused rather than treated as one.
@@ -585,13 +593,21 @@ test("clause 6: the last rule carrying a state's own selector must declare its o
   /* The pre-fix file, against this build: refused by name, on each of the four state rules it
      left to the cascade — two surfaces, two states. */
   const preFix = list(on, { css: stylesheet({ ghost: PREFIX_GHOST_CSS }).css });
-  expect(preFix.length).toBe(4);
+  /* Five, not four: the four state rules below, plus the sentence clause 7b adds — the
+     historical stylesheet marks the header's action and nothing else, which since 16 Oct 2026 is
+     also a half-applied treatment (the button family is unmarked). The count is stated as a
+     number so a clause that stops firing cannot hide behind a `toContain`. */
+  expect(preFix.length).toBe(5);
+  expect(preFix.filter((one) => one.includes("and not across the button family")).length).toBe(1);
   expect(preFix.join(" | ")).toContain("leaves its hover colour to the cascade");
   expect(preFix.join(" | ")).toContain("leaves its active colour to the cascade");
   expect(preFix.filter((one) => one.includes(`the header's ghost (${HOME_RULE}) leaves its hover colour to the cascade`)).length).toBe(1);
   expect(preFix.filter((one) => one.includes(`the header's ghost (${HOME_RULE}) leaves its active colour to the cascade`)).length).toBe(1);
   expect(preFix.filter((one) => one.includes(`the header's ghost (${INK_RULE}) leaves its active colour to the cascade`)).length).toBe(1);
-  for (const one of preFix) {
+  // The four state-rule sentences, each read whole: these are the clause's own refusals.
+  const cascadeRefusals = preFix.filter((one) => one.includes("leaves its"));
+  expect(cascadeRefusals.length).toBe(4);
+  for (const one of cascadeRefusals) {
     expect(one).toContain("the last rule for");
     expect(one).toContain("declares no color, so whichever earlier rule matches paints the words");
     expect(one).toContain("rendered white words as ink at 1.00-1.53:1 on the hero picture");

@@ -168,12 +168,69 @@ export const GHOST_SCRIM_CUE_ACTIVE = "inset 0 0 0 2px #fff, 0 0 0 5px rgba(255,
 export const GHOST_HEADER_ACTION_SELECTOR = ".site-header .call-button";
 export const GHOST_HOME_ACTION_SELECTOR = ".page--index .site-header .call-button";
 
+/* -------------------------------- the button family (owner direction, 16 Oct 2026) */
+
+/**
+ * **Every other button on the review copy** (owner direction by text, 16 Oct 2026): the
+ * outlined treatment stops being two controls and becomes the treatment of the family —
+ * the CTA band's action, the contact form's submit, `Get directions`, and the home page's
+ * two hero actions. The rule does not change with the scope: **the ghost is drawn in the
+ * colour of the surface it sits on**, so the paper-family buttons (there are three, and two
+ * of them sit on the band's `--paper-2`, not on `--paper`) take ink, and the home hero's two
+ * take white because they sit on the hero **photograph**.
+ *
+ * The hero is the one control whose class name lies about its surface: it wears
+ * `button--paper` and is painted white at rest, and the surface behind it is the hero's
+ * photograph under the scrim — measured, not read off the class (`design/…` and
+ * `docs/ghost-controls.md` §11 carry the rendered backdrop). So it is a white ghost, and the
+ * same for the `button--ghost` beside it, which already wore a translucent white fill.
+ */
+export const GHOST_BUTTON_SELECTOR = ".button";
+/** The same family on the home page's hero, over the photograph: one class more specific,
+ *  which is how the cascade gives those two actions white rather than ink. */
+export const GHOST_HOME_BUTTON_SELECTOR = ".page--index .hero-actions .button";
+
+/**
+ * The family's own selectors, and the completeness clause reads them: with the opt-in in
+ * force, a stylesheet that marks the header's action and not the family is the half-applied
+ * treatment clause 3 refuses on the header's two surfaces, one scope out.
+ */
+export const GHOST_BUTTON_SELECTORS = [GHOST_BUTTON_SELECTOR, GHOST_HOME_BUTTON_SELECTOR];
+
+/**
+ * **Every control the renderer draws for this family**, with the surface it sits on — the
+ * table `ghostControlsProblems` clause 7 resolves the stylesheet against, so "every button
+ * wears it" is a claim the build can check rather than a claim this file makes about itself.
+ *
+ * `classes` is the element's own class list, verbatim from the renderer; `skip` names an
+ * ancestor class that rules out a match (a rule scoped to `.hero-actions` cannot paint the
+ * CTA band's action). Two rows share the class list `["button"]` and are kept apart by
+ * `what`, because the message a reader gets should name the control that is still filled.
+ *
+ * *Not in this table, deliberately:* the nested card CTA (`.service-cta`, its own block and
+ * its own clauses 5 and 6), the quiet links (`link-quiet` — links, not buttons), and
+ * `button.qxCTlb` on the review-only `booking-comparison.html`, which is Google's own
+ * injected control and not our markup.
+ */
+export const GHOST_BUTTON_CONTROLS: {
+  what: string;
+  classes: string[];
+  surface: typeof GHOST_SURFACE_INK | typeof GHOST_SURFACE_WHITE;
+  skip?: string[];
+}[] = [
+  { what: "the home hero's phone action", classes: ["button", "button--paper"], surface: GHOST_SURFACE_WHITE },
+  { what: "the home hero's request action", classes: ["button", "button--ghost"], surface: GHOST_SURFACE_WHITE },
+  { what: "the CTA band's action", classes: ["button"], surface: GHOST_SURFACE_INK, skip: [".hero-actions"] },
+  { what: "the contact form's submit", classes: ["button"], surface: GHOST_SURFACE_INK, skip: [".hero-actions"] },
+  { what: "Get directions", classes: ["button", "button--small"], surface: GHOST_SURFACE_INK, skip: [".hero-actions"] },
+];
+
 /**
  * The source of the treatment, cited where it lives so a reader can check it rather than
  * take our word for it.
  */
 export const GHOST_CONTROLS_BASIS =
-  "the owner's direction of 10 Oct 2026 (the header action transparent with white text and a white outline; the nested service-card CTA the same treatment with black text and a black outline) and the lead's ruling of 10 Oct 2026 (one system: the outline colour follows the surface — white over the photograph, ink on paper — because white on paper is 1.00:1)";
+  "the owner's direction of 10 Oct 2026 (the header action transparent with white text and a white outline; the nested service-card CTA the same treatment with black text and a black outline), the lead's ruling of 10 Oct 2026 (one system: the outline colour follows the surface — white over the photograph, ink on paper — because white on paper is 1.00:1), and the owner's direction of 16 Oct 2026 (the same transparent outlined treatment consistent across every button on the Maple Avenue review copy, the approved states, contrast, sizing and both card shapes preserved)";
 
 export interface GhostControlsDecision {
   /** Whether this build paints the ghost controls. */
@@ -215,7 +272,7 @@ export function ghostControlsDecision(vars: {
   if (!ghostControlsRequested(env)) {
     return {
       ...off,
-      basis: `${GHOST_CONTROLS_VAR} is not set in this build, so the header action and the nested card CTA wear the filled buttons they wear today: both published demonstrations and all four fixtures are unchanged, byte for byte (${GHOST_CONTROLS_BASIS}).`,
+      basis: `${GHOST_CONTROLS_VAR} is not set in this build, so every button of the review copy — the header action, the nested card CTA, the CTA band's action, the form's submit, Get directions and the home hero's two actions — wears the filled button it wears today: both published demonstrations and all four fixtures are unchanged, byte for byte (${GHOST_CONTROLS_BASIS}).`,
     };
   }
   const value = raw.trim().toLowerCase();
@@ -248,7 +305,7 @@ export function ghostControlsDecision(vars: {
     surface,
     raw,
     unrecognised: null,
-    basis: `${GHOST_CONTROLS_VAR} is set to "${raw.trim()}" and this record is the ${GHOST_CONTROLS_SLUG} demonstration, so the stylesheet carries the ghost controls: the header action is transparent with an outline in the surface's own colour (white over the home page's photograph, ink on the paper-surfaced headers), and the nested service-card CTA is the same treatment in ink on the card. No page changes at all — the treatment is written in styles.css alone (${GHOST_CONTROLS_BASIS}).`,
+    basis: `${GHOST_CONTROLS_VAR} is set to "${raw.trim()}" and this record is the ${GHOST_CONTROLS_SLUG} demonstration, so the stylesheet carries the ghost controls: the header action is transparent with an outline in the surface's own colour (white over the home page's photograph, ink on the paper-surfaced headers), the nested service-card CTA is the same treatment in ink on the card, and so is every other button of the family — the CTA band's action, the form's submit and Get directions in ink on the paper surfaces, and the home hero's two actions in white over the photograph. No page changes at all — the treatment is written in styles.css alone (${GHOST_CONTROLS_BASIS}).`,
   };
 }
 
@@ -328,6 +385,62 @@ ${GHOST_HOME_ACTION_SELECTOR}:hover {
   box-shadow: ${GHOST_SCRIM_CUE_HOVER};
 }
 ${GHOST_HOME_ACTION_SELECTOR}:active {
+  background: ${GHOST_SCRIM_FILL_ACTIVE};
+  color: ${GHOST_SCRIM_COLOUR};
+  box-shadow: ${GHOST_SCRIM_CUE_ACTIVE};
+}
+/* ------------------------------ the button family (owner direction, 16 Oct 2026)
+
+   "The outlined transparent treatment consistent across every button on the review demo."
+   The rule does not change, only the number of controls it covers: the ghost is drawn in
+   the colour of the surface it sits on. Three of these buttons sit on paper — the CTA
+   band's action and the form's submit on the band's --paper-2, Get directions on --paper —
+   so they are the ink ghost, the same colours the paper header and the card CTA wear.
+
+   The paper rule is one class, written after every filled rule in the base sheet, so it
+   wins by document order and not by weight: this is the cascade the treatment relies on,
+   and it is why a future "darken the band" rule written *after* this one would be the
+   defect clause 7 is there to catch. */
+${GHOST_BUTTON_SELECTOR} {
+  ${GHOST_CONTROLS_MARKER}: ${GHOST_SURFACE_INK};
+  background: transparent;
+  color: ${GHOST_PAPER_INK};
+  border-color: ${GHOST_PAPER_INK};
+}
+/* The same states the header's paper ghost wears, for the same reason: the fill deepens the
+   surface's own ink rather than lightening it (a light veil would drop the *words'*
+   contrast), and the inset ring doubles the outline to 2px without growing the 44px box.
+   Each state declares its own color — the defect of 10 Oct 2026 was a state that left it to
+   the cascade, and clause 6 now refuses that on this family too. */
+${GHOST_BUTTON_SELECTOR}:hover {
+  background: ${GHOST_PAPER_FILL_HOVER};
+  color: ${GHOST_PAPER_INK};
+  box-shadow: inset 0 0 0 1px ${GHOST_PAPER_INK};
+}
+${GHOST_BUTTON_SELECTOR}:active {
+  background: ${GHOST_PAPER_FILL_ACTIVE};
+  color: ${GHOST_PAPER_INK};
+  box-shadow: inset 0 0 0 1px ${GHOST_PAPER_INK};
+}
+/* The home page's hero: both of its actions sit on the photograph, behind the same scrim
+   the header's action sits on, so both are white — including the phone action, whose own
+   class (button--paper) says paper and whose surface is measured, not read off the class.
+   One class more specific than the rule above, which is how the cascade picks it here. */
+${GHOST_HOME_BUTTON_SELECTOR} {
+  ${GHOST_CONTROLS_MARKER}: ${GHOST_SURFACE_WHITE};
+  background: transparent;
+  color: ${GHOST_SCRIM_COLOUR};
+  border-color: ${GHOST_SCRIM_COLOUR};
+}
+/* On the photograph the fill cannot be the cue (the scrim there is already ink: measured
+   10 Oct 2026), so the state is carried by the outline thickening and the halo, exactly as
+   the header's white ghost carries it. The veil deepens too, for the lighter bands. */
+${GHOST_HOME_BUTTON_SELECTOR}:hover {
+  background: ${GHOST_SCRIM_FILL_HOVER};
+  color: ${GHOST_SCRIM_COLOUR};
+  box-shadow: ${GHOST_SCRIM_CUE_HOVER};
+}
+${GHOST_HOME_BUTTON_SELECTOR}:active {
   background: ${GHOST_SCRIM_FILL_ACTIVE};
   color: ${GHOST_SCRIM_COLOUR};
   box-shadow: ${GHOST_SCRIM_CUE_ACTIVE};

@@ -81,6 +81,9 @@ import {
   type ServiceCardActionDecision,
 } from "./service-card-action.ts";
 import {
+  GHOST_BUTTON_CONTROLS,
+  GHOST_BUTTON_SELECTOR,
+  GHOST_BUTTON_SELECTORS,
   GHOST_CONTROLS_MARKER,
   GHOST_CONTROLS_SLUG,
   GHOST_CONTROLS_SURFACES,
@@ -673,6 +676,55 @@ function stateDeclarations(
     }),
     () => true,
   );
+}
+
+/**
+ * The paint a browser gives a control carrying exactly `classes` **at rest**, resolved the way
+ * the browser resolves it: the most specific declaration wins, and at equal specificity the one
+ * later in the document. `stateDeclarations` deliberately does not do this — it merges the
+ * treatment's own appended rules in document order, which is how the treatment is meant to win —
+ * so this is a second, narrower reader for the one question that needs the browser's answer:
+ * **is a control of the button family still painted as the filled pill?**
+ *
+ * A rule counts when its last compound is built only from classes the element carries and
+ * nothing else (no element, id or attribute), and when no earlier compound names a class in
+ * `skip` — a rule scoped to `.hero-actions` cannot paint the CTA band's action. A rule naming an
+ * interaction pseudo-class is skipped: this reads the resting state. A `border` shorthand counts
+ * as a `border-color` declaration, because the cascade does not care which of the two a rule
+ * writes.
+ */
+export function restPaintOf(
+  rules: { selector: string; body: string }[],
+  classes: string[],
+  skip: string[] = [],
+): Map<string, string> {
+  const own = new Set(classes);
+  const best = new Map<string, { value: string; weight: number; order: number }>();
+  const put = (property: string, value: string, weight: number, order: number) => {
+    const current = best.get(property);
+    if (!current || weight > current.weight || (weight === current.weight && order >= current.order)) {
+      best.set(property, { value, weight, order });
+    }
+  };
+  rules.forEach((rule, index) => {
+    for (const part of selectorList(rule.selector)) {
+      if (/:(?:hover|active|focus-visible)\b/.test(part)) continue;
+      if (skip.some((one) => part.includes(one))) continue;
+      const compounds = part.split(/\s+/).filter(Boolean);
+      const last = compounds[compounds.length - 1] ?? "";
+      const named = [...last.matchAll(/\.([\w-]+)/g)].map((m) => m[1]!);
+      if (named.length === 0 || !named.every((one) => own.has(one))) continue;
+      // The compound carries nothing but those classes.
+      if (last.replace(/\.[\w-]+/g, "").trim() !== "") continue;
+      const weight = [...part.matchAll(/[.:#]/g)].length;
+      const body = overlayDeclarations(rule.body);
+      for (const [property, value] of body) put(property === "background-color" ? "background" : property, value, weight, index);
+      if (!body.has("border-color") && body.has("border")) put("border-color", borderColour(body.get("border")!), weight, index);
+    }
+  });
+  const out = new Map<string, string>();
+  for (const [property, one] of best) out.set(property, one.value);
+  return out;
 }
 
 /**
@@ -1339,13 +1391,25 @@ export function ghostControlsProblems(vars: {
   /* 3. both surfaces, each ghost scoped to the surface it claims. */
   const homeClass = `.${HEADER_OVERLAY_CLASS}`;
   const forHeader = (rule: { selector: string }) => rule.selector.includes(".site-header") && rule.selector.includes(".call-button");
+  /**
+   * A rule of the **button family** (owner direction by text, 16 Oct 2026): its selector's last
+   * compound is the family's own class once the state pseudo-classes come off, so `.button` and
+   * `.page--index .hero-actions .button` are family members and `.button--small`, `.button--paper`
+   * and `.service-cta` are not. Read on the bare compound, so `.button:active` is the same member
+   * as `.button`.
+   */
+  const forButton = (rule: { selector: string }) =>
+    selectorList(rule.selector).some((part) => {
+      const bare = part.replace(/::?[\w-]+(?:\([^)]*\))?/g, "").trim();
+      return bare === GHOST_BUTTON_SELECTOR || bare.endsWith(` ${GHOST_BUTTON_SELECTOR}`);
+    });
   const claims = marked.map((rule) => (declared(rule).get(GHOST_CONTROLS_MARKER) ?? "").trim());
   if (decision.enabled || marked.length > 0) {
     for (const [index, rule] of marked.entries()) {
       const claim = claims[index]!;
-      if (!forHeader(rule)) {
+      if (!forHeader(rule) && !forButton(rule)) {
         problems.push(
-          `"${selectorOf(rule)}" declares ${GHOST_CONTROLS_MARKER} but is not the header's action. The treatment is two controls — the header's action on both surfaces, and the nested card CTA — and a marker on anything else is a ghost drawn somewhere the owner did not ask for.`,
+          `"${selectorOf(rule)}" declares ${GHOST_CONTROLS_MARKER} but is neither the header's action nor a button of the family the owner named on 16 Oct 2026. The treatment is the header's action on both surfaces, the buttons of the family (${GHOST_BUTTON_SELECTOR}, and ${GHOST_BUTTON_SELECTORS[1]} over the hero photograph) and the nested card CTA — a marker on anything else is a ghost drawn somewhere the owner did not ask for.`,
         );
         continue;
       }
@@ -1377,10 +1441,16 @@ export function ghostControlsProblems(vars: {
     }
 
     /* 4. the numbers, off the stylesheet the way the gate reads the rest of it. */
+    /* The band the family's paper buttons sit on: the CTA band and the form are both
+       `section--alt`, whose background is `--paper-2` (#FAF7F2), not `--paper`. The floors are
+       measured against whichever of the two gives the ink words the *less* contrast, so the
+       band's own surface is the one the numbers are stated for. */
+    const paper2 = overlayColour(tokens.get("--paper-2") ?? "", tokens) ?? paper;
     for (const rule of marked) {
       const body = declared(rule);
       const claim = (body.get(GHOST_CONTROLS_MARKER) ?? "").trim();
-      if (!forHeader(rule) || (claim !== GHOST_SURFACE_INK && claim !== GHOST_SURFACE_WHITE)) continue;
+      const family = forButton(rule);
+      if ((!forHeader(rule) && !family) || (claim !== GHOST_SURFACE_INK && claim !== GHOST_SURFACE_WHITE)) continue;
       const text = overlayColour(body.get("color") ?? "", tokens);
       const outline = overlayColour(body.get("border-color") ?? "", tokens);
       const fill = (body.get("background") ?? body.get("background-color") ?? "").trim();
@@ -1413,16 +1483,25 @@ export function ghostControlsProblems(vars: {
           `"${selectorOf(rule)}" claims the paper surface but draws its ghost in rgb(${text.join(", ")}) — not the bundle's ink. On --paper the ghost is the ink ghost: the black outline and black words the owner asked for.`,
         );
       }
-      const textOn = contrastRatio(text, paper);
+      /* The button family's paper buttons do not all sit on `--paper`: the CTA band's action
+         and the form's submit sit on the band's own `--paper-2` (#FAF7F2), so the floors are
+         measured against whichever of the two surfaces gives this colour the less contrast. A
+         number stated against white alone would be a number for a surface the control is not
+         on — the mistake the 10 Oct measurement was written to stop. */
+      const onSurface = family && contrastRatio(text, paper2) < contrastRatio(text, paper) ? paper2 : paper;
+      const against = family
+        ? `the band's own surface (rgb(${onSurface.join(", ")}) — the worse of --paper #FFFFFF and --paper-2)`
+        : `--paper`;
+      const textOn = contrastRatio(text, onSurface);
       if (textOn < LABEL_CONTRAST) {
         problems.push(
-          `the paper-surface ghost (${selectorOf(rule)}) reaches only ${textOn.toFixed(2)}:1 for its words against --paper (rgb(${text.join(", ")}) on rgb(${paper.join(", ")})), under the ${LABEL_CONTRAST}:1 text needs.`,
+          `the paper-surface ghost (${selectorOf(rule)}) reaches only ${textOn.toFixed(2)}:1 for its words against ${against} (rgb(${text.join(", ")}) on rgb(${onSurface.join(", ")})), under the ${LABEL_CONTRAST}:1 text needs.`,
         );
       }
-      const outlineOn = contrastRatio(outline, paper);
+      const outlineOn = contrastRatio(outline, onSurface);
       if (outlineOn < WASH_CONTROL_CONTRAST) {
         problems.push(
-          `the paper-surface ghost's outline (${selectorOf(rule)}) reaches only ${outlineOn.toFixed(2)}:1 against --paper (rgb(${outline.join(", ")}) on rgb(${paper.join(", ")})), under the ${WASH_CONTROL_CONTRAST}:1 a control's own boundary needs.`,
+          `the paper-surface ghost's outline (${selectorOf(rule)}) reaches only ${outlineOn.toFixed(2)}:1 against ${against} (rgb(${outline.join(", ")}) on rgb(${onSurface.join(", ")})), under the ${WASH_CONTROL_CONTRAST}:1 a control's own boundary needs.`,
         );
       }
     }
@@ -1550,7 +1629,14 @@ export function ghostControlsProblems(vars: {
   const stateRuled: { resting: string; what: string }[] = [];
   if (decision.enabled || marked.length > 0) {
     for (const rule of marked) {
-      if (forHeader(rule)) stateRuled.push({ resting: selectorOf(rule), what: `the header's ghost (${selectorOf(rule)})` });
+      // Every marked rule the treatment owns, the button family included (16 Oct 2026): a state
+      // the treatment does not declare is a state some earlier page rule paints. A marked rule
+      // that is neither control is clause 3's refusal, not this clause's, so it is skipped here.
+      if (!forHeader(rule) && !forButton(rule)) continue;
+      stateRuled.push({
+        resting: selectorOf(rule),
+        what: `${forButton(rule) ? "the button family" : "the header's ghost"} (${selectorOf(rule)})`,
+      });
     }
   }
   if (ctaRest) stateRuled.push({ resting: selectorOf(ctaRest), what: `the card CTA (${selectorOf(ctaRest)})` });
@@ -1569,6 +1655,81 @@ export function ghostControlsProblems(vars: {
         problems.push(
           `${control.what} leaves its ${state} colour to the cascade: the last rule for "${wanted}" declares no color, so whichever earlier rule matches paints the words — on the home header that is .page--index .site-header .call-button:hover { color: var(--ink) }, which rendered white words as ink at 1.00-1.53:1 on the hero picture (measured 10 Oct 2026). A state rule of the treatment declares the surface's own colour itself; the nested card CTA's two states already do.`,
         );
+      }
+    }
+  }
+
+  /* 7. **the rest of the button family** (owner direction by text, 16 Oct 2026: the outlined
+        transparent treatment consistent across every button of the Maple Avenue review copy).
+        Clauses 3-6 are the header's action and the nested card CTA; this is every other button
+        the renderer draws — the CTA band's action, the contact form's submit, Get directions,
+        and the home page's two hero actions. Two things are refused, by name:
+
+          7a. **a control left behind wearing the filled pill.** The opt-in is in force, the
+              stylesheet carries the marker, and one control still resolves to a fill. It is read
+              through the cascade (`restPaintOf`) rather than off the marked rule, because the
+              question is what the browser paints and not what the treatment's own rule says —
+              the same reason clause 4b exists;
+          7b. **a treatment that covers part of the family**: with the opt-in in force, every
+              selector the module names is marked in the stylesheet the bundle ships.
+
+        What is *not* here: the photograph's numbers. Clause 4 measures the marked family rules
+        against the paper surfaces, and `headerOverlayProblems` clause 6 measures the header's own
+        band against the wash. What the hero's white is worth against the hero's own scrim is a
+        rendered measurement (`design/ghost-controls-measurements.md`) — this gate refuses a
+        colour the surface cannot carry; the pixels say how much it carries. */
+  if (decision.enabled || marked.length > 0) {
+    const unmarked = GHOST_BUTTON_SELECTORS.filter((one) => !marked.some((rule) => selectorOf(rule) === one));
+    if (unmarked.length > 0) {
+      problems.push(
+        `the stylesheet this bundle ships paints the ghost on the header's action and not across the button family: ${unmarked.join(" and ")} carry no marked rule, so ${unmarked.length === 1 ? "that control" : "those controls"} still wear the filled button while the opt-in is in force. The owner's direction of 16 Oct 2026 is one treatment across every button of this copy — the CTA band's action, the form's submit, Get directions and the home hero's two actions as well as the header's. ${decision.basis}`,
+      );
+    }
+    if (marked.some((rule) => forButton(rule))) {
+      for (const control of GHOST_BUTTON_CONTROLS) {
+        // The paint the browser gives this control at rest, ancestors and all.
+        const paint = restPaintOf(all, control.classes, control.skip ?? []);
+        const fill = (paint.get("background") ?? "").trim();
+        const words = overlayColour(paint.get("color") ?? "", tokens);
+        const outline = overlayColour(paint.get("border-color") ?? "", tokens);
+        if (!/^(transparent|none)$/i.test(fill)) {
+          problems.push(
+            `${control.what} is still a filled control in the stylesheet this bundle ships: the cascade resolves its background to ${fill || "nothing"}, not to transparent. ${GHOST_CONTROLS_VAR} is in force and every button of this copy wears the outline treatment (owner's direction, 16 Oct 2026), so a control that still resolves to a fill is the one control the treatment missed.`,
+          );
+        }
+        if (!words) {
+          problems.push(
+            `${control.what} resolves to no readable text colour, so neither its contrast nor the surface it is drawn for can be checked.`,
+          );
+          continue;
+        }
+        if (control.surface === GHOST_SURFACE_WHITE) {
+          if (!/^255,255,255$/.test(words.join(","))) {
+            problems.push(
+              `${control.what} resolves to rgb(${words.join(", ")}) words, but it sits on the home page's hero photograph behind the scrim: there the ghost is white, the same rule the header's action follows, and any other colour is a different treatment wearing the marker.`,
+            );
+          }
+          if (!outline || !/^255,255,255$/.test(outline.join(","))) {
+            problems.push(
+              `${control.what} resolves to ${outline ? `rgb(${outline.join(", ")})` : "no"} outline colour over the hero photograph, where the control's boundary has to be the same white its words are: on a picture the outline is the only edge a transparent control has.`,
+            );
+          }
+        } else {
+          if (!isInk(words)) {
+            problems.push(
+              `${control.what} resolves to rgb(${words.join(", ")}) words — not the bundle's ink. On the paper surfaces the family is the ink ghost: the same words and the same outline the card CTA and the paper header wear.`,
+            );
+          }
+          if (!outline) {
+            problems.push(
+              `${control.what} resolves to no outline colour, so its own boundary against the paper is unknown. A transparent control has no fill to give it an edge.`,
+            );
+          } else if (outline.join(",") !== words.join(",")) {
+            problems.push(
+              `${control.what} resolves to an outline in rgb(${outline.join(", ")}) and words in rgb(${words.join(", ")}) — two colours on one control. The outline is the words' own colour, which is what makes every button of this family one treatment.`,
+            );
+          }
+        }
       }
     }
   }
