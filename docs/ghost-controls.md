@@ -299,6 +299,13 @@ product; outlining it would distort the comparison), and the nested card CTA's a
 `translateY(1px)` on `:active`.
 
 Numbers, the rendered box table (unchanged in all four states), the rendered contrast table at 360
-and 1440, the hierarchy finding, and the gaps this session did **not** close (no new regression
-test for clause 7, no mutation sweep, no re-run of the byte-diff blast radius): see
-`design/every-button-outlined-2026-10-16.md`, which lives outside this repository.
+and 1440, and the hierarchy finding: see `design/every-button-outlined-2026-10-16.md`, which lives
+outside this repository.
+
+**The clause is a rule now, not prose.** The session that wrote the family treatment left clause 7
+untested, and by this team's own rule a rule with no test is no rule. It has since gained one test
+per condition it guards (`test/ghost-controls.test.ts`), and `docs/clause-7-doctor-proofs.md`
+carries the mutation sweep behind them: each condition removed from `build.ts` one at a time, the
+suite watched going red, and the file restored byte-exact (suite 316 → 324). Nothing of the
+treatment moved: the stylesheet a switch-on build writes is byte-identical before and after, which
+is what the review copy the owner is holding was built from.
