@@ -56,6 +56,7 @@ import {
 } from "./refusal-registry.ts";
 import { manifestClaimProblems, refusalCoverageProblems } from "./refusal-coverage.ts";
 import { contactLabelProblems, familyHonestyProblems, familyProblems, submitLabelProblems } from "./family.ts";
+import { graphicsProblems, type GraphicsPart } from "./graphics.ts";
 import {
   SECTION_ORDER,
   extrasLines,
@@ -2515,6 +2516,11 @@ export function complianceChecks(vars: {
   /** The bundle's only script, so the no-tracking sentence can be checked, not asserted. */
   js?: string;
   /**
+   * The graphics layer's parts, as `graphics.ts` emits them. Passed only by a test that
+   * hands the check a deliberately broken layer; absent means the real layer.
+   */
+  graphics?: GraphicsPart[];
+  /**
    * The delivered README, when the caller has it. It ships inside the bundle and carries
    * the same phase furniture as the pages, so `phaseFurnitureProblems` checks it too —
    * `build.ts` always passes it. Left optional only so a caller that is checking a page
@@ -2780,6 +2786,13 @@ export function complianceChecks(vars: {
   // stylesheet that ships rather than from the box a browser happens to draw.
   problems.push(...tapTargetProblems(pages, vars.css ?? ""));
   problems.push(...externalReferenceProblems({ pages, css: vars.css ?? "", js: vars.js ?? "" }));
+  // The graphics layer's own clauses (`graphics.ts`, S3). They audit the layer's output
+  // rather than a single page, so they hold whether or not this build renders an icon:
+  // the layer may never reach the network, leave a graphic unmarked, hard-code a colour,
+  // outgrow its byte cap or write a rule outside `.gfx-`. A caller that passes its own
+  // parts (a test proving a clause can fire) gets those audited; the default is the real
+  // layer, so no build path can skip the check by forgetting to ask for it.
+  problems.push(...graphicsProblems(vars.graphics));
   problems.push(...placeholderProblems(pages));
   return problems;
 }
