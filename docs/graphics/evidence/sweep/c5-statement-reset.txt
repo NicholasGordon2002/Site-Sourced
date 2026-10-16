@@ -1,0 +1,689 @@
+bun test v1.4.3 (c6da4a4d3)
+
+test/graphics.test.ts:
+(pass) the layer is complete: every name it publishes draws something [0.31ms]
+(pass) every icon is 24px-grid, one stroke weight, and decorative [0.17ms]
+(pass) a meaningful graphic is named, and the initials mark is decorative [0.29ms]
+114 |   expect(initialsOf("")).toBe("SS");
+115 |   expect(wordmark("Maple Avenue Barber Shop", { mark: true })).toContain("gfx-wordmark-name");
+116 | });
+117 | 
+118 | test("the real layer passes all five clauses, and fits its byte caps", () => {
+119 |   expect(graphicsProblems()).toEqual([]);
+                                   ^
+error: expect(received).toEqual(expected)
+
+- []
++ [
++   
++ "graphics layer: its stylesheet writes the rule "display: inline-block;
++   flex: none;
++   vertical-align: -0.18em;
++   stroke: currentColor;
++ 
++ .gfx-icon--20", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "width: 20px; height: 20px; 
++ .gfx-icon--24", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "width: 24px; height: 24px; 
++ 
++ 
++ .gfx-marked", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "display: inline-flex;
++   align-items: center;
++   gap: var(--s-1);
++ 
++ .gfx-marked--row", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "display: flex;
++   align-items: center;
++   gap: var(--s-2);
++ 
++ 
++ .gfx-ground", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "position: relative; 
++ .gfx-ground--rules", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   "graphics layer: its stylesheet writes the rule "background-image: repeating-linear-gradient(to bottom", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   "graphics layer: its stylesheet writes the rule "currentColor 0 1px", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   
++ "graphics layer: its stylesheet writes the rule "transparent 1px 28px);
++ 
++ .gfx-ground--grid", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "background-image:
++     repeating-linear-gradient(to right", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   "graphics layer: its stylesheet writes the rule "currentColor 0 1px", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   "graphics layer: its stylesheet writes the rule "transparent 1px 16px)", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   "graphics layer: its stylesheet writes the rule "repeating-linear-gradient(to bottom", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   "graphics layer: its stylesheet writes the rule "currentColor 0 1px", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   
++ "graphics layer: its stylesheet writes the rule "transparent 1px 16px);
++ 
++ .gfx-ground--arcs", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   "graphics layer: its stylesheet writes the rule "background-image: radial-gradient(circle at 50% 100%", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   "graphics layer: its stylesheet writes the rule "transparent 0 27px", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   "graphics layer: its stylesheet writes the rule "currentColor 27px 28px", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   
++ "graphics layer: its stylesheet writes the rule "transparent 28px);
++   background-size: 56px 28px;
++ 
++ .gfx-ground--stripe", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   "graphics layer: its stylesheet writes the rule "background-image: repeating-linear-gradient(115deg", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   "graphics layer: its stylesheet writes the rule "currentColor 0 1px", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   
++ "graphics layer: its stylesheet writes the rule "transparent 1px 9px);
++ 
++ .gfx-ground--no-photo", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "color: var(--paper);
++   background-color: var(--ink);
++   background-image: radial-gradient(circle at 50% 100%", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   "graphics layer: its stylesheet writes the rule "transparent 0 27px", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   "graphics layer: its stylesheet writes the rule "currentColor 27px 28px", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   
++ "graphics layer: its stylesheet writes the rule "transparent 28px);
++   background-size: 56px 28px;
++   border-top: 3px solid var(--accent);
++ 
++ .gfx-ground--on-ink", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "color: var(--footer-ink); 
++ .gfx-ground--on-paper", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "color: var(--line); 
++ 
++ .gfx-divider", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "display: block;
++   width: 100%;
++   height: 24px;
++   color: var(--line);
++ 
++ .gfx-divider--stripe", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "color: var(--line); 
++ .gfx-accent-stroke", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "stroke: var(--accent); 
++ 
++ .gfx-map", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "display: block;
++   width: 100%;
++   height: auto;
++   max-width: 30rem;
++   color: var(--line);
++ 
++ .gfx-map-ground", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "fill: var(--paper-2); stroke: none; 
++ .gfx-map-street", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "fill: var(--paper); stroke: none; 
++ .gfx-map .gfx-map-block", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "fill: var(--paper); 
++ .gfx-map-block", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "fill: none; stroke: var(--line); 
++ .gfx-map-hair", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "stroke: var(--line); 
++ .gfx-map-dash", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "stroke: var(--line); 
++ .gfx-map-halo", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "fill: var(--accent-soft); stroke: none; 
++ .gfx-map-dot", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "fill: var(--accent); stroke: none; 
++ .gfx-map-label", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "fill: var(--body-text); font-family: var(--font-body); font-size: 15px; stroke: none; 
++ .gfx-map-note", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "fill: var(--muted);
++   font-family: var(--font-label", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "var(--font-body));
++   font-size: 11px;
++   letter-spacing: 0.12em;
++   stroke: none;
++ 
++ 
++ .gfx-wordmark", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "display: inline-flex; align-items: center; gap: var(--s-2); 
++ .gfx-wordmark-name", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "font-family: var(--font-display);
++   font-weight: 600;
++   letter-spacing: -0.01em;
++ 
++ .gfx-wordmark--rule .gfx-wordmark-name", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "display: inline-block;
++   padding-bottom: 3px;
++   border-bottom: 2px solid var(--accent);
++ 
++ .gfx-monogram", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "display: block; flex: none; 
++ .gfx-mono-face", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "fill: var(--accent); 
++ .gfx-mono-letters", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++ ]
+
+- Expected  - 1
++ Received  + 199
+
+      at <anonymous> (/home/team/shared/pipeline/test/graphics.test.ts:119:30)
+(fail) the real layer passes all five clauses, and fits its byte caps [1.95ms]
+148 |   expect(
+149 |     graphicsProblems(withPart("css", '.gfx-map-dot { fill: url("#accent"); }')).some((p) =>
+150 |       p.includes("a url() reference"),
+151 |     ),
+152 |   ).toBe(true);
+153 |   expect(graphicsProblems()).toEqual([]);
+                                   ^
+error: expect(received).toEqual(expected)
+
+- []
++ [
++   
++ "graphics layer: its stylesheet writes the rule "display: inline-block;
++   flex: none;
++   vertical-align: -0.18em;
++   stroke: currentColor;
++ 
++ .gfx-icon--20", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "width: 20px; height: 20px; 
++ .gfx-icon--24", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "width: 24px; height: 24px; 
++ 
++ 
++ .gfx-marked", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "display: inline-flex;
++   align-items: center;
++   gap: var(--s-1);
++ 
++ .gfx-marked--row", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "display: flex;
++   align-items: center;
++   gap: var(--s-2);
++ 
++ 
++ .gfx-ground", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "position: relative; 
++ .gfx-ground--rules", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   "graphics layer: its stylesheet writes the rule "background-image: repeating-linear-gradient(to bottom", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   "graphics layer: its stylesheet writes the rule "currentColor 0 1px", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   
++ "graphics layer: its stylesheet writes the rule "transparent 1px 28px);
++ 
++ .gfx-ground--grid", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "background-image:
++     repeating-linear-gradient(to right", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   "graphics layer: its stylesheet writes the rule "currentColor 0 1px", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   "graphics layer: its stylesheet writes the rule "transparent 1px 16px)", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   "graphics layer: its stylesheet writes the rule "repeating-linear-gradient(to bottom", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   "graphics layer: its stylesheet writes the rule "currentColor 0 1px", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   
++ "graphics layer: its stylesheet writes the rule "transparent 1px 16px);
++ 
++ .gfx-ground--arcs", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   "graphics layer: its stylesheet writes the rule "background-image: radial-gradient(circle at 50% 100%", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   "graphics layer: its stylesheet writes the rule "transparent 0 27px", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   "graphics layer: its stylesheet writes the rule "currentColor 27px 28px", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   
++ "graphics layer: its stylesheet writes the rule "transparent 28px);
++   background-size: 56px 28px;
++ 
++ .gfx-ground--stripe", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   "graphics layer: its stylesheet writes the rule "background-image: repeating-linear-gradient(115deg", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   "graphics layer: its stylesheet writes the rule "currentColor 0 1px", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   
++ "graphics layer: its stylesheet writes the rule "transparent 1px 9px);
++ 
++ .gfx-ground--no-photo", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "color: var(--paper);
++   background-color: var(--ink);
++   background-image: radial-gradient(circle at 50% 100%", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   "graphics layer: its stylesheet writes the rule "transparent 0 27px", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   "graphics layer: its stylesheet writes the rule "currentColor 27px 28px", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   
++ "graphics layer: its stylesheet writes the rule "transparent 28px);
++   background-size: 56px 28px;
++   border-top: 3px solid var(--accent);
++ 
++ .gfx-ground--on-ink", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "color: var(--footer-ink); 
++ .gfx-ground--on-paper", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "color: var(--line); 
++ 
++ .gfx-divider", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "display: block;
++   width: 100%;
++   height: 24px;
++   color: var(--line);
++ 
++ .gfx-divider--stripe", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "color: var(--line); 
++ .gfx-accent-stroke", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "stroke: var(--accent); 
++ 
++ .gfx-map", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "display: block;
++   width: 100%;
++   height: auto;
++   max-width: 30rem;
++   color: var(--line);
++ 
++ .gfx-map-ground", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "fill: var(--paper-2); stroke: none; 
++ .gfx-map-street", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "fill: var(--paper); stroke: none; 
++ .gfx-map .gfx-map-block", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "fill: var(--paper); 
++ .gfx-map-block", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "fill: none; stroke: var(--line); 
++ .gfx-map-hair", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "stroke: var(--line); 
++ .gfx-map-dash", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "stroke: var(--line); 
++ .gfx-map-halo", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "fill: var(--accent-soft); stroke: none; 
++ .gfx-map-dot", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "fill: var(--accent); stroke: none; 
++ .gfx-map-label", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "fill: var(--body-text); font-family: var(--font-body); font-size: 15px; stroke: none; 
++ .gfx-map-note", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "fill: var(--muted);
++   font-family: var(--font-label", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "var(--font-body));
++   font-size: 11px;
++   letter-spacing: 0.12em;
++   stroke: none;
++ 
++ 
++ .gfx-wordmark", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "display: inline-flex; align-items: center; gap: var(--s-2); 
++ .gfx-wordmark-name", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "font-family: var(--font-display);
++   font-weight: 600;
++   letter-spacing: -0.01em;
++ 
++ .gfx-wordmark--rule .gfx-wordmark-name", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "display: inline-block;
++   padding-bottom: 3px;
++   border-bottom: 2px solid var(--accent);
++ 
++ .gfx-monogram", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "display: block; flex: none; 
++ .gfx-mono-face", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "fill: var(--accent); 
++ .gfx-mono-letters", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++ ]
+
+- Expected  - 1
++ Received  + 199
+
+      at <anonymous> (/home/team/shared/pipeline/test/graphics.test.ts:153:30)
+(fail) clause 1 fires: a layer that reaches the network fails the build [2.85ms]
+(pass) clause 2 fires: an unmarked, doubly-marked or nameless graphic fails [0.78ms]
+(pass) clause 3 fires: a baked-in colour fails, because it cannot follow the surface [0.66ms]
+(pass) clause 4 fires: an icon, the set and the whole layer each have a cap [1.88ms]
+229 | /* -------------------------------------------------------- clause 5 — scoping */
+230 | 
+231 | test("clause 5 fires: every rule is scoped to a .gfx- class, or it is refused", () => {
+232 |   const leaked = `${graphicsCss()}\n.card { border-color: var(--accent); }\nbody { color: var(--ink); }`;
+233 |   const problems = graphicsProblems(withPart("css", leaked));
+234 |   expect(problems.some((p) => p.includes('the rule ".card"'))).toBe(true);
+                                                                     ^
+error: expect(received).toBe(expected)
+
+Expected: true
+Received: false
+
+      at <anonymous> (/home/team/shared/pipeline/test/graphics.test.ts:234:64)
+(fail) clause 5 fires: every rule is scoped to a .gfx- class, or it is refused [0.67ms]
+264 |   // A rule after the at-rule block is back at the top level: nothing carries the path on.
+265 |   const after = graphicsProblems(
+266 |     withPart("css", "@media (min-width: 40rem) { .gfx-icon { width: 1rem; } }\n.card { border-color: var(--accent); }"),
+267 |   );
+268 |   expect(after.length).toBe(1);
+269 |   expect(after[0]).toContain('the rule ".card"');
+                         ^
+error: expect(received).toContain(expected)
+
+Expected to contain: "the rule \".card\""
+Received: "graphics layer: its stylesheet writes the rule \"width: 1rem;  \n.card\", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
+
+      at <anonymous> (/home/team/shared/pipeline/test/graphics.test.ts:269:20)
+(fail) clause 5 fires inside an at-rule, and the refusal says which at-rule [1.53ms]
+(pass) clause 5's stated limits hold at the boundary: key frames, and CSS nesting [0.62ms]
+319 |     delivery,
+320 |     images: [] as ManifestImage[],
+321 |     privacy: ctx.privacy,
+322 |   };
+323 |   // The unbroken layer adds nothing to a real build's problem list...
+324 |   expect(complianceChecks(base).filter((p) => p.startsWith("graphics layer"))).toEqual([]);
+                                                                                     ^
+error: expect(received).toEqual(expected)
+
+- []
++ [
++   
++ "graphics layer: its stylesheet writes the rule "display: inline-block;
++   flex: none;
++   vertical-align: -0.18em;
++   stroke: currentColor;
++ 
++ .gfx-icon--20", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "width: 20px; height: 20px; 
++ .gfx-icon--24", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "width: 24px; height: 24px; 
++ 
++ 
++ .gfx-marked", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "display: inline-flex;
++   align-items: center;
++   gap: var(--s-1);
++ 
++ .gfx-marked--row", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "display: flex;
++   align-items: center;
++   gap: var(--s-2);
++ 
++ 
++ .gfx-ground", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "position: relative; 
++ .gfx-ground--rules", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   "graphics layer: its stylesheet writes the rule "background-image: repeating-linear-gradient(to bottom", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   "graphics layer: its stylesheet writes the rule "currentColor 0 1px", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   
++ "graphics layer: its stylesheet writes the rule "transparent 1px 28px);
++ 
++ .gfx-ground--grid", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "background-image:
++     repeating-linear-gradient(to right", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   "graphics layer: its stylesheet writes the rule "currentColor 0 1px", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   "graphics layer: its stylesheet writes the rule "transparent 1px 16px)", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   "graphics layer: its stylesheet writes the rule "repeating-linear-gradient(to bottom", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   "graphics layer: its stylesheet writes the rule "currentColor 0 1px", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   
++ "graphics layer: its stylesheet writes the rule "transparent 1px 16px);
++ 
++ .gfx-ground--arcs", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   "graphics layer: its stylesheet writes the rule "background-image: radial-gradient(circle at 50% 100%", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   "graphics layer: its stylesheet writes the rule "transparent 0 27px", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   "graphics layer: its stylesheet writes the rule "currentColor 27px 28px", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   
++ "graphics layer: its stylesheet writes the rule "transparent 28px);
++   background-size: 56px 28px;
++ 
++ .gfx-ground--stripe", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   "graphics layer: its stylesheet writes the rule "background-image: repeating-linear-gradient(115deg", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   "graphics layer: its stylesheet writes the rule "currentColor 0 1px", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   
++ "graphics layer: its stylesheet writes the rule "transparent 1px 9px);
++ 
++ .gfx-ground--no-photo", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "color: var(--paper);
++   background-color: var(--ink);
++   background-image: radial-gradient(circle at 50% 100%", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   "graphics layer: its stylesheet writes the rule "transparent 0 27px", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   "graphics layer: its stylesheet writes the rule "currentColor 27px 28px", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   
++ "graphics layer: its stylesheet writes the rule "transparent 28px);
++   background-size: 56px 28px;
++   border-top: 3px solid var(--accent);
++ 
++ .gfx-ground--on-ink", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "color: var(--footer-ink); 
++ .gfx-ground--on-paper", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "color: var(--line); 
++ 
++ .gfx-divider", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "display: block;
++   width: 100%;
++   height: 24px;
++   color: var(--line);
++ 
++ .gfx-divider--stripe", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "color: var(--line); 
++ .gfx-accent-stroke", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "stroke: var(--accent); 
++ 
++ .gfx-map", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "display: block;
++   width: 100%;
++   height: auto;
++   max-width: 30rem;
++   color: var(--line);
++ 
++ .gfx-map-ground", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "fill: var(--paper-2); stroke: none; 
++ .gfx-map-street", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "fill: var(--paper); stroke: none; 
++ .gfx-map .gfx-map-block", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "fill: var(--paper); 
++ .gfx-map-block", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "fill: none; stroke: var(--line); 
++ .gfx-map-hair", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "stroke: var(--line); 
++ .gfx-map-dash", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "stroke: var(--line); 
++ .gfx-map-halo", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "fill: var(--accent-soft); stroke: none; 
++ .gfx-map-dot", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "fill: var(--accent); stroke: none; 
++ .gfx-map-label", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "fill: var(--body-text); font-family: var(--font-body); font-size: 15px; stroke: none; 
++ .gfx-map-note", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "fill: var(--muted);
++   font-family: var(--font-label", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "var(--font-body));
++   font-size: 11px;
++   letter-spacing: 0.12em;
++   stroke: none;
++ 
++ 
++ .gfx-wordmark", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "display: inline-flex; align-items: center; gap: var(--s-2); 
++ .gfx-wordmark-name", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "font-family: var(--font-display);
++   font-weight: 600;
++   letter-spacing: -0.01em;
++ 
++ .gfx-wordmark--rule .gfx-wordmark-name", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "display: inline-block;
++   padding-bottom: 3px;
++   border-bottom: 2px solid var(--accent);
++ 
++ .gfx-monogram", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "display: block; flex: none; 
++ .gfx-mono-face", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++   
++ "graphics layer: its stylesheet writes the rule "fill: var(--accent); 
++ .gfx-mono-letters", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
++ ,
++ ]
+
+- Expected  - 1
++ Received  + 199
+
+      at <anonymous> (/home/team/shared/pipeline/test/graphics.test.ts:324:80)
+(fail) the clauses are wired into the build itself, not only callable [22.13ms]
+(pass) the layers' own exports do not collide with the template's class names [0.30ms]
+
+ 8 pass
+ 5 fail
+ 238 expect() calls
+Ran 13 tests across 1 file. [66.00ms]

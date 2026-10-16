@@ -1,0 +1,71 @@
+# 17 Oct 2026: the check-fix session changed no emitted byte
+
+This session rewrote `cssSelectors()` in `src/demo/graphics.ts` (clause 5) and the per-part
+cap branch in `graphicsProblems()` (clause 4). Nothing in the layer's output moved. Proved
+two ways, both from this machine on 17 Oct 2026, tree at `master` `5da49dc` with only the
+check, its tests and the sweep rows changed.
+
+## 1. The layer's own emitted output: identical, hash for hash
+
+`graphicsCss()`, each part `graphicsParts()` emits, all parts joined, and
+`graphicsByteReport()` are hashed before and after the change. The two runs print the same
+bytes; `diff` between them is empty (`LAYER-OUTPUT-IDENTICAL`).
+
+```
+$ cd /home/team/shared/pipeline
+$ bun run /tmp/gfxcheck/layer-hash.ts > before.txt     # before the edit (master 5da49dc)
+$ bun run /tmp/gfxcheck/layer-hash.ts > after.txt      # after the edit
+$ diff before.txt after.txt   # no output
+
+graphicsCss()  a6eca3d43e6d9473ed4ed34684aad84507ab38f5b66c2dad6e108a4142780f06  3648 bytes
+part icons     4a1f5c6348203dac974182ddaeda8b52238bb70f6383884fda8a430ef1c7c6a2  5070 bytes
+part css       a6eca3d43e6d9473ed4ed34684aad84507ab38f5b66c2dad6e108a4142780f06  3648 bytes
+part dividers  7cc94a20c646be49f7146347ba8da14e1c46a1d6de126e3ae8da79c1f0b364ec  1298 bytes
+part map       296d0de06d2aa6004a9e472fb4130bc4cd6f3dc53b985aeaf00e5dbe755430a8  1468 bytes
+part wordmark  f3f1032a0d5f41ce899b8b8da5688d568483ac597c9640ebcb317bb9c886e42d  375 bytes
+part caption   20e61ef9de344ac8dc5de88a5b7b9d2f10f132cd44cbb996f6ee45da5e0236ad  67 bytes
+all parts joined  e4384c387325173ad35a563b0f18d352b58aa8de380c4997cb815f0a6ddb5e60
+graphicsByteReport()  9deb2ccb6985682bdf6007402a2aab9bfe859969bef4c4552f036c08dc09cf09
+graphicsProblems()  []      # the real layer still passes every clause
+```
+
+The specimen page is the layer laid out with its own measured table, so it is the second
+witness:
+
+```
+$ bun run tools/graphics-specimen.ts --check
+up to date: /home/team/shared/pipeline/docs/graphics/graphics-specimen.html (59245 B)
+$ sha256sum docs/graphics/graphics-specimen.html
+212fc7bd24ed40cd6e59fc2896b6328b6763c79cbe0af1f29e690a47fe05c31e  docs/graphics/graphics-specimen.html
+    # the same hash as before the change
+```
+
+## 2. The four fixtures: rebuilt, byte-identical
+
+Both trees built with the switches off, the same way the 16 Oct comparison was built:
+
+```
+$ cd /home/team/shared/pipeline
+$ bun run src/demo/cli.ts -- --record test/fixtures --out /tmp/gfxcheck/before   # before the edit
+$ bun run src/demo/cli.ts -- --record test/fixtures --out /tmp/gfxcheck/after    # after the edit
+
+$ cd /tmp/gfxcheck/before && find . -type f ! -name manifest.json | sort | xargs sha256sum > /tmp/gfxcheck/before.norm.sha
+$ cd /tmp/gfxcheck/after  && find . -type f ! -name manifest.json | sort | xargs sha256sum > /tmp/gfxcheck/after.norm.sha
+$ diff /tmp/gfxcheck/before.norm.sha /tmp/gfxcheck/after.norm.sha
+(no output: the two lists are identical)
+# files compared: 80 in before, 80 in after
+# per-bundle pages:
+  before king-west-dental
+  before maple-avenue-barber-shop
+  before northshore-garden-works
+  before red-hill-property-care
+  after  king-west-dental
+  after  maple-avenue-barber-shop
+  after  northshore-garden-works
+  after  red-hill-property-care
+```
+
+`manifest.json` is the only excluded file, as in the 16 Oct comparison: it carries a
+generated-at timestamp. This is the point of the session — the layer is not wired into any
+page yet, so a change to the *check* must not move a single byte of a built bundle, and it
+does not.

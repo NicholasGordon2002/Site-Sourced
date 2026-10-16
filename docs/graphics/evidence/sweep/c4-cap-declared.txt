@@ -1,0 +1,34 @@
+bun test v1.4.3 (c6da4a4d3)
+
+test/graphics.test.ts:
+(pass) the layer is complete: every name it publishes draws something [0.30ms]
+(pass) every icon is 24px-grid, one stroke weight, and decorative [0.20ms]
+(pass) a meaningful graphic is named, and the initials mark is decorative [0.31ms]
+(pass) the real layer passes all five clauses, and fits its byte caps [1.67ms]
+(pass) clause 1 fires: a layer that reaches the network fails the build [1.75ms]
+(pass) clause 2 fires: an unmarked, doubly-marked or nameless graphic fails [0.70ms]
+(pass) clause 3 fires: a baked-in colour fails, because it cannot follow the surface [0.65ms]
+221 |   // also why the caption exemption is load-bearing: without it the caption lands here.
+222 |   const uncapped = graphicsProblems([
+223 |     ...graphicsParts(),
+224 |     { name: "sparkle", text: "<svg aria-hidden=\"true\"></svg>" } as unknown as GraphicsPart,
+225 |   ]);
+226 |   expect(uncapped.some((p) => p.includes("its sparkle part has no byte cap"))).toBe(true);
+                                                                                     ^
+error: expect(received).toBe(expected)
+
+Expected: true
+Received: false
+
+      at <anonymous> (/home/team/shared/pipeline/test/graphics.test.ts:226:80)
+(fail) clause 4 fires: an icon, the set and the whole layer each have a cap [2.46ms]
+(pass) clause 5 fires: every rule is scoped to a .gfx- class, or it is refused [0.53ms]
+(pass) clause 5 fires inside an at-rule, and the refusal says which at-rule [0.79ms]
+(pass) clause 5's stated limits hold at the boundary: key frames, and CSS nesting [0.68ms]
+(pass) the clauses are wired into the build itself, not only callable [27.00ms]
+(pass) the layers' own exports do not collide with the template's class names [0.24ms]
+
+ 12 pass
+ 1 fail
+ 253 expect() calls
+Ran 13 tests across 1 file. [72.00ms]

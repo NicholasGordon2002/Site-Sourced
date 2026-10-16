@@ -1,10 +1,10 @@
 bun test v1.4.3 (c6da4a4d3)
 
 test/graphics.test.ts:
-(pass) the layer is complete: every name it publishes draws something [0.29ms]
+(pass) the layer is complete: every name it publishes draws something [0.33ms]
 (pass) every icon is 24px-grid, one stroke weight, and decorative [0.17ms]
-(pass) a meaningful graphic is named, and the initials mark is decorative [0.28ms]
-(pass) the real layer passes all five clauses, and fits its byte caps [1.31ms]
+(pass) a meaningful graphic is named, and the initials mark is decorative [0.29ms]
+(pass) the real layer passes all five clauses, and fits its byte caps [1.64ms]
 138 |     ['<use href="sprite.svg#pin"/>', "<use> pointing outside this document"],
 139 |     ['<svg src="icons.svg"></svg>', "external resource attribute"],
 140 |   ] as const;
@@ -17,16 +17,18 @@ error: expect(received).toBe(expected)
 Expected: true
 Received: false
 
-      at <anonymous> (/tmp/gfx-layer/test/graphics.test.ts:143:88)
-(fail) clause 1 fires: a layer that reaches the network fails the build [0.54ms]
-(pass) clause 2 fires: an unmarked, doubly-marked or nameless graphic fails [0.78ms]
-(pass) clause 3 fires: a baked-in colour fails, because it cannot follow the surface [0.76ms]
-(pass) clause 4 fires: an icon, the set and the whole layer each have a cap [1.46ms]
-(pass) clause 5 fires: every rule is scoped to a .gfx- class, or it is refused [0.47ms]
-(pass) the clauses are wired into the build itself, not only callable [25.84ms]
-(pass) the layers' own exports do not collide with the template's class names [0.27ms]
+      at <anonymous> (/home/team/shared/pipeline/test/graphics.test.ts:143:88)
+(fail) clause 1 fires: a layer that reaches the network fails the build [0.96ms]
+(pass) clause 2 fires: an unmarked, doubly-marked or nameless graphic fails [0.99ms]
+(pass) clause 3 fires: a baked-in colour fails, because it cannot follow the surface [0.92ms]
+(pass) clause 4 fires: an icon, the set and the whole layer each have a cap [1.83ms]
+(pass) clause 5 fires: every rule is scoped to a .gfx- class, or it is refused [0.68ms]
+(pass) clause 5 fires inside an at-rule, and the refusal says which at-rule [0.80ms]
+(pass) clause 5's stated limits hold at the boundary: key frames, and CSS nesting [0.57ms]
+(pass) the clauses are wired into the build itself, not only callable [27.41ms]
+(pass) the layers' own exports do not collide with the template's class names [0.43ms]
 
- 10 pass
+ 12 pass
  1 fail
- 228 expect() calls
-Ran 11 tests across 1 file. [55.00ms]
+ 245 expect() calls
+Ran 13 tests across 1 file. [69.00ms]

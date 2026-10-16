@@ -53,16 +53,26 @@ const ROWS: Row[] = [
   { id: "c3-named", clause: "3", condition: `LITERAL_COLOUR_PATTERNS "a named colour"`, file: GRAPHICS, from: `    /(?::|;|\\s)(?:white|black|red|green|blue|grey|gray|silver|maroon|navy|teal|olive)\\b(?![\\w-])/i,`, to: `    /(?::|;|\\s)NEVER(?:white|black|red|green|blue|grey|gray|silver|maroon|navy|teal|olive)\\b(?![\\w-])/i,` },
 
   // ---- clause 4 — the bytes
-  { id: "c4-per-part-cap", clause: "4", condition: `size(part) > cap`, file: GRAPHICS, from: `    if (cap !== undefined && size(part) > cap) {`, to: `    if (cap !== undefined && size(part) > cap + 1e9) {` },
+  { id: "c4-per-part-cap", clause: "4", condition: `size(part) > cap`, file: GRAPHICS, from: `    if (size(part) > cap) {`, to: `    if (size(part) > cap + 1e9) {` },
+  { id: "c4-cap-declared", clause: "4", condition: `if (cap === undefined) — a part with no byte cap`, file: GRAPHICS, from: `    if (cap === undefined) {`, to: `    if (false && cap === undefined) {` },
   { id: "c4-icon-count", clause: "4", condition: `each.length !== ICON_NAMES.length`, file: GRAPHICS, from: `    if (each.length !== ICON_NAMES.length) {`, to: `    if (false && each.length !== ICON_NAMES.length) {` },
   { id: "c4-one-icon-cap", clause: "4", condition: `bytes > GRAPHICS_BYTE_CAPS.oneIcon`, file: GRAPHICS, from: `      if (bytes > GRAPHICS_BYTE_CAPS.oneIcon) {`, to: `      if (bytes > GRAPHICS_BYTE_CAPS.oneIcon + 1e9) {` },
   { id: "c4-layer-cap", clause: "4", condition: `layerBytes > GRAPHICS_BYTE_CAPS.layer`, file: GRAPHICS, from: `  if (layerBytes > GRAPHICS_BYTE_CAPS.layer) {`, to: `  if (layerBytes > GRAPHICS_BYTE_CAPS.layer + 1e9) {` },
   { id: "c4-size-from-text-not-bytes", clause: "4", condition: `const size = (part) => Buffer.byteLength(part.text, "utf8")`, file: GRAPHICS, from: `  const size = (part: GraphicsPart): number => Buffer.byteLength(part.text, "utf8");`, to: `  const size = (part: GraphicsPart): number => part.bytes ?? Buffer.byteLength(part.text, "utf8");` },
 
-  // ---- clause 5 — additive only
-  { id: "c5-not-a-class", clause: "5", condition: `selector && !selector.startsWith(".")`, file: GRAPHICS, from: `        if (selector && !selector.startsWith(".")) selectors.push(selector);`, to: `        if (false && selector && !selector.startsWith(".")) selectors.push(selector);` },
-  { id: "c5-not-gfx", clause: "5", condition: `selector.includes(".") && !selector.includes(".gfx-")`, file: GRAPHICS, from: `        else if (selector.includes(".") && !selector.includes(".gfx-")) selectors.push(selector);`, to: `        else if (false && selector.includes(".") && !selector.includes(".gfx-")) selectors.push(selector);` },
-  { id: "c5-at-rule-skip", clause: "5", condition: `if (head.startsWith("@")) continue;`, file: GRAPHICS, from: `      if (head.startsWith("@")) continue;`, to: `      if (false && head.startsWith("@")) continue;` },
+  // ---- clause 5 — additive only (the selector walk, at the top level and inside at-rules)
+  { id: "c5-not-a-class", clause: "5", condition: `selector && !selector.startsWith(".")`, file: GRAPHICS, from: `          if (selector && !selector.startsWith(".")) found.push({ selector, atRules: [...atRules] });`, to: `          if (false && selector && !selector.startsWith(".")) found.push({ selector, atRules: [...atRules] });` },
+  { id: "c5-not-gfx", clause: "5", condition: `selector.includes(".") && !selector.includes(".gfx-")`, file: GRAPHICS, from: `          else if (selector.includes(".") && !selector.includes(".gfx-")) found.push({ selector, atRules: [...atRules] });`, to: `          else if (false && selector.includes(".") && !selector.includes(".gfx-")) found.push({ selector, atRules: [...atRules] });` },
+  { id: "c5-at-rule-container", clause: "5", condition: `prelude.startsWith("@") — an at-rule head is a block header, not a selector`, file: GRAPHICS, from: `      } else if (prelude.startsWith("@")) {`, to: `      } else if (prelude.startsWith("@NEVER")) {` },
+  { id: "c5-keyframes-limit", clause: "5", condition: `KEYFRAMES_AT_RULE.test(prelude) — a key frames block is not walked into`, file: GRAPHICS, from: `        if (KEYFRAMES_AT_RULE.test(prelude)) open.push(false);`, to: `        if (false && KEYFRAMES_AT_RULE.test(prelude)) open.push(false);` },
+  { id: "c5-walk-into-at-rules", clause: "5", condition: `const nested = open.includes(false) — the walk looks inside at-rule blocks`, file: GRAPHICS, from: `      const nested = open.includes(false);`, to: `      const nested = open.length > 0;` },
+  { id: "c5-at-rule-pushed", clause: "5", condition: `atRules.push(prelude) — the at-rule path a refusal names`, file: GRAPHICS, from: `        else {\n          open.push(true);\n          atRules.push(prelude);\n        }`, to: `        else {\n          open.push(true);\n        }` },
+  { id: "c5-head-consumed", clause: "5", condition: `head = "" — a prelude belongs to the block it opens`, file: GRAPHICS, from: `      const prelude = head.trim();\n      head = "";`, to: `      const prelude = head.trim();` },
+  { id: "c5-statement-reset", clause: "5", condition: `token === ";" — a statement ends the prelude it is not part of`, file: GRAPHICS, from: `    } else if (token === ";") {`, to: `    } else if (false && token === ";") {` },
+  { id: "c5-block-opens", clause: "5", condition: `token === "{" — a block opens`, file: GRAPHICS, from: `    } else if (token === "{") {`, to: `    } else if (false && token === "{") {` },
+  { id: "c5-block-closes", clause: "5", condition: `token === "}" — a block closes`, file: GRAPHICS, from: `    if (token === "}") {`, to: `    if (false && token === "}") {` },
+  { id: "c5-path-unwinds", clause: "5", condition: `if (open.pop()) atRules.pop() — leaving an at-rule block unwinds the path`, file: GRAPHICS, from: `      if (open.pop()) atRules.pop();`, to: `      open.pop();` },
+  { id: "c5-at-rule-named", clause: "5", condition: `the where clause that names the at-rule in the refusal`, file: GRAPHICS, from: `      const where = atRules.length === 0 ? "" : \` inside the at-rule\${atRules.length > 1 ? "s" : ""} "\${atRules.join(" > ")}"\`;`, to: `      const where = "";` },
   { id: "c5-css-part-only", clause: "5", condition: `if (part.name !== "css") continue;`, file: GRAPHICS, from: `    if (part.name !== "css") continue;`, to: `    if (true) continue;` },
   { id: "c4-icons-part-only", clause: "4", condition: `if (part.name !== "icons") continue;`, file: GRAPHICS, from: `    if (part.name !== "icons") continue;`, to: `    if (true) continue;` },
 
@@ -70,7 +80,6 @@ const ROWS: Row[] = [
   { id: "wiring-compliance-checks", clause: "wiring", condition: `problems.push(...graphicsProblems(vars.graphics)) in build.ts`, file: BUILD, from: `  problems.push(...graphicsProblems(vars.graphics));`, to: `  // problems.push(...graphicsProblems(vars.graphics));` },
 
   // ---- rows expected UNGUARDED (no test may go red; the sweep says so out loud)
-  { id: "c4-cap-undefined-guard", clause: "4", condition: `cap !== undefined && (the undefined-cap branch)`, file: GRAPHICS, from: `    if (cap !== undefined && size(part) > cap) {`, to: `    if (size(part) > cap!) {` },
   { id: "c4-caption-in-named", clause: "4", condition: `parts.filter((part) => part.name !== "caption")`, file: GRAPHICS, from: `  const named = parts.filter((part) => part.name !== "caption");`, to: `  const named = parts.filter(() => true);` },
 ];
 

@@ -1,19 +1,40 @@
-1a. an unscoped rule at the top level — refused (guarded by clause 5's test):
+1a. an unscoped rule at the top level — refused, no at-rule to name:
   ["graphics layer: its stylesheet writes the rule \".card\", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."]
 
-1b. the SAME rule nested in an @media block — nothing is reported:
+1b. the SAME rule nested in an @media block — refused, and the at-rule is named:
+  ["graphics layer: its stylesheet writes the rule \".card\" inside the at-rule \"@media (min-width: 40rem)\", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."]
+
+1c. a correctly scoped rule in the same @media block — accepted (the case that will arrive first):
   []
 
-1c. at-rules in the real layer's own stylesheet: none
-    (so the skip is not exercised by the shipped stylesheet either — the branch is untested, not merely unreached)
+1d. two levels down (@supports inside @media) — both at-rules named, outermost first:
+  ["graphics layer: its stylesheet writes the rule \".card\" inside the at-rules \"@media (min-width: 40rem) > @supports (display: grid)\", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."]
+
+1e. at-rules in the real layer's own stylesheet: none
+    (so the rule is enforced ahead of the layer's first media query rather than after it: the check has no at-rule of its own to test against)
+
+1f. a rule after an at-rule block — back at the top level, no at-rule carried on:
+  ["graphics layer: its stylesheet writes the rule \".card\", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."]
+
+1g. a rule after a statement-terminated at-rule (@charset "utf-8";) — checked as a rule, not swallowed as a prelude:
+  ["graphics layer: its stylesheet writes the rule \".card\", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."]
+
+1h. the stated limits: a @keyframes block is not walked into (its inner blocks are stops, not selectors):
+  []
+
+1i. ...and a rule nested in a style rule's own block belongs to the selector around it, which is checked:
+  []
 
 2a. parts the layer emits:
   ["icons","css","dividers","map","wordmark","caption"]
 
-2b. parts with no entry in GRAPHICS_BYTE_CAPS (the only names the guard can catch):
+2b. parts with no entry in GRAPHICS_BYTE_CAPS:
   ["caption"]
 
-3a. the caption part, which the exemption removes from the byte counting:
+2c. a part with no cap, which the old guard passed silently — now refused by name:
+  ["graphics layer: its sparkle part has no byte cap in GRAPHICS_BYTE_CAPS. Every part this layer emits is capped, and the layer total is only as honest as the parts under it — a part with no cap is a part nobody bounded."]
+
+3a. the caption part, which the exemption keeps out of the byte clauses:
   [{"name":"caption","text":"Schematic illustration — not a map of the area, and not to scale.","bytes":67}]
 
 3b. layer bytes counted WITH the caption in `named`:
@@ -22,7 +43,10 @@
 3c. the layer cap it must stay under:
   13312
 
-3d. margin: 1386 bytes — the exemption is not what keeps the cap passing
+3d. margin: 1386 bytes — the cap cannot prove the exemption, so 2c does
+
+3e. captions among the parts with no cap (the exemption's only client):
+  ["caption"]
 
 4a. a part whose bytes field claims 999,999 with the real text behind it (the label cannot invent a problem):
   []

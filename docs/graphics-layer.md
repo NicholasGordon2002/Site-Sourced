@@ -190,29 +190,39 @@ The 1440 table is printed in the same `harness-run-2026-10-16.txt` and its probe
   no `@import`, **no `url()` at all**, no `<script>`, no `<image>`, no `<use>` outside the
   document, no external resource attribute; (2) every graphic marked, and marked one way; (3) no
   literal colour, so a mark always follows its surface; (4) byte caps per icon, per part and for
-  the layer; (5) every rule scoped to a `.gfx-` class, so the layer cannot restyle a page that did
-  not ask for it. The byte cap measures each part's **text**, never a `bytes` field — a
+  the layer, with a part that carries no cap refused by name; (5) every rule scoped to a
+  `.gfx-` class, at the top level and **inside an at-rule block** alike (the refusal names the
+  at-rule the rule was found in), so the layer cannot restyle a page that did not ask for it.
+  The byte cap measures each part's **text**, never a `bytes` field — a
   mislabelled part is exactly how a cap stops meaning anything.
 
 ### The doctor proofs — each condition shown firing
 
-`docs/graphics-check-doctor-proofs.md`, generated from the run itself: **27 rows, one per
+`docs/graphics-check-doctor-proofs.md`, generated from the run itself: **36 rows, one per
 condition**, each mutating that condition in `graphics.ts` (or `build.ts` for the wiring row),
 showing which test goes red, and restoring the file **byte-exact** — `graphics.ts`
-`e7951586…` and `build.ts` `2d7a20d2…` identical before and after in all 27 rows.
+`89f99acd…` and `build.ts` `2d7a20d2…` identical before and after in all 36 rows.
 Raw log: `docs/graphics/evidence/sweep-log.txt`; one bun transcript per row in
-`docs/graphics/evidence/sweep/<id>.txt`. **24 of the 27 rows are guarded; 3 conditions come out
-unguarded and are named there:**
+`docs/graphics/evidence/sweep/<id>.txt`. **All 36 rows are guarded, none unguarded, none
+skipped**, counted clause by clause in §4 of the companion doc. The three conditions that
+came out unguarded on 16 Oct are closed (17 Oct session), and how each was closed — with the
+measurement that decided it — is §3 there:
 
-1. `if (head.startsWith("@")) continue;` in `cssSelectors()` — untested, and it hides a real hole:
-   a rule nested inside an `@media` block is **not inspected at all** (proved:
-   `docs/graphics/evidence/gap-probes.txt`, `1b` reports `[]` for `@media (min-width: 40rem) { .card
-   { … } }`, while `1a` shows the same rule refused at the top level). Latent today only because
-   `graphicsCss()` contains no at-rule.
-2. `if (cap !== undefined && …)` in the per-part cap — its false half is unreachable (the only
-   uncapped part, the caption, is filtered out of `named`), so removing it changes nothing.
-3. `const named = parts.filter((part) => part.name !== "caption")` — the caption exemption is not
-   what keeps the cap passing (1,386 bytes of margin with the caption counted in).
+1. `cssSelectors()` (clause 5) walked a stylesheet split on `}` and skipped any chunk whose
+   head was an at-rule, so a rule nested inside an `@media` block was invisible. The walk is
+   now a brace-depth stack: it looks inside at-rule blocks to any depth, checks each inner
+   selector the same way, and names the at-rule in the refusal. Three limits are stated on
+   the function and proved at the boundary (a `@keyframes` block is not walked into, so its
+   animation *name* is unchecked; a rule nested in a style rule's own block belongs to the
+   enclosing selector, which is checked; braces inside a quoted value would be misread).
+2. `if (cap !== undefined && …)` in the per-part cap had an unreachable false half. It was
+   **made reachable**: a part with no byte cap in `GRAPHICS_BYTE_CAPS` is refused by name
+   instead of passing silently — a part the cap does not cover is exactly how the layer total
+   stops meaning anything.
+3. `const named = parts.filter((part) => part.name !== "caption")` could not be proved by the
+   cap (the caption is 67 bytes against a 1,386-byte margin), so it is proved by (2): the
+   caption is the one part with no cap, so a layer that stops exempting it fails clause 4 by
+   name. The exemption is on the record in the code comment beside it.
 
 The caps were proved live, not just in a mutation: the first run of `graphicsProblems()` against
 the real layer **failed** on `icons=5070 over the 3072-byte cap` and `the whole layer is 11542
@@ -228,7 +238,16 @@ per-icon cap was added because a redrawn mark could otherwise cost three times t
   `/tmp/gfx/before` on master `dd319a5` and `/tmp/gfx/after` on this branch — and the file
   recomputes the comparison from them.)
 - Suite: **335 pass / 0 fail**, 2,657 `expect()` calls, 25 files —
-  `docs/graphics/evidence/suite-2026-10-16.txt`; 324 on master + 11 new.
+  `docs/graphics/evidence/suite-2026-10-16.txt`; 324 on master + 11 new. The 17 Oct check-fix
+  session left it at **337 pass / 0 fail**, 2,674 `expect()` calls, 25 files —
+  `docs/graphics/evidence/suite-2026-10-17.txt`; the two new tests are the at-rule case and the
+  at-rule limits of clause 5.
+- **The 17 Oct session changed no emitted byte.** Rewriting clause 5's walk and adding the
+  no-cap refusal moved neither the layer's own output (`graphicsCss()`, every part,
+  `graphicsByteReport()` — hash for hash identical; the specimen page still reports `up to
+  date` at `212fc7bd…`) nor any of the four fixtures rebuilt with the switches off: 80 files in
+  each tree, no output from `diff`. Commands and hashes:
+  `docs/graphics/evidence/rebuild-diff-2026-10-17.txt`.
 - Nothing is staged on a demo path, and nothing was published.
 
 ## 7. The fonts, stated plainly

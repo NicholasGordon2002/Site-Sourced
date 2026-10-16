@@ -1,19 +1,129 @@
 bun test v1.4.3 (c6da4a4d3)
 
 test/graphics.test.ts:
-(pass) the layer is complete: every name it publishes draws something [0.29ms]
-(pass) every icon is 24px-grid, one stroke weight, and decorative [0.14ms]
-(pass) a meaningful graphic is named, and the initials mark is decorative [0.30ms]
-(pass) the real layer passes all five clauses, and fits its byte caps [1.41ms]
-(pass) clause 1 fires: a layer that reaches the network fails the build [1.66ms]
-(pass) clause 2 fires: an unmarked, doubly-marked or nameless graphic fails [0.56ms]
-(pass) clause 3 fires: a baked-in colour fails, because it cannot follow the surface [0.64ms]
-(pass) clause 4 fires: an icon, the set and the whole layer each have a cap [3.17ms]
-(pass) clause 5 fires: every rule is scoped to a .gfx- class, or it is refused [0.48ms]
-(pass) the clauses are wired into the build itself, not only callable [25.86ms]
-(pass) the layers' own exports do not collide with the template's class names [0.23ms]
+(pass) the layer is complete: every name it publishes draws something [0.28ms]
+(pass) every icon is 24px-grid, one stroke weight, and decorative [0.18ms]
+(pass) a meaningful graphic is named, and the initials mark is decorative [0.29ms]
+114 |   expect(initialsOf("")).toBe("SS");
+115 |   expect(wordmark("Maple Avenue Barber Shop", { mark: true })).toContain("gfx-wordmark-name");
+116 | });
+117 | 
+118 | test("the real layer passes all five clauses, and fits its byte caps", () => {
+119 |   expect(graphicsProblems()).toEqual([]);
+                                   ^
+error: expect(received).toEqual(expected)
 
- 11 pass
- 0 fail
- 236 expect() calls
-Ran 11 tests across 1 file. [57.00ms]
+- []
++ [
++   "graphics layer: its caption part has no byte cap in GRAPHICS_BYTE_CAPS. Every part this layer emits is capped, and the layer total is only as honest as the parts under it — a part with no cap is a part nobody bounded.",
++ ]
+
+- Expected  - 1
++ Received  + 3
+
+      at <anonymous> (/home/team/shared/pipeline/test/graphics.test.ts:119:30)
+(fail) the real layer passes all five clauses, and fits its byte caps [1.69ms]
+148 |   expect(
+149 |     graphicsProblems(withPart("css", '.gfx-map-dot { fill: url("#accent"); }')).some((p) =>
+150 |       p.includes("a url() reference"),
+151 |     ),
+152 |   ).toBe(true);
+153 |   expect(graphicsProblems()).toEqual([]);
+                                   ^
+error: expect(received).toEqual(expected)
+
+- []
++ [
++   "graphics layer: its caption part has no byte cap in GRAPHICS_BYTE_CAPS. Every part this layer emits is capped, and the layer total is only as honest as the parts under it — a part with no cap is a part nobody bounded.",
++ ]
+
+- Expected  - 1
++ Received  + 3
+
+      at <anonymous> (/home/team/shared/pipeline/test/graphics.test.ts:153:30)
+(fail) clause 1 fires: a layer that reaches the network fails the build [2.74ms]
+(pass) clause 2 fires: an unmarked, doubly-marked or nameless graphic fails [0.79ms]
+(pass) clause 3 fires: a baked-in colour fails, because it cannot follow the surface [0.63ms]
+(pass) clause 4 fires: an icon, the set and the whole layer each have a cap [1.71ms]
+232 |   const leaked = `${graphicsCss()}\n.card { border-color: var(--accent); }\nbody { color: var(--ink); }`;
+233 |   const problems = graphicsProblems(withPart("css", leaked));
+234 |   expect(problems.some((p) => p.includes('the rule ".card"'))).toBe(true);
+235 |   expect(problems.some((p) => p.includes('the rule "body"'))).toBe(true);
+236 |   // The real stylesheet writes no unscoped selector and no selector list outside .gfx-.
+237 |   expect(graphicsProblems(withPart("css", graphicsCss()))).toEqual([]);
+                                                                 ^
+error: expect(received).toEqual(expected)
+
+- []
++ [
++   "graphics layer: its caption part has no byte cap in GRAPHICS_BYTE_CAPS. Every part this layer emits is capped, and the layer total is only as honest as the parts under it — a part with no cap is a part nobody bounded.",
++ ]
+
+- Expected  - 1
++ Received  + 3
+
+      at <anonymous> (/home/team/shared/pipeline/test/graphics.test.ts:237:60)
+(fail) clause 5 fires: every rule is scoped to a .gfx- class, or it is refused [0.77ms]
+241 |   // The case that will actually arrive first: a correctly scoped rule inside a media
+242 |   // query. It is additive, so it is accepted — a walk that refused it would refuse the
+243 |   // layer's own next commit.
+244 |   expect(
+245 |     graphicsProblems(withPart("css", "@media (min-width: 40rem) { .gfx-icon--24 { width: 1.5rem; } }")),
+246 |   ).toEqual([]);
+          ^
+error: expect(received).toEqual(expected)
+
+- []
++ [
++   "graphics layer: its caption part has no byte cap in GRAPHICS_BYTE_CAPS. Every part this layer emits is capped, and the layer total is only as honest as the parts under it — a part with no cap is a part nobody bounded.",
++ ]
+
+- Expected  - 1
++ Received  + 3
+
+      at <anonymous> (/home/team/shared/pipeline/test/graphics.test.ts:246:5)
+(fail) clause 5 fires inside an at-rule, and the refusal says which at-rule [0.50ms]
+282 |   // `@keyframes` inner blocks are stops (`from`, `to`), not selectors. Looking inside one
+283 |   // would refuse a legitimate animation, so the walk does not — which also means the
+284 |   // animation *name* goes unchecked (the limit is on the record in the doc comment).
+285 |   expect(
+286 |     graphicsProblems(withPart("css", "@keyframes gfx-dash { from { stroke-dashoffset: 0; } to { stroke-dashoffset: 2rem; } }")),
+287 |   ).toEqual([]);
+          ^
+error: expect(received).toEqual(expected)
+
+- []
++ [
++   "graphics layer: its caption part has no byte cap in GRAPHICS_BYTE_CAPS. Every part this layer emits is capped, and the layer total is only as honest as the parts under it — a part with no cap is a part nobody bounded.",
++ ]
+
+- Expected  - 1
++ Received  + 3
+
+      at <anonymous> (/home/team/shared/pipeline/test/graphics.test.ts:287:5)
+(fail) clause 5's stated limits hold at the boundary: key frames, and CSS nesting [0.40ms]
+319 |     delivery,
+320 |     images: [] as ManifestImage[],
+321 |     privacy: ctx.privacy,
+322 |   };
+323 |   // The unbroken layer adds nothing to a real build's problem list...
+324 |   expect(complianceChecks(base).filter((p) => p.startsWith("graphics layer"))).toEqual([]);
+                                                                                     ^
+error: expect(received).toEqual(expected)
+
+- []
++ [
++   "graphics layer: its caption part has no byte cap in GRAPHICS_BYTE_CAPS. Every part this layer emits is capped, and the layer total is only as honest as the parts under it — a part with no cap is a part nobody bounded.",
++ ]
+
+- Expected  - 1
++ Received  + 3
+
+      at <anonymous> (/home/team/shared/pipeline/test/graphics.test.ts:324:80)
+(fail) the clauses are wired into the build itself, not only callable [20.33ms]
+(pass) the layers' own exports do not collide with the template's class names [0.24ms]
+
+ 7 pass
+ 6 fail
+ 230 expect() calls
+Ran 13 tests across 1 file. [62.00ms]

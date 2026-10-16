@@ -213,6 +213,17 @@ test("clause 4 fires: an icon, the set and the whole layer each have a cap", () 
   expect(
     graphicsProblems(grown).some((p) => p.includes("the whole layer is") && p.includes("over the")),
   ).toBe(true);
+
+  // A part with no cap in the table is refused rather than silently free. Unreachable
+  // from the real layer — every part `named` passes carries a cap, and the caption, the
+  // one part without one, is exempted — so this is the doctored layer's own case, and the
+  // sweep row `c4-cap-declared` is what proves this test is holding the branch up. It is
+  // also why the caption exemption is load-bearing: without it the caption lands here.
+  const uncapped = graphicsProblems([
+    ...graphicsParts(),
+    { name: "sparkle", text: "<svg aria-hidden=\"true\"></svg>" } as unknown as GraphicsPart,
+  ]);
+  expect(uncapped.some((p) => p.includes("its sparkle part has no byte cap"))).toBe(true);
 });
 
 /* -------------------------------------------------------- clause 5 — scoping */
@@ -224,6 +235,64 @@ test("clause 5 fires: every rule is scoped to a .gfx- class, or it is refused", 
   expect(problems.some((p) => p.includes('the rule "body"'))).toBe(true);
   // The real stylesheet writes no unscoped selector and no selector list outside .gfx-.
   expect(graphicsProblems(withPart("css", graphicsCss()))).toEqual([]);
+});
+
+test("clause 5 fires inside an at-rule, and the refusal says which at-rule", () => {
+  // The case that will actually arrive first: a correctly scoped rule inside a media
+  // query. It is additive, so it is accepted — a walk that refused it would refuse the
+  // layer's own next commit.
+  expect(
+    graphicsProblems(withPart("css", "@media (min-width: 40rem) { .gfx-icon--24 { width: 1.5rem; } }")),
+  ).toEqual([]);
+
+  // The same rule unscoped, one block down, is refused — and the refusal names where it
+  // lives, not only what it says.
+  const nested = graphicsProblems(
+    withPart("css", "@media (min-width: 40rem) { .card { border-color: var(--accent); } }"),
+  );
+  expect(nested.length).toBe(1);
+  expect(nested[0]).toContain('the rule ".card"');
+  expect(nested[0]).toContain('inside the at-rule "@media (min-width: 40rem)"');
+
+  // Two levels: both at-rules are named, outermost first.
+  const deep = graphicsProblems(
+    withPart("css", "@media (min-width: 40rem) { @supports (display: grid) { .card { border-color: var(--accent); } } }"),
+  );
+  expect(deep.length).toBe(1);
+  expect(deep[0]).toContain('inside the at-rules "@media (min-width: 40rem) > @supports (display: grid)"');
+
+  // A rule after the at-rule block is back at the top level: nothing carries the path on.
+  const after = graphicsProblems(
+    withPart("css", "@media (min-width: 40rem) { .gfx-icon { width: 1rem; } }\n.card { border-color: var(--accent); }"),
+  );
+  expect(after.length).toBe(1);
+  expect(after[0]).toContain('the rule ".card"');
+  expect(after[0]).not.toContain("inside the at-rule");
+
+  // A statement-terminated at-rule (`@charset`, `@layer a, b;`) is a statement, not a
+  // block prelude: it ends at its `;`, so it is neither a selector itself nor read as the
+  // next rule's selector.
+  expect(graphicsProblems(withPart("css", '@charset "utf-8";\n.gfx-icon { color: var(--body-text); }'))).toEqual([]);
+  const afterStatement = graphicsProblems(withPart("css", '@charset "utf-8";\n.card { border-color: var(--accent); }'));
+  expect(afterStatement.length).toBe(1);
+  expect(afterStatement[0]).toContain('the rule ".card"');
+});
+
+test("clause 5's stated limits hold at the boundary: key frames, and CSS nesting", () => {
+  // `@keyframes` inner blocks are stops (`from`, `to`), not selectors. Looking inside one
+  // would refuse a legitimate animation, so the walk does not — which also means the
+  // animation *name* goes unchecked (the limit is on the record in the doc comment).
+  expect(
+    graphicsProblems(withPart("css", "@keyframes gfx-dash { from { stroke-dashoffset: 0; } to { stroke-dashoffset: 2rem; } }")),
+  ).toEqual([]);
+  expect(graphicsProblems(withPart("css", "@keyframes dash { from { opacity: 0; } }"))).toEqual([]);
+
+  // A rule nested inside a style rule's declaration block is composed with the selector
+  // around it, so the *enclosing* selector is the one that decides whether the layer stays
+  // additive — and that selector is checked. The leak moves to the outer rule, where it is
+  // caught:
+  expect(graphicsProblems(withPart("css", ".gfx-icon { .card { border-color: var(--accent); } }"))).toEqual([]);
+  expect(graphicsProblems(withPart("css", ".card { .gfx-icon { border-color: var(--accent); } }")).length).toBe(1);
 });
 
 /* ------------------------------------------------------------------ wiring */

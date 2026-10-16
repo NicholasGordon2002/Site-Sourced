@@ -1,0 +1,34 @@
+bun test v1.4.3 (c6da4a4d3)
+
+test/graphics.test.ts:
+(pass) the layer is complete: every name it publishes draws something [0.29ms]
+(pass) every icon is 24px-grid, one stroke weight, and decorative [0.14ms]
+(pass) a meaningful graphic is named, and the initials mark is decorative [0.33ms]
+(pass) the real layer passes all five clauses, and fits its byte caps [1.91ms]
+(pass) clause 1 fires: a layer that reaches the network fails the build [2.41ms]
+(pass) clause 2 fires: an unmarked, doubly-marked or nameless graphic fails [0.94ms]
+(pass) clause 3 fires: a baked-in colour fails, because it cannot follow the surface [0.85ms]
+(pass) clause 4 fires: an icon, the set and the whole layer each have a cap [2.47ms]
+(pass) clause 5 fires: every rule is scoped to a .gfx- class, or it is refused [0.52ms]
+250 |   const nested = graphicsProblems(
+251 |     withPart("css", "@media (min-width: 40rem) { .card { border-color: var(--accent); } }"),
+252 |   );
+253 |   expect(nested.length).toBe(1);
+254 |   expect(nested[0]).toContain('the rule ".card"');
+255 |   expect(nested[0]).toContain('inside the at-rule "@media (min-width: 40rem)"');
+                          ^
+error: expect(received).toContain(expected)
+
+Expected to contain: "inside the at-rule \"@media (min-width: 40rem)\""
+Received: "graphics layer: its stylesheet writes the rule \".card\", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it."
+
+      at <anonymous> (/home/team/shared/pipeline/test/graphics.test.ts:255:21)
+(fail) clause 5 fires inside an at-rule, and the refusal says which at-rule [1.68ms]
+(pass) clause 5's stated limits hold at the boundary: key frames, and CSS nesting [0.89ms]
+(pass) the clauses are wired into the build itself, not only callable [26.43ms]
+(pass) the layers' own exports do not collide with the template's class names [0.27ms]
+
+ 12 pass
+ 1 fail
+ 245 expect() calls
+Ran 13 tests across 1 file. [73.00ms]

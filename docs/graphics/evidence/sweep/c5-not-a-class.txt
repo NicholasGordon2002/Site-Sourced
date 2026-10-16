@@ -1,32 +1,34 @@
 bun test v1.4.3 (c6da4a4d3)
 
 test/graphics.test.ts:
-(pass) the layer is complete: every name it publishes draws something [0.29ms]
-(pass) every icon is 24px-grid, one stroke weight, and decorative [0.17ms]
-(pass) a meaningful graphic is named, and the initials mark is decorative [0.28ms]
-(pass) the real layer passes all five clauses, and fits its byte caps [1.38ms]
-(pass) clause 1 fires: a layer that reaches the network fails the build [1.74ms]
-(pass) clause 2 fires: an unmarked, doubly-marked or nameless graphic fails [1.13ms]
-(pass) clause 3 fires: a baked-in colour fails, because it cannot follow the surface [0.61ms]
-(pass) clause 4 fires: an icon, the set and the whole layer each have a cap [1.44ms]
-219 | 
-220 | test("clause 5 fires: every rule is scoped to a .gfx- class, or it is refused", () => {
-221 |   const leaked = `${graphicsCss()}\n.card { border-color: var(--accent); }\nbody { color: var(--ink); }`;
-222 |   const problems = graphicsProblems(withPart("css", leaked));
-223 |   expect(problems.some((p) => p.includes('the rule ".card"'))).toBe(true);
-224 |   expect(problems.some((p) => p.includes('the rule "body"'))).toBe(true);
+(pass) the layer is complete: every name it publishes draws something [0.30ms]
+(pass) every icon is 24px-grid, one stroke weight, and decorative [0.14ms]
+(pass) a meaningful graphic is named, and the initials mark is decorative [0.31ms]
+(pass) the real layer passes all five clauses, and fits its byte caps [1.95ms]
+(pass) clause 1 fires: a layer that reaches the network fails the build [2.42ms]
+(pass) clause 2 fires: an unmarked, doubly-marked or nameless graphic fails [0.96ms]
+(pass) clause 3 fires: a baked-in colour fails, because it cannot follow the surface [0.88ms]
+(pass) clause 4 fires: an icon, the set and the whole layer each have a cap [2.67ms]
+230 | 
+231 | test("clause 5 fires: every rule is scoped to a .gfx- class, or it is refused", () => {
+232 |   const leaked = `${graphicsCss()}\n.card { border-color: var(--accent); }\nbody { color: var(--ink); }`;
+233 |   const problems = graphicsProblems(withPart("css", leaked));
+234 |   expect(problems.some((p) => p.includes('the rule ".card"'))).toBe(true);
+235 |   expect(problems.some((p) => p.includes('the rule "body"'))).toBe(true);
                                                                     ^
 error: expect(received).toBe(expected)
 
 Expected: true
 Received: false
 
-      at <anonymous> (/tmp/gfx-layer/test/graphics.test.ts:224:63)
-(fail) clause 5 fires: every rule is scoped to a .gfx- class, or it is refused [0.53ms]
-(pass) the clauses are wired into the build itself, not only callable [26.15ms]
-(pass) the layers' own exports do not collide with the template's class names [0.23ms]
+      at <anonymous> (/home/team/shared/pipeline/test/graphics.test.ts:235:63)
+(fail) clause 5 fires: every rule is scoped to a .gfx- class, or it is refused [1.18ms]
+(pass) clause 5 fires inside an at-rule, and the refusal says which at-rule [2.19ms]
+(pass) clause 5's stated limits hold at the boundary: key frames, and CSS nesting [0.66ms]
+(pass) the clauses are wired into the build itself, not only callable [30.43ms]
+(pass) the layers' own exports do not collide with the template's class names [0.27ms]
 
- 10 pass
+ 12 pass
  1 fail
- 235 expect() calls
-Ran 11 tests across 1 file. [57.00ms]
+ 252 expect() calls
+Ran 13 tests across 1 file. [79.00ms]

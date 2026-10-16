@@ -608,22 +608,86 @@ function svgTags(text: string): string[] {
     .filter((tag) => tag.length > 0);
 }
 
-/** The selectors a CSS block writes, for the scoping check. */
-function cssSelectors(css: string): string[] {
+/** An unscoped rule: what it says, and the at-rule blocks it was found inside. */
+interface UnscopedRule {
+  readonly selector: string;
+  /** The enclosing at-rule heads, outermost first. Empty means the top level. */
+  readonly atRules: readonly string[];
+}
+
+/** At-rules whose inner blocks are keyframe stops (`from`, `to`, `50%`), not selectors. */
+const KEYFRAMES_AT_RULE = /^@(?:-[\w]+-)?keyframes\b/i;
+
+/**
+ * Every selector a CSS block writes, for the scoping check, each with the at-rule path it
+ * sits inside (outermost first; empty at the top level).
+ *
+ * The walk is a brace-depth stack rather than a split on `}`. A rule nested inside an
+ * at-rule block can restyle a page exactly as well as one at the top level, so the walk
+ * looks inside at-rule blocks (`@media`, `@supports`, `@layer`, `@container`, `@scope`) to
+ * any depth, and carries the at-rule's own text into the refusal: a reader is told where
+ * the rule lives, not only what it says. `@media` inside `@media` is walked the same way.
+ *
+ * Three limits, all deliberate, and all proved at the boundary in `test/graphics.test.ts`:
+ *
+ * 1. **A `@keyframes` block is not walked into.** Its inner blocks are keyframe stops
+ *    (`from`, `to`, `50%`), not selectors, so checking them would refuse a legitimate
+ *    animation. The consequence, stated rather than hidden: the animation **name** is not
+ *    checked either, and CSS gives it no scope — a key frames block that collided with one
+ *    the page already has would override it. `graphicsCss()` writes no at-rule at all
+ *    today; a session that adds a key frames block should decide whether the layer's
+ *    animation names have to be `gfx-`-prefixed.
+ * 2. **A style rule's own declaration block is not walked into.** A rule nested in one
+ *    (CSS nesting: `.gfx-icon { .card { … } }`) is composed with the selector around it —
+ *    `.gfx-icon .card` — so whether the layer stays additive is decided by the enclosing
+ *    selector, which this walk does check. Nothing hides behind the limit: an inner rule is
+ *    only reachable at all if its enclosing rule passed.
+ * 3. **The walk reads braces, strings and all.** A `{` or `}` inside a quoted value
+ *    (`content: "}"`) would be taken for structure. No part of this layer writes one —
+ *    clause 1 already refuses `url()`, and a pseudo-element is markup this layer does not
+ *    emit — so the limit costs nothing today and is stated for the day it might.
+ */
+function cssSelectors(css: string): UnscopedRule[] {
   const withoutComments = css.replace(/\/\*[\s\S]*?\*\//g, "");
-  const selectors: string[] = [];
-  for (const block of withoutComments.split("}")) {
-    if (block.includes("{")) {
-      const head = block.slice(0, block.indexOf("{")).trim();
-      if (head.startsWith("@")) continue;
-      for (const one of head.split(",")) {
-        const selector = one.trim();
-        if (selector && !selector.startsWith(".")) selectors.push(selector);
-        else if (selector.includes(".") && !selector.includes(".gfx-")) selectors.push(selector);
+  const found: UnscopedRule[] = [];
+  /** The at-rule heads this position sits inside, outermost first. */
+  const atRules: string[] = [];
+  /** One frame per open block: `true` where the walk looks inside it, `false` where it does not. */
+  const open: boolean[] = [];
+  /** The text since the last `{`, `}` or `;` — a block's prelude, or a whole statement. */
+  let head = "";
+  for (const token of withoutComments.split(/([{};])/)) {
+    if (token === "}") {
+      if (open.pop()) atRules.pop();
+    } else if (token === ";") {
+      head = "";
+    } else if (token === "{") {
+      const prelude = head.trim();
+      head = "";
+      const nested = open.includes(false);
+      if (nested) {
+        // Inside a block the walk does not look into: tracked only so its closing brace
+        // pops the frame that opened here.
+        open.push(false);
+      } else if (prelude.startsWith("@")) {
+        if (KEYFRAMES_AT_RULE.test(prelude)) open.push(false);
+        else {
+          open.push(true);
+          atRules.push(prelude);
+        }
+      } else {
+        for (const one of prelude.split(",")) {
+          const selector = one.trim();
+          if (selector && !selector.startsWith(".")) found.push({ selector, atRules: [...atRules] });
+          else if (selector.includes(".") && !selector.includes(".gfx-")) found.push({ selector, atRules: [...atRules] });
+        }
+        open.push(false);
       }
+    } else {
+      head += token;
     }
   }
-  return selectors;
+  return found;
 }
 
 /**
@@ -688,8 +752,20 @@ export function graphicsProblems(parts: GraphicsPart[] = graphicsParts()): strin
   // its contents is exactly how a byte cap stops meaning anything.
   const size = (part: GraphicsPart): number => Buffer.byteLength(part.text, "utf8");
   for (const part of named) {
-    const cap = GRAPHICS_BYTE_CAPS[part.name as keyof typeof GRAPHICS_BYTE_CAPS];
-    if (cap !== undefined && size(part) > cap) {
+    const cap: number | undefined = GRAPHICS_BYTE_CAPS[part.name as keyof typeof GRAPHICS_BYTE_CAPS];
+    // A part with no cap is refused rather than silently free. `named` keeps the caption —
+    // the one part with no cap, a sentence of the map's own — out of the byte clauses
+    // entirely, and that exemption is what makes this branch unreachable from the real
+    // layer; it is reachable from a doctored one, which is why it has a test and a sweep
+    // row of its own. It also makes the exemption load-bearing: a layer that stops
+    // exempting the caption fails here, by name (sweep row `c4-caption-in-named`).
+    if (cap === undefined) {
+      problems.push(
+        `graphics layer: its ${part.name} part has no byte cap in GRAPHICS_BYTE_CAPS. Every part this layer emits is capped, and the layer total is only as honest as the parts under it — a part with no cap is a part nobody bounded.`,
+      );
+      continue;
+    }
+    if (size(part) > cap) {
       problems.push(
         `graphics layer: its ${part.name} part is ${size(part)} bytes, over the ${cap}-byte cap. The layer is an addition to a stylesheet a phone already waits for; the cap is what keeps it an addition.`,
       );
@@ -721,12 +797,14 @@ export function graphicsProblems(parts: GraphicsPart[] = graphicsParts()): strin
     );
   }
 
-  // Clause 5 — additive only: every rule is scoped to a .gfx- class.
+  // Clause 5 — additive only: every rule is scoped to a .gfx- class, at the top level and
+  // inside an at-rule block alike, and the refusal says which at-rule it was found in.
   for (const part of named) {
     if (part.name !== "css") continue;
-    for (const selector of cssSelectors(part.text)) {
+    for (const { selector, atRules } of cssSelectors(part.text)) {
+      const where = atRules.length === 0 ? "" : ` inside the at-rule${atRules.length > 1 ? "s" : ""} "${atRules.join(" > ")}"`;
       problems.push(
-        `graphics layer: its stylesheet writes the rule "${selector}", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.`,
+        `graphics layer: its stylesheet writes the rule "${selector}"${where}, which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.`,
       );
     }
   }

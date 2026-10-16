@@ -1,0 +1,40 @@
+bun test v1.4.3 (c6da4a4d3)
+
+test/graphics.test.ts:
+(pass) the layer is complete: every name it publishes draws something [0.30ms]
+(pass) every icon is 24px-grid, one stroke weight, and decorative [0.15ms]
+(pass) a meaningful graphic is named, and the initials mark is decorative [0.30ms]
+(pass) the real layer passes all five clauses, and fits its byte caps [1.77ms]
+(pass) clause 1 fires: a layer that reaches the network fails the build [2.16ms]
+(pass) clause 2 fires: an unmarked, doubly-marked or nameless graphic fails [0.74ms]
+(pass) clause 3 fires: a baked-in colour fails, because it cannot follow the surface [0.62ms]
+(pass) clause 4 fires: an icon, the set and the whole layer each have a cap [2.04ms]
+(pass) clause 5 fires: every rule is scoped to a .gfx- class, or it is refused [0.45ms]
+(pass) clause 5 fires inside an at-rule, and the refusal says which at-rule [0.76ms]
+282 |   // `@keyframes` inner blocks are stops (`from`, `to`), not selectors. Looking inside one
+283 |   // would refuse a legitimate animation, so the walk does not — which also means the
+284 |   // animation *name* goes unchecked (the limit is on the record in the doc comment).
+285 |   expect(
+286 |     graphicsProblems(withPart("css", "@keyframes gfx-dash { from { stroke-dashoffset: 0; } to { stroke-dashoffset: 2rem; } }")),
+287 |   ).toEqual([]);
+          ^
+error: expect(received).toEqual(expected)
+
+- []
++ [
++   "graphics layer: its stylesheet writes the rule "from" inside the at-rule "@keyframes gfx-dash", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++   "graphics layer: its stylesheet writes the rule "to" inside the at-rule "@keyframes gfx-dash", which is not scoped to a .gfx- class. The layer is additive: wiring it in may not restyle a page that did not ask for it.",
++ ]
+
+- Expected  - 1
++ Received  + 4
+
+      at <anonymous> (/home/team/shared/pipeline/test/graphics.test.ts:287:5)
+(fail) clause 5's stated limits hold at the boundary: key frames, and CSS nesting [0.82ms]
+(pass) the clauses are wired into the build itself, not only callable [28.19ms]
+(pass) the layers' own exports do not collide with the template's class names [0.28ms]
+
+ 12 pass
+ 1 fail
+ 250 expect() calls
+Ran 13 tests across 1 file. [72.00ms]
