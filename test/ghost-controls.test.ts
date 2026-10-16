@@ -33,7 +33,11 @@
  *      active states on the photograph): a state rule that leaves its own `color` to the
  *      cascade is refused — proved the way it was found, by building the **pre-fix**
  *      `ghost-controls.ts` against this `build.ts`, and then by removing only the home header's
- *      hover `color` and showing exactly one problem.
+ *      hover `color` and showing exactly one problem;
+ *  10. **clause 7** (added with the family treatment, owner direction by text, 16 Oct 2026): one
+ *      test per condition it guards, seven of them read through `restPaintOf` — the paint the
+ *      **cascade** gives each control the renderer draws, not the declaration the treatment's own
+ *      rule carries — and one on the family being marked at all.
  *
  * Three habits this file keeps, because each was a real defect in a sibling check:
  *
@@ -57,6 +61,8 @@ import { join } from "node:path";
 import { ghostControlsProblems, headerOverlayProblems, resolveBuildParts } from "../src/demo/build.ts";
 import { composePrivacy, profileFor } from "../src/demo/copy.ts";
 import {
+  GHOST_BUTTON_CONTROLS,
+  GHOST_BUTTON_SELECTORS,
   GHOST_CONTROLS_MARKER,
   GHOST_CONTROLS_SLUG,
   GHOST_CONTROLS_SURFACES,
@@ -653,6 +659,177 @@ test("clause 6: the last rule carrying a state's own selector must declare its o
   expect(absent.join(" | ")).toContain("every state the treatment paints deepens the surface's own colour and thickens the control's own outline");
 });
 
+/* --------------------------------------------------------- 10. clause 7, by name */
+
+/**
+ * **Clause 7 — the rest of the button family** (owner direction by text, 16 Oct 2026: the
+ * outlined transparent treatment consistent across every button of the Maple Avenue review
+ * copy). Clauses 3–6 are the header's action and the nested card CTA; clause 7 is every other
+ * button the renderer draws, and it refuses two things:
+ *
+ *   7a. **a control the cascade still paints as the filled pill.** The gate does not read the
+ *       treatment's own rule — that rule may declare `background: transparent` while the browser
+ *       paints the control anyway. It asks `restPaintOf` what the cascade resolves, which is why
+ *       every doctor below is a rule appended **after** the treatment block: the position a later
+ *       "darken the band" rule lands in, the defect the clause's own comment names. The marked
+ *       rule is untouched in each of them and the control is refused regardless.
+ *   7b. **a treatment that covers part of the family**: every selector `ghost-controls.ts` names
+ *       is marked in the stylesheet the bundle ships.
+ *
+ * One test per condition, every doctor moving exactly one thing, every assertion naming the
+ * sentence that fires: `problems.length` is asserted as a number, so a doctor that starts
+ * tripping a second clause cannot hide behind a `toContain`.
+ *
+ * `restPaintOf` resolves a control's paint from its **classes**: an ancestor selector in a rule
+ * is never checked against the page, only against `skip`, so a rule a browser would not apply to
+ * a control can still be *read* as applying to it. Each doctor below therefore either names a
+ * class only the control under test carries (`.button--small`, `.button--ghost`) or carries
+ * `.hero-actions`, which `restPaintOf` skips for the three paper controls by design (the `skip`
+ * entry that keeps a rule scoped to the hero from painting the CTA band's action).
+ */
+
+/** The button block a build ships, plus rules a page writes **after** it. */
+const late = (...rules: string[]): string => `${ghostControlsCss()}${rules.map((one) => `\n${one}\n`).join("")}`;
+
+/** The controls and surfaces this clause refuses on, stated here, not read off the module. */
+const FAMILY_CONTROL_NAMES = [
+  "the home hero's phone action",
+  "the home hero's request action",
+  "the CTA band's action",
+  "the contact form's submit",
+  "Get directions",
+];
+
+test("clause 7b: a treatment that marks the header's action and not the whole button family is refused, for one selector or for both", () => {
+  const on = build({ value: "1" });
+  // The file states the family and the module says it: a selector or a control added to the
+  // module without being stated here fails this test, and that friction is the point.
+  expect([...GHOST_BUTTON_SELECTORS]).toEqual([BUTTON_RULE, HOME_BUTTON_RULE]);
+  expect(GHOST_BUTTON_CONTROLS.map((one) => one.what)).toEqual(FAMILY_CONTROL_NAMES);
+  expect(GHOST_BUTTON_CONTROLS.map((one) => one.surface)).toEqual([
+    GHOST_SURFACE_WHITE,
+    GHOST_SURFACE_WHITE,
+    GHOST_SURFACE_INK,
+    GHOST_SURFACE_INK,
+    GHOST_SURFACE_INK,
+  ]);
+  // The build as it ships: all five controls are covered and the clause is silent.
+  expect(refusal(on)).toBe("");
+
+  /* (a) one selector of the family stops being marked. Its rules still paint — they simply stop
+     saying which surface they are drawn for — so nothing else in the gate notices and this
+     clause is what has to. */
+  const one = doctor(ghostControlsCss(), /(^\.page--index \.hero-actions \.button \{\n)  --ghost-control: white;\n/m, "$1");
+  const single = list(on, { css: stylesheet({ ghost: one }).css });
+  expect(single.length).toBe(1);
+  expect(single[0]).toContain("paints the ghost on the header's action and not across the button family");
+  expect(single[0]).toContain(`${HOME_BUTTON_RULE} carry no marked rule, so that control still wears the filled button`);
+  expect(single[0]).toContain("while the opt-in is in force");
+
+  /* (b) the whole family unmarked: both selectors are named, and the two controls that would
+     otherwise be read as covered are refused as unmarked instead. With no family rule marked the
+     7a loop does not run at all — this half is the refusal that makes that safe, which is why
+     the `marked.some(forButton)` guard needs no separate test of its own. */
+  const none = doctor(one, /(^\.button \{\n)  --ghost-control: ink;\n/m, "$1");
+  const both = list(on, { css: stylesheet({ ghost: none }).css });
+  expect(both.length).toBe(1);
+  expect(both[0]).toContain(`${BUTTON_RULE} and ${HOME_BUTTON_RULE} carry no marked rule, so those controls still wear`);
+  expect(both.filter((problem) => problem.includes("is still a filled control")).length).toBe(0);
+});
+
+test("clause 7a: a control the cascade still fills with the pill is refused, though the treatment's own rule says transparent", () => {
+  const on = build({ value: "1" });
+  expect(refusal(on)).toBe("");
+
+  /* The doctor is a rule appended after the treatment block, which is the shape of the defect the
+     clause was written for. `.button--small` is Get directions alone, and the marked family rule
+     still declares `background: transparent` — a check that read that rule instead of the cascade
+     would pass this stylesheet and ship the pill. */
+  const filled = list(on, { css: stylesheet({ ghost: late(".button--small { background: var(--ink); }") }).css });
+  expect(filled.length).toBe(1);
+  expect(filled[0]).toContain("Get directions is still a filled control in the stylesheet this bundle ships");
+  expect(filled[0]).toContain("the cascade resolves its background to var(--ink), not to transparent");
+  expect(filled[0]).toContain(`${GHOST_CONTROLS_VAR} is in force and every button of this copy wears the outline treatment`);
+  expect(filled[0]).toContain("is the one control the treatment missed");
+});
+
+test("clause 7a: a control whose cascade resolves to no readable text colour is refused", () => {
+  const on = build({ value: "1" });
+  expect(refusal(on)).toBe("");
+
+  // `inherit` is a value no colour reader here can resolve, and a control the gate cannot read is
+  // a control whose contrast and surface are unchecked — the older hole this half closes.
+  const unreadable = list(on, { css: stylesheet({ ghost: late(".button--small { color: inherit; }") }).css });
+  expect(unreadable.length).toBe(1);
+  expect(unreadable[0]).toBe(
+    "Get directions resolves to no readable text colour, so neither its contrast nor the surface it is drawn for can be checked.",
+  );
+});
+
+test("clause 7a: a hero action the cascade paints in anything but white is refused — the photograph's ghost is white", () => {
+  const on = build({ value: "1" });
+  expect(refusal(on)).toBe("");
+
+  const inked = list(on, {
+    css: stylesheet({ ghost: late(".page--index .hero-actions .button--ghost { color: var(--ink); }") }).css,
+  });
+  expect(inked.length).toBe(1);
+  expect(inked[0]).toContain(
+    "the home hero's request action resolves to rgb(22, 24, 27) words, but it sits on the home page's hero photograph behind the scrim",
+  );
+  expect(inked[0]).toContain("there the ghost is white, the same rule the header's action follows");
+  expect(inked[0]).toContain("any other colour is a different treatment wearing the marker");
+});
+
+test("clause 7a: a hero action whose outline resolves to anything but its words' white is refused", () => {
+  const on = build({ value: "1" });
+  expect(refusal(on)).toBe("");
+
+  const bordered = list(on, {
+    css: stylesheet({ ghost: late(".page--index .hero-actions .button--ghost { border-color: #3d4450; }") }).css,
+  });
+  expect(bordered.length).toBe(1);
+  expect(bordered[0]).toContain("the home hero's request action resolves to rgb(61, 68, 80) outline colour over the hero photograph");
+  expect(bordered[0]).toContain("on a picture the outline is the only edge a transparent control has");
+});
+
+test("clause 7a: a paper control the cascade paints in words that are not the bundle's ink is refused", () => {
+  const on = build({ value: "1" });
+  expect(refusal(on)).toBe("");
+
+  /* Both halves move together here — a words-only doctor would also be a control whose outline is
+     not its words' colour, and this test is about the words' own condition. */
+  const notInk = list(on, {
+    css: stylesheet({ ghost: late(".button--small { color: #3d4450; border-color: #3d4450; }") }).css,
+  });
+  expect(notInk.length).toBe(1);
+  expect(notInk[0]).toContain("Get directions resolves to rgb(61, 68, 80) words — not the bundle's ink");
+  expect(notInk[0]).toContain("On the paper surfaces the family is the ink ghost");
+});
+
+test("clause 7a: a paper control with no outline at all is refused — a transparent control's only edge", () => {
+  const on = build({ value: "1" });
+  expect(refusal(on)).toBe("");
+
+  const edgeless = list(on, { css: stylesheet({ ghost: late(".button--small { border-color: inherit; }") }).css });
+  expect(edgeless.length).toBe(1);
+  expect(edgeless[0]).toBe(
+    "Get directions resolves to no outline colour, so its own boundary against the paper is unknown. A transparent control has no fill to give it an edge.",
+  );
+});
+
+test("clause 7a: a paper control whose outline is not its words' own colour is refused — two colours on one control", () => {
+  const on = build({ value: "1" });
+  expect(refusal(on)).toBe("");
+
+  const two = list(on, { css: stylesheet({ ghost: late(".button--small { border-color: #3d4450; }") }).css });
+  expect(two.length).toBe(1);
+  expect(two[0]).toContain(
+    "Get directions resolves to an outline in rgb(61, 68, 80) and words in rgb(22, 24, 27) — two colours on one control",
+  );
+  expect(two[0]).toContain("The outline is the words' own colour, which is what makes every button of this family one treatment");
+});
+
 /* ------------------------------------------------------------------------------- limits */
 
 /**
@@ -662,9 +839,9 @@ test("clause 6: the last rule carrying a state's own selector must declare its o
  *   1. **The documents this module cites are not all in the repository.** `ghost-controls.ts`,
  *      the manifest's own note and the branch's commit messages point at
  *      `docs/ghost-controls.md` for the before/after table, the measured numbers and the two
- *      refused resolutions of the contrast problem; there is no such file in the tree, and the
- *      decision's refusal text therefore contains numbers whose working is not on disk. The
- *      measurements themselves are in `design/ghost-controls-measurements.md` (outside the
- *      repository). A regression test cannot assert a document that does not exist; it can
- *      only say so, which is what this note does.
+ *      refused resolutions of the contrast problem. That document **is** in the tree — it landed with
+ *      the family treatment on 16 Oct 2026 — but the measurements it cites are in
+ *      `design/ghost-controls-measurements.md`, which is outside the repository, so the numbers
+ *      the refusal texts carry still have their working outside the check that cannot read them.
+ *      A regression test cannot assert a document that is not in the tree; it can only say so.
  */

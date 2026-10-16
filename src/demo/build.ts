@@ -1682,7 +1682,7 @@ export function ghostControlsProblems(vars: {
     const unmarked = GHOST_BUTTON_SELECTORS.filter((one) => !marked.some((rule) => selectorOf(rule) === one));
     if (unmarked.length > 0) {
       problems.push(
-        `the stylesheet this bundle ships paints the ghost on the header's action and not across the button family: ${unmarked.join(" and ")} carry no marked rule, so ${unmarked.length === 1 ? "that control" : "those controls"} still wear the filled button while the opt-in is in force. The owner's direction of 16 Oct 2026 is one treatment across every button of this copy — the CTA band's action, the form's submit, Get directions and the home hero's two actions as well as the header's. ${decision.basis}`,
+        `the stylesheet this bundle ships paints the ghost on the header's action and not across the button family: ${unmarked.join(" and ")} carry no marked rule, so ${unmarked.length === 1 ? "that control still wears" : "those controls still wear"} the filled button while the opt-in is in force. The owner's direction of 16 Oct 2026 is one treatment across every button of this copy — the CTA band's action, the form's submit, Get directions and the home hero's two actions as well as the header's. ${decision.basis}`,
       );
     }
     if (marked.some((rule) => forButton(rule))) {
