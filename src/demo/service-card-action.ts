@@ -88,6 +88,28 @@ import { headingText, serviceCardMeasure, type ServiceCardShape } from "./family
 import { GHOST_PAPER_FILL_ACTIVE, GHOST_PAPER_FILL_HOVER, GHOST_PAPER_INK } from "./ghost-controls.ts";
 import type { BusinessRecord, FormDeliveryMode } from "./types.ts";
 
+export function fetchedBy(card: string): string[] {
+  return [
+      ...new Set([
+        ...(card.match(/<\/?(img|object|embed|iframe|script|picture|source|video|audio)\b/gi) ?? []).map((tag) =>
+          tag.replace(/[</]/g, "").toLowerCase(),
+        ),
+        // An **inline** `<svg>` fetches nothing, so `svg` is out of the tag list above: the
+        // graphics layer draws every mark inline (`graphics.ts`), from `currentColor` and the
+        // bundle's own tokens, so there is no file to ship and none to license. What fetches
+        // *inside* a drawing is named here instead, so the clause keeps exactly the teeth it
+        // had — a card may not take a file from anywhere.
+        ...(/<svg[^>]*\bsrc\s*=/i.test(card) ? ["an <svg src>"] : []),
+        ...(/<image[\s>]/i.test(card) ? ["an <image>"] : []),
+        ...(/<use[^>]*href="(?!#)/i.test(card) ? ["an external <use>"] : []),
+        ...(/\bsrc\s*=/i.test(card) ? ["src="] : []),
+        ...(/\bhttps?:\/\//i.test(card) ? ["a remote address"] : []),
+        ...(/url\(/i.test(card) ? ["url(...)"] : []),
+        ...(/\son[a-z]+\s*=/i.test(card) ? ["an inline event handler"] : []),
+      ]),
+  ];
+}
+
 /** The configuration switch that opts this variant in. It carries no content. */
 export const SERVICE_CARD_ACTION_VAR = "DEMO_SERVICE_CARD_ACTION_BAR";
 /** The one page the variant may appear on. */
@@ -651,25 +673,20 @@ function wholeCardActionProblems(vars: {
 
   /* 6. the glyph costs nothing: the bar is text, and it asks the network for nothing. */
   for (const card of barCards) {
-    const requests = [
-      ...new Set([
-        ...(card.match(/<\/?(img|object|embed|iframe|script|picture|source|video|audio)\b/gi) ?? []).map((tag) =>
-          tag.replace(/[</]/g, "").toLowerCase(),
-        ),
-        // An **inline** `<svg>` fetches nothing, so `svg` is out of the tag list above: the
-        // graphics layer draws every mark inline (`graphics.ts`), from `currentColor` and the
-        // bundle's own tokens, so there is no file to ship and none to license. What fetches
-        // *inside* a drawing is named here instead, so the clause keeps exactly the teeth it
-        // had — a card may not take a file from anywhere.
-        ...(/<svg[^>]*\bsrc\s*=/i.test(card) ? ["an <svg src>"] : []),
-        ...(/<image[\s>]/i.test(card) ? ["an <image>"] : []),
-        ...(/<use[^>]*href="(?!#)/i.test(card) ? ["an external <use>"] : []),
-        ...(/\bsrc\s*=/i.test(card) ? ["src="] : []),
-        ...(/\bhttps?:\/\//i.test(card) ? ["a remote address"] : []),
-        ...(/url\(/i.test(card) ? ["url(...)"] : []),
-        ...(/\son[a-z]+\s*=/i.test(card) ? ["an inline event handler"] : []),
-      ]),
-    ];
+
+/**
+ * Everything in a card's markup that would ask the network for a file.
+ *
+ * The two card shapes and the action bar all refuse a card that fetches anything, and this
+ * is the one place that decides what "fetches" means. An **inline** `<svg>` does not: the
+ * graphics layer draws every mark inline (`graphics.ts`), from `currentColor` and the
+ * bundle's own tokens, so there is no file to ship and none to license. `svg` therefore is
+ * not in the tag list, and what fetches *inside* a drawing is named instead — an `<svg
+ * src>`, a raster `<image>` and a `<use>` pointing at another document. Exported so a test
+ * can prove both halves: the marks pass, and the three fetching shapes do not.
+ */
+
+    const requests = fetchedBy(card);
     if (requests.length > 0) {
       problems.push(
         `${decision.page}: an action-bar card adds ${requests.join(", ")} — on a card whose whole action is one link and one text glyph. The chevron is a text glyph, the grammar booking.ts's BOOKING_ARROW uses, so the bar survives the stylesheet not loading, costs no request, and needs no file the bundle has to ship or license.`,
@@ -849,25 +866,7 @@ function nestedCtaActionProblems(vars: {
   for (const page of pages) {
     const card = cardsOf(page.html).find((html) => html.includes(cardMarker));
     if (!card) continue;
-    const requests = [
-      ...new Set([
-        ...(card.match(/<\/?(img|object|embed|iframe|script|picture|source|video|audio)\b/gi) ?? []).map((tag) =>
-          tag.replace(/[</]/g, "").toLowerCase(),
-        ),
-        // An **inline** `<svg>` fetches nothing, so `svg` is out of the tag list above: the
-        // graphics layer draws every mark inline (`graphics.ts`), from `currentColor` and the
-        // bundle's own tokens, so there is no file to ship and none to license. What fetches
-        // *inside* a drawing is named here instead, so the clause keeps exactly the teeth it
-        // had — a card may not take a file from anywhere.
-        ...(/<svg[^>]*\bsrc\s*=/i.test(card) ? ["an <svg src>"] : []),
-        ...(/<image[\s>]/i.test(card) ? ["an <image>"] : []),
-        ...(/<use[^>]*href="(?!#)/i.test(card) ? ["an external <use>"] : []),
-        ...(/\bsrc\s*=/i.test(card) ? ["src="] : []),
-        ...(/\bhttps?:\/\//i.test(card) ? ["a remote address"] : []),
-        ...(/url\(/i.test(card) ? ["url(...)"] : []),
-        ...(/\son[a-z]+\s*=/i.test(card) ? ["an inline event handler"] : []),
-      ]),
-    ];
+    const requests = fetchedBy(card);
     if (requests.length > 0) {
       problems.push(
         `${page.file}: a nested-CTA card adds ${requests.join(", ")} — on a card whose whole action is one anchor carrying one label. The button is text in the bundle's own stylesheet, so it survives the stylesheet not loading, costs no request, and needs no file the bundle has to ship or license.`,

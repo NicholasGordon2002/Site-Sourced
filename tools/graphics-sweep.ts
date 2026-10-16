@@ -31,6 +31,13 @@ type Row = {
   to: string;
 };
 
+// The files the wiring lives in, derived from the layer's own path so a move keeps every
+// row pointing at the same tree.
+const WIRING = GRAPHICS.replace("graphics.ts", "graphics-wiring.ts");
+const ADDRESSES = GRAPHICS.replace("graphics.ts", "addresses.ts");
+const FAMILY = GRAPHICS.replace("graphics.ts", "family-render.ts");
+const SCA = GRAPHICS.replace("graphics.ts", "service-card-action.ts");
+
 const ROWS: Row[] = [
   // ---- clause 1 — nothing reaches the network (eight patterns, eight conditions)
   { id: "c1-absolute-url", clause: "1", condition: `REMOTE_PATTERNS "an absolute http(s) URL" /https?:\\/\\//i`, file: GRAPHICS, from: `["an absolute http(s) URL", /https?:\\/\\//i],`, to: `["an absolute http(s) URL", /https?:\\/\\/NEVER-MATCHES/i],` },
@@ -78,6 +85,25 @@ const ROWS: Row[] = [
 
   // ---- the wiring — the check runs inside a real build
   { id: "wiring-compliance-checks", clause: "wiring", condition: `problems.push(...graphicsProblems(vars.graphics)) in build.ts`, file: BUILD, from: `  problems.push(...graphicsProblems(vars.graphics));`, to: `  // problems.push(...graphicsProblems(vars.graphics));` },
+
+  // ---- the wiring's own clauses (graphics-wiring.ts) and the three guards the layer's
+  //      inline marks pushed back to reading text
+  { id: "gw-requested", clause: "wiring", condition: "graphicsRequested: a truthy value", file: WIRING, from: `  return raw !== "" && raw !== "0" && raw !== "false" && raw !== "off";`, to: `  return false;` },
+  { id: "gw-slug-scoped", clause: "wiring", condition: "if (vars.slug !== GRAPHICS_SLUG) — one demonstration only", file: WIRING, from: `  if (vars.slug !== GRAPHICS_SLUG) {`, to: `  if (false && vars.slug !== GRAPHICS_SLUG) {` },
+  { id: "gw-business-refused", clause: "wiring", condition: "if (vars.phase === \"business\") — the delivered phase", file: WIRING, from: `  if (vars.phase === "business") {`, to: `  if (false && vars.phase === "business") {` },
+  { id: "gw-unrecognised", clause: "wiring", condition: "if (decision.unrecognised !== null)", file: WIRING, from: `  if (decision.unrecognised !== null) {`, to: `  if (false && decision.unrecognised !== null) {` },
+  { id: "gw-off-page-smuggled", clause: "wiring", condition: "for (const page of marked) — a mark while the switch is off", file: WIRING, from: `    for (const page of marked) {`, to: `    for (const page of []) {` },
+  { id: "gw-off-css-smuggled", clause: "wiring", condition: "the stylesheet carries the layer while the switch is off", file: WIRING, from: `    if (css.includes(".gfx-icon {") || css.includes(GRAPHICS_MARKER)) {`, to: `    if (false && (css.includes(".gfx-icon {") || css.includes(GRAPHICS_MARKER))) {` },
+  { id: "gw-on-page-unmarked", clause: "wiring", condition: "if (!marked.includes(page)) — a page with no mark", file: WIRING, from: `    if (!marked.includes(page)) {`, to: `    if (false && !marked.includes(page)) {` },
+  { id: "gw-on-css-unmarked", clause: "wiring", condition: "if (!cssCarriesLayer) — the stylesheet with no layer", file: WIRING, from: `  if (!cssCarriesLayer) {`, to: `  if (false && !cssCarriesLayer) {` },
+  { id: "gw-mark-unmarked", clause: "wiring", condition: "a gfx mark with no aria-hidden and no role", file: WIRING, from: `      if (!/aria-hidden="true"/i.test(tag) && !/role="img"/i.test(tag)) {`, to: `      if (false && !/aria-hidden="true"/i.test(tag) && !/role="img"/i.test(tag)) {` },
+  { id: "gw-mark-unfocusable", clause: "wiring", condition: "focusable=\"false\" on a mark", file: WIRING, from: `      if (!/focusable="false"/i.test(tag)) {`, to: `      if (false && !/focusable="false"/i.test(tag)) {` },
+  { id: "gw-map-caption", clause: "wiring", condition: "if (shows && !page.html.includes(MAP_CAPTION))", file: WIRING, from: `    if (shows && !page.html.includes(MAP_CAPTION)) {`, to: `    if (false && shows && !page.html.includes(MAP_CAPTION)) {` },
+  { id: "gw-mark-in-control", clause: "wiring", condition: "a mark written inside a button-shaped anchor", file: WIRING, from: `      if (/\bgfx-/.test(control.slice(control.indexOf(">"))) {`, to: `      if (false && /\bgfx-/.test(control.slice(control.indexOf(">"))) {` },
+  { id: "gw-wiring-in-build", clause: "wiring", condition: "graphicsWiringProblems(...) in build.ts", file: BUILD, from: `    ...graphicsWiringProblems({`, to: `    ...graphicsWiringProblems({\n      pages: [],` },
+  { id: "gw-phone-geometry", clause: "guards", condition: "withoutGeometry: a drawing's path data is not a printed number", file: ADDRESSES, from: `  return html.replace(GEOMETRY_ELEMENTS, " ");`, to: `  return html;` },
+  { id: "gw-heading-text", clause: "guards", condition: "headingText: a mark beside a name is not part of it", file: FAMILY, from: `  return inner.replace(/<[^>]*>/g, "").trim();`, to: `  return inner.trim();` },
+  { id: "gw-fetch-image", clause: "guards", condition: "fetchedBy: a raster <image> in a drawing still fetches", file: SCA, from: `        ...(/<image[\s>]/i.test(card) ? ["an <image>"] : []),`, to: `        ...((false) ? ["an <image>"] : []),` },
 
   // ---- rows expected UNGUARDED (no test may go red; the sweep says so out loud)
   { id: "c4-caption-in-named", clause: "4", condition: `parts.filter((part) => part.name !== "caption")`, file: GRAPHICS, from: `  const named = parts.filter((part) => part.name !== "caption");`, to: `  const named = parts.filter(() => true);` },

@@ -41,7 +41,18 @@ import {
   wordmark,
   type GraphicsPart,
 } from "../src/demo/graphics.ts";
-import { renderPages, type RenderContext } from "../src/demo/render.ts";
+import { renderCss, renderPages, type RenderContext } from "../src/demo/render.ts";
+import {
+  GRAPHICS_MARKER,
+  GRAPHICS_SLUG,
+  GRAPHICS_VAR,
+  graphicsDecision,
+  graphicsWiringProblems,
+  type GraphicsDecision,
+} from "../src/demo/graphics-wiring.ts";
+import { headingText } from "../src/demo/family-render.ts";
+import { phonesPrintedIn } from "../src/demo/addresses.ts";
+import { fetchedBy } from "../src/demo/service-card-action.ts";
 import type { BusinessRecord, ManifestImage } from "../src/demo/types.ts";
 
 const SLUG = "example-barber-shop";
@@ -340,4 +351,167 @@ test("the layers' own exports do not collide with the template's class names", (
   expect(classes.length).toBeGreaterThan(20);
   for (const name of classes) expect(name.startsWith("gfx-")).toBe(true);
   expect(graphicsCss()).toContain(".gfx-ground--no-photo");
+});
+
+/* ------------------------------------------- the wiring (`DEMO_GRAPHICS`, S3 wired) */
+
+/** The decision a build of the one demonstration this layer is scoped to makes. */
+function decision(env: Record<string, string | undefined>, phase: "demo" | "business" = "demo"): GraphicsDecision {
+  return graphicsDecision({ slug: GRAPHICS_SLUG, phase, env });
+}
+const ON = decision({ [GRAPHICS_VAR]: "layer" });
+const OFF = decision({});
+
+/** One bundle's pages and stylesheet, with the layer on or off — the real renderer. */
+function rendered(graphics: boolean) {
+  const { form, delivery, copy } = resolveBuildParts(RECORD, SLUG);
+  const ctx: RenderContext = {
+    record: RECORD,
+    copy,
+    profile: profileFor(RECORD),
+    form,
+    delivery,
+    privacy: composePrivacy(RECORD, form, delivery),
+    images: [] as ManifestImage[],
+    slug: SLUG,
+    generatedAt: "2026-10-17T00:00:00.000Z",
+    ...(graphics ? { graphics: true } : {}),
+  };
+  return {
+    pages: renderPages(ctx),
+    css: renderCss(profileFor(RECORD), SLUG, graphics ? { graphics: true } : {}),
+  };
+}
+
+/** A one-page bundle, for the clauses that read the pages rather than the renderer. */
+function bundle(html: string) {
+  return [{ id: "index" as const, file: "index.html", html }];
+}
+
+test("the switch is value-addressed, scoped to one demonstration, and refused in the delivered phase", () => {
+  expect(OFF.enabled).toBe(false);
+  expect(OFF.unrecognised).toBe(null);
+  expect(ON.enabled).toBe(true);
+  expect(ON.scope).toBe("layer");
+  // A value this build cannot read is refused rather than guessed at, and it says so.
+  const odd = decision({ [GRAPHICS_VAR]: "shiny" });
+  expect(odd.enabled).toBe(false);
+  expect(odd.unrecognised).toBe("shiny");
+  expect(graphicsWiringProblems({ pages: [], css: "", decision: odd }).some((p) => p.includes("names no treatment"))).toBe(true);
+  // Off, and the switch is off for every spelling the repo uses for off.
+  for (const off of ["0", "false", "off", " "]) expect(decision({ [GRAPHICS_VAR]: off }).enabled).toBe(false);
+  // Scoped: another record's build reads the same variable and nothing happens.
+  const other = graphicsDecision({ slug: "red-hill-property-care", phase: "demo", env: { [GRAPHICS_VAR]: "layer" } });
+  expect(other.enabled).toBe(false);
+  expect(other.basis).toContain("refused");
+  // The delivered phase refuses it: a client's site carries the design the client agreed to.
+  const client = decision({ [GRAPHICS_VAR]: "layer" }, "business");
+  expect(client.enabled).toBe(false);
+  expect(client.basis).toContain("delivered phase");
+});
+
+test("with the layer on, every page carries a marked mark and the stylesheet carries the layer", () => {
+  const { pages, css } = rendered(true);
+  expect(pages.length).toBeGreaterThan(4);
+  for (const page of pages) expect(/class="[^"]*\bgfx-[a-z]/.test(page.html)).toBe(true);
+  expect(css).toContain(".gfx-icon {");
+  expect(css).toContain(GRAPHICS_MARKER);
+  // The whole bundle, through the clauses the build runs.
+  expect(graphicsWiringProblems({ pages, css, decision: ON })).toEqual([]);
+  // A mark is never inside a control: the measured button boxes do not move.
+  for (const page of pages) {
+    for (const control of [...page.html.matchAll(/<a\b[^>]*>[\s\S]*?<\/a>/gi)].map((m) => m[0]!)) {
+      const classes = (/class="([^"]*)"/.exec(control.slice(0, control.indexOf(">")))?.[1] ?? "").split(/\s+/);
+      if (!classes.some((one) => ["button", "call-button", "service-cta"].includes(one))) continue;
+      expect(/gfx-/.test(control.slice(control.indexOf(">")))).toBe(false);
+    }
+  }
+});
+
+test("with the layer off, no page and no stylesheet carries it — and the clauses refuse one that does", () => {
+  const { pages, css } = rendered(false);
+  for (const page of pages) expect(page.html.includes("gfx-")).toBe(false);
+  expect(css.includes(GRAPHICS_MARKER)).toBe(false);
+  expect(css.includes(".gfx-icon {")).toBe(false);
+  expect(graphicsWiringProblems({ pages, css, decision: OFF })).toEqual([]);
+  // Clause 1: a layer smuggled in while the switch is off, on a page or in the stylesheet.
+  const smuggled = bundle('<main><svg class="gfx-icon gfx-icon--20" aria-hidden="true"></svg></main>');
+  expect(graphicsWiringProblems({ pages: smuggled, css: "", decision: OFF }).some((p) => p.includes("carries a graphics-layer class"))).toBe(true);
+  expect(
+    graphicsWiringProblems({ pages: [], css: `.gfx-icon { color: var(--ink); }\n.gfx-layer { ${GRAPHICS_MARKER}: s3.1; }`, decision: OFF }).some((p) =>
+      p.includes("carries the graphics layer's rules"),
+    ),
+  ).toBe(true);
+  // Clause 2: the opt-in in force and nothing painted, or the marker missing.
+  expect(
+    graphicsWiringProblems({ pages: bundle("<main><p>plain</p></main>"), css: "", decision: ON }).some((p) =>
+      p.includes("carries no graphics-layer mark"),
+    ),
+  ).toBe(true);
+  expect(
+    graphicsWiringProblems({ pages: bundle('<svg class="gfx-icon" aria-hidden="true"></svg>'), css: css, decision: ON }).some((p) =>
+      p.includes("carries no graphics layer while"),
+    ),
+  ).toBe(true);
+});
+
+test("the wiring refuses an unmarked mark, a map without its caption, and a mark inside a control", () => {
+  const { css } = rendered(true);
+  const ok = bundle('<svg class="gfx-icon gfx-icon--20" aria-hidden="true" focusable="false"></svg>');
+  expect(graphicsWiringProblems({ pages: ok, css, decision: ON })).toEqual([]);
+
+  // Clause 3 — marking, and the focusable attribute.
+  const unmarked = bundle('<svg class="gfx-icon" focusable="false"></svg>');
+  expect(graphicsWiringProblems({ pages: unmarked, css, decision: ON }).some((p) => p.includes("carries no marking"))).toBe(true);
+  const unfocusable = bundle('<svg class="gfx-icon" aria-hidden="true"></svg>');
+  expect(graphicsWiringProblems({ pages: unfocusable, css, decision: ON }).some((p) => p.includes('focusable="false"'))).toBe(true);
+
+  // Clause 4 — the map's meaning is its caption, and only its caption.
+  const mapNoCaption = bundle(schematicMap());
+  expect(graphicsWiringProblems({ pages: mapNoCaption, css, decision: ON }).some((p) => p.includes("without its caption"))).toBe(true);
+  const mapWithCaption = bundle(`${schematicMap()}<p>${MAP_CAPTION}</p>`);
+  expect(graphicsWiringProblems({ pages: mapWithCaption, css, decision: ON })).toEqual([]);
+
+  // Clause 5 — a mark beside a control is fine; a mark inside one is not.
+  const beside = bundle(`<p>${icon("hours")} <a class="button" href="#form">Request an appointment</a></p>`);
+  expect(graphicsWiringProblems({ pages: beside, css, decision: ON })).toEqual([]);
+  const inside = bundle(`<a class="button" href="#form">${icon("hours")} Request an appointment</a>`);
+  expect(graphicsWiringProblems({ pages: inside, css, decision: ON }).some((p) => p.includes("carries a graphics-layer mark inside it"))).toBe(true);
+});
+
+test("the clauses are wired into the build itself, not only callable", () => {
+  const { pages, css } = rendered(true);
+  const { form, delivery, copy } = resolveBuildParts(RECORD, SLUG);
+  const base = { pages, record: RECORD, copy, form, delivery, images: [] as ManifestImage[], privacy: composePrivacy(RECORD, form, delivery), css };
+  // The layer, wired and opted in, adds nothing to a real build's problem list...
+  expect(complianceChecks({ ...base, graphicsWiring: ON }).filter((p) => p.includes("graphics-layer") || p.includes("graphics layer"))).toEqual([]);
+  // ...and a page that lost its marking stops that same build, through the same entry point
+  // `build.ts` uses.
+  const broken = complianceChecks({ ...base, pages: bundle('<svg class="gfx-icon"></svg>'), graphicsWiring: ON });
+  expect(broken.some((p) => p.includes("carries no marking"))).toBe(true);
+});
+
+test("the three guards that read markup now read text: an inline mark is not a phone number, a name or a fetch", () => {
+  // The phone guard read an inline SVG's path data as eleven digits starting with 1, which
+  // is a North American number: geometry is stripped, and nothing else is.
+  const drawing = `<svg class="gfx-icon" viewBox="0 0 24 24"><path d="M12.6 3.4h6.1a1.9 1.9 0 0 1 1.9 1.9v6.1a1.9 1.9 0 0 1-.56 1.34l-7.2 7.2a1.9 1.9 0 0 1-2.69 0Z"/></svg>`;
+  expect(phonesPrintedIn({ file: "index.html", html: drawing })).toEqual([]);
+  // What a visitor can read is still read: the same number as visible text, and inside a
+  // drawing's own <text> element.
+  expect(phonesPrintedIn({ file: "index.html", html: `<p>Call +1 905-555-0142</p>` }).length).toBe(1);
+  expect(phonesPrintedIn({ file: "index.html", html: `<svg><text>+1 905-555-0142</text></svg>` }).length).toBe(1);
+  expect(phonesPrintedIn({ file: "index.html", html: `<a href="tel:+19055550142">Call</a>` }).length).toBe(1);
+
+  // The card checks compared a heading's markup with the record's own name.
+  expect(headingText(`<svg class="gfx-icon"></svg> Haircut`)).toBe("Haircut");
+  expect(headingText("Kids&#39; cut")).toBe("Kids&#39; cut");
+
+  // The card's cost scan listed `svg` as a tag that fetches. Inline SVG fetches nothing;
+  // these are the shapes that do.
+  expect(fetchedBy(drawing)).toEqual([]);
+  expect(fetchedBy('<svg src="icons.svg"></svg>')).toEqual(["an <svg src>", "src="]);
+  expect(fetchedBy('<svg><image href="hero.png"/></svg>')).toEqual(["an <image>"]);
+  expect(fetchedBy('<svg><use href="sprite.svg#pin"/></svg>')).toEqual(["an external <use>"]);
+  expect(fetchedBy('<img src="x.png">')).toEqual(["img", "src="]);
+  expect(fetchedBy('<a href="https://example.com">x</a>')).toEqual(["a remote address"]);
 });
