@@ -285,28 +285,29 @@ export function schematicMap(options: MapOptions = {}): string {
     `<svg class="${classes}" viewBox="0 0 480 280" width="480" height="280" aria-hidden="true"`,
     ` focusable="false" fill="none" stroke="currentColor" stroke-width="1"`,
     ` stroke-linecap="round" stroke-linejoin="round">`,
+    // A plan, plainly drawn: two streets with their own centrelines, parcels between
+    // them, and nothing that could be read as geography.
     `<rect class="gfx-map-ground" x="0" y="0" width="480" height="280" rx="18"/>`,
-    // Two street bands and the blocks they separate: a plan, plainly drawn.
-    `<rect class="gfx-map-street" x="0" y="92" width="480" height="46"/>`,
-    `<rect class="gfx-map-street" x="0" y="192" width="480" height="44"/>`,
-    `<rect class="gfx-map-block" x="28" y="16" width="120" height="60" rx="6"/>`,
-    `<rect class="gfx-map-block" x="182" y="16" width="104" height="60" rx="6"/>`,
-    `<rect class="gfx-map-block" x="320" y="16" width="132" height="60" rx="6"/>`,
-    `<rect class="gfx-map-block" x="28" y="154" width="96" height="24" rx="6"/>`,
-    `<rect class="gfx-map-block" x="156" y="154" width="132" height="24" rx="6"/>`,
-    `<rect class="gfx-map-block" x="322" y="154" width="130" height="24" rx="6"/>`,
-    `<rect class="gfx-map-block" x="28" y="250" width="120" height="22" rx="6"/>`,
-    `<rect class="gfx-map-block" x="182" y="250" width="104" height="22" rx="6"/>`,
-    `<rect class="gfx-map-block" x="320" y="250" width="132" height="22" rx="6"/>`,
-    `<rect class="gfx-map-block" x="28" y="138" width="424" height="1"/>`,
-    // The marker: an accent disc with a dot, on the block that stands in for the address.
-    `<circle class="gfx-map-halo" cx="152" cy="115" r="26"/>`,
-    `<circle class="gfx-map-dot" cx="152" cy="115" r="7"/>`,
+    `<rect class="gfx-map-street" x="0" y="88" width="480" height="52"/>`,
+    `<rect class="gfx-map-street" x="0" y="188" width="480" height="48"/>`,
+    `<path class="gfx-map-hair" d="M0 88h480M0 140h480M0 188h480M0 236h480"/>`,
+    `<path class="gfx-map-dash" stroke-dasharray="12 14" d="M0 114h480M0 212h480"/>`,
+    `<rect class="gfx-map-block" x="26" y="18" width="118" height="52" rx="4"/>`,
+    `<rect class="gfx-map-block" x="176" y="18" width="102" height="52" rx="4"/>`,
+    `<rect class="gfx-map-block" x="312" y="18" width="142" height="52" rx="4"/>`,
+    `<rect class="gfx-map-block" x="26" y="156" width="92" height="14" rx="4"/>`,
+    `<rect class="gfx-map-block" x="150" y="156" width="128" height="14" rx="4"/>`,
+    `<rect class="gfx-map-block" x="310" y="156" width="144" height="14" rx="4"/>`,
+    `<rect class="gfx-map-block" x="26" y="252" width="118" height="18" rx="4"/>`,
+    `<rect class="gfx-map-block" x="176" y="252" width="102" height="18" rx="4"/>`,
+    `<rect class="gfx-map-block" x="312" y="252" width="142" height="18" rx="4"/>`,
+    // The marker: an accent halo and a dot, on the parcel that stands in for the address.
+    `<circle class="gfx-map-halo" cx="150" cy="44" r="24"/>`,
+    `<circle class="gfx-map-dot" cx="150" cy="44" r="6.5"/>`,
     label,
     // The one thing that stops it pretending: its own label, inside the drawing.
-    `<text class="gfx-map-note" x="26" y="266">SCHEMATIC</text>`,
-    `<path class="gfx-map-hair" d="M96 262h44"/>`,
-    `</svg>`,
+    `<text class="gfx-map-note" x="26" y="270">SCHEMATIC — NOT TO SCALE</text>`,
+    `<path class="gfx-map-hair" d="M172 266h282"/>`,
   ].join("");
 }
 
@@ -420,7 +421,9 @@ export function graphicsCss(): string {
 
 .gfx-ground { position: relative; }
 .gfx-ground--rules {
-  background-image: repeating-linear-gradient(to bottom, currentColor 0 1px, transparent 1px 12px);
+  /* A 28px pitch: the same rhythm as a 17px line at 1.65, so ruled text sits on the rules
+     instead of struck through by them. */
+  background-image: repeating-linear-gradient(to bottom, currentColor 0 1px, transparent 1px 28px);
 }
 .gfx-ground--grid {
   background-image:
@@ -462,8 +465,10 @@ export function graphicsCss(): string {
 }
 .gfx-map-ground { fill: var(--paper-2); stroke: none; }
 .gfx-map-street { fill: var(--paper); stroke: none; }
+.gfx-map .gfx-map-block { fill: var(--paper); }
 .gfx-map-block { fill: none; stroke: var(--line); }
 .gfx-map-hair { stroke: var(--line); }
+.gfx-map-dash { stroke: var(--line); }
 .gfx-map-halo { fill: var(--accent-soft); stroke: none; }
 .gfx-map-dot { fill: var(--accent); stroke: none; }
 .gfx-map-label { fill: var(--body-text); font-family: var(--font-body); font-size: 15px; stroke: none; }

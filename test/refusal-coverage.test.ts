@@ -203,6 +203,8 @@ const EXEMPT: Record<string, string> = {
   PHASE_REFUSAL_LISTS: "the registry's phase half; the entries live in the two lists above it",
   NAMED_DETAILS: "recognisers, not refusals: it names the four details as pages write them, and the refusal is a claim shape (DETAIL_CLAIM_SHAPES, registered)",
   ENTITIES: "HTML entities decoded before a sentence is reported: it replaces text and refuses nothing",
+  REMOTE_PATTERNS: "not prose: it audits the graphics layer's own emitted markup and CSS for a reference that would leave the page (an http URL, a protocol-relative one, @import, url(), script, image, a use pointing outside the document, an external resource attribute). Its refusals are named in graphicsProblems() and each is proved firing on a doctored layer in test/graphics.test.ts; it never reads a page's prose, so prose samples for it would be meaningless",
+  LITERAL_COLOUR_PATTERNS: "not prose: it audits the graphics layer for a colour baked into a mark instead of currentColor or a token — the one rule that keeps a hand-drawn icon legible on both surfaces it will sit on. Proved firing with a mutated icon and stylesheet in test/graphics.test.ts; it reads artwork, not sentences",
 };
 
 test("no list of named refusals exists in the demo generator without being registered", async () => {
