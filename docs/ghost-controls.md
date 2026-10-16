@@ -267,3 +267,29 @@ a clause should know what it was for.
 | the rendered numbers, both viewports, every state | `/home/team/shared/design/ghost-controls-measurements.md` |
 | the screenshots | `/home/team/shared/design/screenshots/ghost-*.png` |
 | the review handoff that introduced it | `/home/team/shared/design/ghost-controls-review.md` |
+
+## 11. The button family — the treatment extended to every button (16 Oct 2026)
+
+Owner direction by text, 16 Oct 2026: the outlined transparent treatment consistent across
+**every button** of the Maple Avenue review copy. The rule did not change — the ghost is drawn in
+the colour of the surface it sits on — only the number of controls it covers:
+
+| control | surface (measured, not read off the class) | ghost |
+|---|---|---|
+| CTA band's action (\`.cta-actions .button\`) | the band's own \`--paper-2\` #FAF7F2 | ink |
+| form submit (\`.form-actions .button\`) | the same band | ink |
+| Get directions (\`.button--small\`) | \`--paper\` #FFFFFF | ink |
+| home hero's phone action (\`.button--paper\`) | **the hero photograph** — its class says paper and its surface does not | white |
+| home hero's request action (\`.button--ghost\`) | the hero photograph | white |
+| header action (\`.call-button\`) | photograph on the home page, paper elsewhere | white / ink |
+
+The stylesheet the switch-on build ships therefore carries **four** marked rules (the header's two
+surfaces and the family's two), and  gained: clause 3 accepts the family's
+selectors, clause 4 measures the family's paper rules against the worse of \`--paper\` and
+\`--paper-2\` (the band is not white), clause 6 requires a state rule of the family to declare
+its own colour, and clause 7 refuses by name a control the **cascade** still paints as a filled
+pill (read through \`restPaintOf\`, a specificity-then-order reader — the question is what the
+browser paints) and a treatment that marks the header's action but not the family.
+
+Numbers, the box table and the stated gaps: \`design/every-button-outlined-2026-10-16.md\`
+(outside this repository, with the rendered contrast table at 360 and 1440).
