@@ -250,8 +250,8 @@ const CONTROL_CLASSES = ["button", "call-button", "service-cta"];
  * or left a mark inside a control — fails the build rather than a review.
  *
  * Takes its pages and the stylesheet as arguments so a test can hand it a doctored bundle
- * and prove each clause fires (`test/graphics.test.ts`; the sweep rows are
- * `gw1-…`/`gw5-…` in `tools/graphics-sweep.ts`).
+ * and prove each clause fires (`test/graphics.test.ts`; the sweep rows are the `gw-…` rows in
+ * `tools/graphics-sweep.ts`, one row per condition).
  */
 export function graphicsWiringProblems(vars: {
   pages: RenderedPage[];

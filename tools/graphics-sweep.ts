@@ -13,6 +13,19 @@
  * A row whose mutation leaves **0 failures** is reported as UNGUARDED: the condition
  * is not covered by any test, so it is prose rather than a rule.
  *
+ * A row that **cannot be applied** is reported as INVALID and the sweep exits non-zero.
+ * It is not a skip and it is not a pass: an unapplied row proves nothing about the
+ * condition it names, and two of them sat in this table on 17 Oct looking like rows that
+ * had been run. Two ways a row stops applying, both silent until this guard existed:
+ *
+ *   - **the escape trap.** A row's text lives in a template literal, where `\b` is the
+ *     backspace character (U+0008) and `\s` is a plain `s`. A row quoting a regex must
+ *     double its backslashes (`\\b`, `\\s`); one that does not can never match the file;
+ *   - **the shadowing trap.** A mutation must **replace** the line carrying the condition.
+ *     Adding a second property in front of one (`pages: [],` before `pages,`) is a no-op —
+ *     JavaScript takes the last — so the file changes but the code does not, and the row
+ *     reads as a condition with no test behind it.
+ *
  * Nothing here touches the network and nothing is written outside `--out`.
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -99,13 +112,20 @@ const ROWS: Row[] = [
   { id: "gw-mark-unmarked", clause: "wiring", condition: "a gfx mark with no aria-hidden and no role", file: WIRING, from: `      if (!/aria-hidden="true"/i.test(tag) && !/role="img"/i.test(tag)) {`, to: `      if (false && !/aria-hidden="true"/i.test(tag) && !/role="img"/i.test(tag)) {` },
   { id: "gw-mark-unfocusable", clause: "wiring", condition: "focusable=\"false\" on a mark", file: WIRING, from: `      if (!/focusable="false"/i.test(tag)) {`, to: `      if (false && !/focusable="false"/i.test(tag)) {` },
   { id: "gw-map-caption", clause: "wiring", condition: "if (shows && !page.html.includes(MAP_CAPTION))", file: WIRING, from: `    if (shows && !page.html.includes(MAP_CAPTION)) {`, to: `    if (false && shows && !page.html.includes(MAP_CAPTION)) {` },
-  { id: "gw-mark-in-control", clause: "wiring", condition: "a mark written inside a button-shaped anchor", file: WIRING, from: `      if (/\bgfx-/.test(control.slice(control.indexOf(">"))) {`, to: `      if (false && /\bgfx-/.test(control.slice(control.indexOf(">"))) {` },
-  { id: "gw-wiring-in-build", clause: "wiring", condition: "graphicsWiringProblems(...) in build.ts", file: BUILD, from: `    ...graphicsWiringProblems({`, to: `    ...graphicsWiringProblems({\n      pages: [],` },
+  { id: "gw-mark-in-control", clause: "wiring", condition: "a mark written inside a button-shaped anchor", file: WIRING, from: `      if (/\\bgfx-/.test(control.slice(control.indexOf(">")))) {`, to: `      if (false && /\\bgfx-/.test(control.slice(control.indexOf(">")))) {` },
+  // A mutation must **replace** the line that carries the condition, never be added in front of
+  // it. `pages: [],` prepended to an object literal that already carries `pages,` is a no-op —
+  // JavaScript takes the last property — so the row read 0 failures and looked like a condition
+  // with no test behind it. It has one (`test/graphics.test.ts`, "the clauses are wired into the
+  // build itself"); what was wrong was the mutation.
+  { id: "gw-wiring-in-build", clause: "wiring", condition: "graphicsWiringProblems(...) — the pages the build checks are the bundle's own", file: BUILD, from: `    ...graphicsWiringProblems({\n      pages,\n      css: vars.css,`, to: `    ...graphicsWiringProblems({\n      pages: [],\n      css: vars.css,` },
   { id: "gw-phone-geometry", clause: "guards", condition: "withoutGeometry: a drawing's path data is not a printed number", file: ADDRESSES, from: `  return html.replace(GEOMETRY_ELEMENTS, " ");`, to: `  return html;` },
   { id: "gw-heading-text", clause: "guards", condition: "headingText: a mark beside a name is not part of it", file: FAMILY, from: `  return inner.replace(/<[^>]*>/g, "").trim();`, to: `  return inner.trim();` },
-  { id: "gw-fetch-image", clause: "guards", condition: "fetchedBy: a raster <image> in a drawing still fetches", file: SCA, from: `        ...(/<image[\s>]/i.test(card) ? ["an <image>"] : []),`, to: `        ...((false) ? ["an <image>"] : []),` },
+  { id: "gw-fetch-image", clause: "guards", condition: "fetchedBy: a raster <image> in a drawing still fetches", file: SCA, from: `        ...(/<image[\\s>]/i.test(card) ? ["an <image>"] : []),`, to: `        ...((false) ? ["an <image>"] : []),` },
 
-  // ---- rows expected UNGUARDED (no test may go red; the sweep says so out loud)
+  // The caption exemption (clause 4 counts the layer's bytes over every part *except* the
+  // caption, which has no cap of its own). Without it the caption lands in the no-cap branch,
+  // and `the real layer passes all five clauses` is the test that says so.
   { id: "c4-caption-in-named", clause: "4", condition: `parts.filter((part) => part.name !== "caption")`, file: GRAPHICS, from: `  const named = parts.filter((part) => part.name !== "caption");`, to: `  const named = parts.filter(() => true);` },
 ];
 
@@ -119,9 +139,21 @@ for (const file of new Set(ROWS.map((row) => row.file))) {
   original.set(file, readFileSync(file, "utf8"));
 }
 
+// A row whose text carries a control character that no source file holds can never match: it was
+// written in a template literal without doubling a backslash, so `\b` became U+0008 before this
+// tool ever ran. Named here rather than discovered as a quiet skip. A newline (U+000A) and a tab
+// (U+0009) are built by `\n` and `\t` on purpose — a row may span lines — so they are not flags.
+const MANGLED = ROWS.filter((row) => /[\u0000-\u0008\u000b\u000c\u000d\u000e-\u001f\u007f]/.test(`${row.from}${row.to}`));
+
 mkdirSync(outDir, { recursive: true });
 const rows = ROWS.filter((row) => !only || row.id === only);
 console.log(`# graphicsProblems() mutation sweep — ${rows.length} rows`);
+for (const row of MANGLED) {
+  console.log(
+    `!! ${row.id}: INVALID ROW — its text carries a control character, so it can never match ${row.file}. ` +
+      `A row in a template literal must double the backslashes of any regex it quotes (\\b, \\s, \\\\/).`,
+  );
+}
 for (const [file, text] of original) {
   console.log(`# ${file} at the start of the sweep: sha256 ${sha(text)}`);
 }
@@ -131,16 +163,35 @@ const baselineText = `${baseline.stdout.toString()}${baseline.stderr.toString()}
 console.log(`# bun test test/graphics.test.ts (unmutated): ${/^\s*(\d+) pass\b/m.exec(baselineText)?.[1] ?? "?"} pass / ${/^\s*(\d+) fail\b/m.exec(baselineText)?.[1] ?? "?"} fail\n`);
 
 let unguarded = 0;
-let missed = 0;
+let invalid = 0;
 for (const row of rows) {
   const before = original.get(row.file)!;
   const beforeSha = sha(before);
   if (!before.includes(row.from)) {
-    console.log(`!! ${row.id}: the text to mutate was not found — row skipped (file changed?)`);
-    missed += 1;
+    invalid += 1;
+    const mangled = MANGLED.includes(row);
+    console.log(`\n## ${row.id}  (clause ${row.clause})`);
+    console.log(`condition: ${row.condition}`);
+    console.log(
+      `!! INVALID ROW — the text to mutate is not in ${row.file}, so this row proves nothing about the condition it names.`,
+    );
+    console.log(
+      mangled
+        ? "   ...and its text carries a control character: a template literal ate an escape. Double the backslash (\\b → \\\\b)."
+        : "   ...the enclosing condition has moved or gone: retarget the row at the code that carries it now, or retire the row in its own commit and say why.",
+    );
     continue;
   }
   const mutated = before.replace(row.from, row.to);
+  if (mutated === before) {
+    invalid += 1;
+    console.log(`\n## ${row.id}  (clause ${row.clause})`);
+    console.log(`condition: ${row.condition}`);
+    console.log(
+      `!! INVALID ROW — the replacement leaves the file byte-identical, so there is nothing to run.`,
+    );
+    continue;
+  }
   writeFileSync(row.file, mutated);
   const proc = Bun.spawnSync(["bun", "test", "test/graphics.test.ts"], {
     env: { ...process.env },
@@ -169,4 +220,12 @@ for (const row of rows) {
   console.log(failed.length ? `tests red: ${failed.join(" | ")}` : "tests red: NONE — UNGUARDED (this condition has no test behind it)");
   if (firstError) console.log(`first failure: ${firstError}${at ? ` at ${at}` : ""}`);
 }
-console.log(`\n# ${rows.length} rows: ${unguarded} with no test going red (unguarded), ${missed} skipped, ${rows.length - unguarded - missed} guarded`);
+console.log(
+  `\n# ${rows.length} rows: ${unguarded} with no test going red (unguarded), ${invalid} invalid (the row did not apply), ${rows.length - unguarded - invalid} guarded`,
+);
+if (invalid > 0) {
+  console.log(
+    "# SWEEP INCOMPLETE — an invalid row proves nothing about the condition it names. Fix or retire it, then run the sweep again.",
+  );
+  process.exit(1);
+}
