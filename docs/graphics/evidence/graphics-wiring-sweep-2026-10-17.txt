@@ -1,0 +1,542 @@
+# graphicsProblems() mutation sweep — 52 rows
+# src/demo/graphics.ts at the start of the sweep: sha256 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5
+# src/demo/build.ts at the start of the sweep: sha256 bd3e9af2b4e5769c9c4da6eed8f6eb674f5f140e9d1de46bdb9435f2749964ed
+# src/demo/graphics-wiring.ts at the start of the sweep: sha256 ff466d503d074de5ef8729fc4df210cbcbe646393a06326b8a1e908566674341
+# src/demo/addresses.ts at the start of the sweep: sha256 d61f43c3df81064f9f45180ff0c55e5f2e6934c104ec4defa7a085362ef35045
+# src/demo/family-render.ts at the start of the sweep: sha256 3ba7591e3cef5bc3c4d7fe42c798d2584b84de848b7e57d2afe37f76cde1c14d
+# src/demo/service-card-action.ts at the start of the sweep: sha256 1eb23f670caca13af9f61a6f02b0888abb0b4b4edfe10068d3aa291e83394946
+# git rev-parse HEAD: cc61147e50f836f7652526cab3ab348200e232b2
+# bun test test/graphics.test.ts (unmutated): 19 pass / 0 fail
+
+
+## c1-absolute-url  (clause 1)
+condition: REMOTE_PATTERNS "an absolute http(s) URL" /https?:\/\//i
+mutation (src/demo/graphics.ts): ["an absolute http(s) URL", /https?:\/\//i],
+                     → ["an absolute http(s) URL", /https?:\/\/NEVER-MATCHES/i],
+sha256 before: 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5
+sha256 after : 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: clause 1 fires: a layer that reaches the network fails the build
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:154:88
+
+## c1-protocol-relative  (clause 1)
+condition: REMOTE_PATTERNS "a protocol-relative URL" /(?:^|["'(=\s])\/\//
+mutation (src/demo/graphics.ts): ["a protocol-relative URL", /(?:^|["'(=\s])\/\//],
+                     → ["a protocol-relative URL", /(?:^|["'(=\s])\/\/NEVER-MATCHES/],
+sha256 before: 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5
+sha256 after : 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: clause 1 fires: a layer that reaches the network fails the build
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:154:88
+
+## c1-import  (clause 1)
+condition: REMOTE_PATTERNS "an @import" /@import/i
+mutation (src/demo/graphics.ts): ["an @import", /@import/i],
+                     → ["an @import", /@import-NEVER/i],
+sha256 before: 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5
+sha256 after : 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: the clauses are wired into the build itself, not only callable
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:343:87
+
+## c1-url  (clause 1)
+condition: REMOTE_PATTERNS "a url() reference" /url\(/i
+mutation (src/demo/graphics.ts): ["a url() reference", /url\(/i],
+                     → ["a url() reference", /url-NEVER\(/i],
+sha256 before: 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5
+sha256 after : 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: clause 1 fires: a layer that reaches the network fails the build
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:154:88
+
+## c1-script  (clause 1)
+condition: REMOTE_PATTERNS "a <script> element"
+mutation (src/demo/graphics.ts): ["a <script> element", /<script[\s>]/i],
+                     → ["a <script> element", /<script-NEVER[\s>]/i],
+sha256 before: 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5
+sha256 after : 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: clause 1 fires: a layer that reaches the network fails the build
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:154:88
+
+## c1-image  (clause 1)
+condition: REMOTE_PATTERNS "an <image> element"
+mutation (src/demo/graphics.ts): ["an <image> element", /<image[\s>]/i],
+                     → ["an <image> element", /<image-NEVER[\s>]/i],
+sha256 before: 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5
+sha256 after : 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: clause 1 fires: a layer that reaches the network fails the build
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:154:88
+
+## c1-use-outside  (clause 1)
+condition: REMOTE_PATTERNS "a <use> pointing outside this document"
+mutation (src/demo/graphics.ts): ["a <use> pointing outside this document", /<use[^>]*href="(?!\s*#)/i],
+                     → ["a <use> pointing outside this document", /<use-NEVER[^>]*href="(?!\s*#)/i],
+sha256 before: 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5
+sha256 after : 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: clause 1 fires: a layer that reaches the network fails the build
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:154:88
+
+## c1-external-attr  (clause 1)
+condition: REMOTE_PATTERNS "an external resource attribute"
+mutation (src/demo/graphics.ts): ["an external resource attribute", /\b(?:src|xlink:href|data|poster)="/i],
+                     → ["an external resource attribute", /\bNEVER(?:src|xlink:href|data|poster)="/i],
+sha256 before: 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5
+sha256 after : 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: clause 1 fires: a layer that reaches the network fails the build
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:154:88
+
+## c2-marked-both  (clause 2)
+condition: if (decorative && meaningful)
+mutation (src/demo/graphics.ts): if (decorative && meaningful) {
+                     → if (false && decorative && meaningful) {
+sha256 before: 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5
+sha256 after : 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: clause 2 fires: an unmarked, doubly-marked or nameless graphic fails
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:178:5
+
+## c2-no-marking  (clause 2)
+condition: else if (!decorative && !meaningful)
+mutation (src/demo/graphics.ts): } else if (!decorative && !meaningful) {
+                     → } else if (false && !decorative && !meaningful) {
+sha256 before: 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5
+sha256 after : 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: clause 2 fires: an unmarked, doubly-marked or nameless graphic fails
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:173:5
+
+## c2-no-accessible-name  (clause 2)
+condition: else if (meaningful && !named_)
+mutation (src/demo/graphics.ts): } else if (meaningful && !named_) {
+                     → } else if (false && meaningful && !named_) {
+sha256 before: 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5
+sha256 after : 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: clause 2 fires: an unmarked, doubly-marked or nameless graphic fails
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:185:5
+
+## c3-hex  (clause 3)
+condition: LITERAL_COLOUR_PATTERNS "a hex colour"
+mutation (src/demo/graphics.ts): ["a hex colour", /#[0-9a-fA-F]{3,8}\b/],
+                     → ["a hex colour", /NEVER#[0-9a-fA-F]{3,8}\b/],
+sha256 before: 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5
+sha256 after : 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: clause 3 fires: a baked-in colour fails, because it cannot follow the surface
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:198:88
+
+## c3-rgb-hsl  (clause 3)
+condition: LITERAL_COLOUR_PATTERNS "an rgb()/hsl() colour"
+mutation (src/demo/graphics.ts): ["an rgb()/hsl() colour", /\b(?:rgba?|hsla?)\(/i],
+                     → ["an rgb()/hsl() colour", /\bNEVER(?:rgba?|hsla?)\(/i],
+sha256 before: 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5
+sha256 after : 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: clause 3 fires: a baked-in colour fails, because it cannot follow the surface
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:198:88
+
+## c3-named  (clause 3)
+condition: LITERAL_COLOUR_PATTERNS "a named colour"
+mutation (src/demo/graphics.ts): /(?::|;|\s)(?:white|black|red|green|blue|grey|gray|silver|maroon|navy|teal|olive)\b(?![\w-])/i,
+                     → /(?::|;|\s)NEVER(?:white|black|red|green|blue|grey|gray|silver|maroon|navy|teal|olive)\b(?![\w-])/i,
+sha256 before: 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5
+sha256 after : 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: clause 3 fires: a baked-in colour fails, because it cannot follow the surface
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:198:88
+
+## c4-per-part-cap  (clause 4)
+condition: size(part) > cap
+mutation (src/demo/graphics.ts): if (size(part) > cap) {
+                     → if (size(part) > cap + 1e9) {
+sha256 before: 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5
+sha256 after : 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: clause 4 fires: an icon, the set and the whole layer each have a cap
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:215:73
+
+## c4-cap-declared  (clause 4)
+condition: if (cap === undefined) — a part with no byte cap
+mutation (src/demo/graphics.ts): if (cap === undefined) {
+                     → if (false && cap === undefined) {
+sha256 before: 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5
+sha256 after : 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: clause 4 fires: an icon, the set and the whole layer each have a cap
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:237:80
+
+## c4-icon-count  (clause 4)
+condition: each.length !== ICON_NAMES.length
+mutation (src/demo/graphics.ts): if (each.length !== ICON_NAMES.length) {
+                     → if (false && each.length !== ICON_NAMES.length) {
+sha256 before: 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5
+sha256 after : 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: clause 4 fires: an icon, the set and the whole layer each have a cap
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:217:78
+
+## c4-one-icon-cap  (clause 4)
+condition: bytes > GRAPHICS_BYTE_CAPS.oneIcon
+mutation (src/demo/graphics.ts): if (bytes > GRAPHICS_BYTE_CAPS.oneIcon) {
+                     → if (bytes > GRAPHICS_BYTE_CAPS.oneIcon + 1e9) {
+sha256 before: 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5
+sha256 after : 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: clause 4 fires: an icon, the set and the whole layer each have a cap
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:208:73
+
+## c4-layer-cap  (clause 4)
+condition: layerBytes > GRAPHICS_BYTE_CAPS.layer
+mutation (src/demo/graphics.ts): if (layerBytes > GRAPHICS_BYTE_CAPS.layer) {
+                     → if (layerBytes > GRAPHICS_BYTE_CAPS.layer + 1e9) {
+sha256 before: 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5
+sha256 after : 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: clause 4 fires: an icon, the set and the whole layer each have a cap
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:226:5
+
+## c4-size-from-text-not-bytes  (clause 4)
+condition: const size = (part) => Buffer.byteLength(part.text, "utf8")
+mutation (src/demo/graphics.ts): const size = (part: GraphicsPart): number => Buffer.byteLength(part.text, "utf8");
+                     → const size = (part: GraphicsPart): number => part.bytes ?? Buffer.byteLength(part.text, "utf8");
+sha256 before: 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5
+sha256 after : 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: clause 4 fires: an icon, the set and the whole layer each have a cap
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:226:5
+
+## c5-not-a-class  (clause 5)
+condition: selector && !selector.startsWith(".")
+mutation (src/demo/graphics.ts): if (selector && !selector.startsWith(".")) found.push({ selector, atRules: [...atRules] });
+                     → if (false && selector && !selector.startsWith(".")) found.push({ selector, atRules: [...atRules] });
+sha256 before: 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5
+sha256 after : 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: clause 5 fires: every rule is scoped to a .gfx- class, or it is refused
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:246:63
+
+## c5-not-gfx  (clause 5)
+condition: selector.includes(".") && !selector.includes(".gfx-")
+mutation (src/demo/graphics.ts): else if (selector.includes(".") && !selector.includes(".gfx-")) found.push({ selector, atRules: [...atRules] });
+                     → else if (false && selector.includes(".") && !selector.includes(".gfx-")) found.push({ selector, atRules: [...atRules] });
+sha256 before: 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5
+sha256 after : 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5   RESTORED byte-exact
+result: 16 pass / 3 fail
+tests red: clause 5 fires: every rule is scoped to a .gfx- class, or it is refused | clause 5 fires inside an at-rule, and the refusal says which at-rule | clause 5's stated limits hold at the boundary: key frames, and CSS nesting
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:245:64
+
+## c5-at-rule-container  (clause 5)
+condition: prelude.startsWith("@") — an at-rule head is a block header, not a selector
+mutation (src/demo/graphics.ts): } else if (prelude.startsWith("@")) {
+                     → } else if (prelude.startsWith("@NEVER")) {
+sha256 before: 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5
+sha256 after : 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5   RESTORED byte-exact
+result: 17 pass / 2 fail
+tests red: clause 5 fires inside an at-rule, and the refusal says which at-rule | clause 5's stated limits hold at the boundary: key frames, and CSS nesting
+first failure: error: expect(received).toEqual(expected) at /home/team/shared/pipeline/test/graphics.test.ts:257:5
+
+## c5-keyframes-limit  (clause 5)
+condition: KEYFRAMES_AT_RULE.test(prelude) — a key frames block is not walked into
+mutation (src/demo/graphics.ts): if (KEYFRAMES_AT_RULE.test(prelude)) open.push(false);
+                     → if (false && KEYFRAMES_AT_RULE.test(prelude)) open.push(false);
+sha256 before: 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5
+sha256 after : 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: clause 5's stated limits hold at the boundary: key frames, and CSS nesting
+first failure: error: expect(received).toEqual(expected) at /home/team/shared/pipeline/test/graphics.test.ts:298:5
+
+## c5-walk-into-at-rules  (clause 5)
+condition: const nested = open.includes(false) — the walk looks inside at-rule blocks
+mutation (src/demo/graphics.ts): const nested = open.includes(false);
+                     → const nested = open.length > 0;
+sha256 before: 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5
+sha256 after : 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: clause 5 fires inside an at-rule, and the refusal says which at-rule
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:264:25
+
+## c5-at-rule-pushed  (clause 5)
+condition: atRules.push(prelude) — the at-rule path a refusal names
+mutation (src/demo/graphics.ts): else {
+          open.push(true);
+          atRules.push(prelude);
+        }
+                     → else {
+          open.push(true);
+        }
+sha256 before: 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5
+sha256 after : 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: clause 5 fires inside an at-rule, and the refusal says which at-rule
+first failure: error: expect(received).toContain(expected) at /home/team/shared/pipeline/test/graphics.test.ts:266:21
+
+## c5-head-consumed  (clause 5)
+condition: head = "" — a prelude belongs to the block it opens
+mutation (src/demo/graphics.ts): const prelude = head.trim();
+      head = "";
+                     → const prelude = head.trim();
+sha256 before: 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5
+sha256 after : 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: clause 5 fires inside an at-rule, and the refusal says which at-rule
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:264:25
+
+## c5-statement-reset  (clause 5)
+condition: token === ";" — a statement ends the prelude it is not part of
+mutation (src/demo/graphics.ts): } else if (token === ";") {
+                     → } else if (false && token === ";") {
+sha256 before: 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5
+sha256 after : 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5   RESTORED byte-exact
+result: 13 pass / 6 fail
+tests red: the real layer passes all five clauses, and fits its byte caps | clause 1 fires: a layer that reaches the network fails the build | clause 5 fires: every rule is scoped to a .gfx- class, or it is refused | clause 5 fires inside an at-rule, and the refusal says which at-rule | the clauses are wired into the build itself, not only callable | the clauses are wired into the build itself, not only callable
+first failure: error: expect(received).toEqual(expected) at /home/team/shared/pipeline/test/graphics.test.ts:130:30
+
+## c5-block-opens  (clause 5)
+condition: token === "{" — a block opens
+mutation (src/demo/graphics.ts): } else if (token === "{") {
+                     → } else if (false && token === "{") {
+sha256 before: 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5
+sha256 after : 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5   RESTORED byte-exact
+result: 16 pass / 3 fail
+tests red: clause 5 fires: every rule is scoped to a .gfx- class, or it is refused | clause 5 fires inside an at-rule, and the refusal says which at-rule | clause 5's stated limits hold at the boundary: key frames, and CSS nesting
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:245:64
+
+## c5-block-closes  (clause 5)
+condition: token === "}" — a block closes
+mutation (src/demo/graphics.ts): if (token === "}") {
+                     → if (false && token === "}") {
+sha256 before: 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5
+sha256 after : 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5   RESTORED byte-exact
+result: 17 pass / 2 fail
+tests red: clause 5 fires: every rule is scoped to a .gfx- class, or it is refused | clause 5 fires inside an at-rule, and the refusal says which at-rule
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:245:64
+
+## c5-path-unwinds  (clause 5)
+condition: if (open.pop()) atRules.pop() — leaving an at-rule block unwinds the path
+mutation (src/demo/graphics.ts): if (open.pop()) atRules.pop();
+                     → open.pop();
+sha256 before: 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5
+sha256 after : 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: clause 5 fires inside an at-rule, and the refusal says which at-rule
+first failure: error: expect(received).not.toContain(expected) at /home/team/shared/pipeline/test/graphics.test.ts:281:24
+
+## c5-at-rule-named  (clause 5)
+condition: the where clause that names the at-rule in the refusal
+mutation (src/demo/graphics.ts): const where = atRules.length === 0 ? "" : ` inside the at-rule${atRules.length > 1 ? "s" : ""} "${atRules.join(" > ")}"`;
+                     → const where = "";
+sha256 before: 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5
+sha256 after : 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: clause 5 fires inside an at-rule, and the refusal says which at-rule
+first failure: error: expect(received).toContain(expected) at /home/team/shared/pipeline/test/graphics.test.ts:266:21
+
+## c5-css-part-only  (clause 5)
+condition: if (part.name !== "css") continue;
+mutation (src/demo/graphics.ts): if (part.name !== "css") continue;
+                     → if (true) continue;
+sha256 before: 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5
+sha256 after : 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5   RESTORED byte-exact
+result: 16 pass / 3 fail
+tests red: clause 5 fires: every rule is scoped to a .gfx- class, or it is refused | clause 5 fires inside an at-rule, and the refusal says which at-rule | clause 5's stated limits hold at the boundary: key frames, and CSS nesting
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:245:64
+
+## c4-icons-part-only  (clause 4)
+condition: if (part.name !== "icons") continue;
+mutation (src/demo/graphics.ts): if (part.name !== "icons") continue;
+                     → if (true) continue;
+sha256 before: 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5
+sha256 after : 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: clause 4 fires: an icon, the set and the whole layer each have a cap
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:208:73
+
+## wiring-compliance-checks  (clause wiring)
+condition: problems.push(...graphicsProblems(vars.graphics)) in build.ts
+mutation (src/demo/build.ts): problems.push(...graphicsProblems(vars.graphics));
+                     → // problems.push(...graphicsProblems(vars.graphics));
+sha256 before: bd3e9af2b4e5769c9c4da6eed8f6eb674f5f140e9d1de46bdb9435f2749964ed
+sha256 after : bd3e9af2b4e5769c9c4da6eed8f6eb674f5f140e9d1de46bdb9435f2749964ed   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: the clauses are wired into the build itself, not only callable
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:343:87
+
+## gw-requested  (clause wiring)
+condition: graphicsRequested: a truthy value
+mutation (src/demo/graphics-wiring.ts): return raw !== "" && raw !== "0" && raw !== "false" && raw !== "off";
+                     → return false;
+sha256 before: ff466d503d074de5ef8729fc4df210cbcbe646393a06326b8a1e908566674341
+sha256 after : ff466d503d074de5ef8729fc4df210cbcbe646393a06326b8a1e908566674341   RESTORED byte-exact
+result: 14 pass / 5 fail
+tests red: the switch is value-addressed, scoped to one demonstration, and refused in the delivered phase | with the layer on, every page carries a marked mark and the stylesheet carries the layer | with the layer off, no page and no stylesheet carries it — and the clauses refuse one that does | the wiring refuses an unmarked mark, a map without its caption, and a mark inside a control | the clauses are wired into the build itself, not only callable
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:394:22
+
+## gw-slug-scoped  (clause wiring)
+condition: if (vars.slug !== GRAPHICS_SLUG) — one demonstration only
+mutation (src/demo/graphics-wiring.ts): if (vars.slug !== GRAPHICS_SLUG) {
+                     → if (false && vars.slug !== GRAPHICS_SLUG) {
+sha256 before: ff466d503d074de5ef8729fc4df210cbcbe646393a06326b8a1e908566674341
+sha256 after : ff466d503d074de5ef8729fc4df210cbcbe646393a06326b8a1e908566674341   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: the switch is value-addressed, scoped to one demonstration, and refused in the delivered phase
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:405:25
+
+## gw-business-refused  (clause wiring)
+condition: if (vars.phase === "business") — the delivered phase
+mutation (src/demo/graphics-wiring.ts): if (vars.phase === "business") {
+                     → if (false && vars.phase === "business") {
+sha256 before: ff466d503d074de5ef8729fc4df210cbcbe646393a06326b8a1e908566674341
+sha256 after : ff466d503d074de5ef8729fc4df210cbcbe646393a06326b8a1e908566674341   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: the switch is value-addressed, scoped to one demonstration, and refused in the delivered phase
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:409:26
+
+## gw-unrecognised  (clause wiring)
+condition: if (decision.unrecognised !== null)
+mutation (src/demo/graphics-wiring.ts): if (decision.unrecognised !== null) {
+                     → if (false && decision.unrecognised !== null) {
+sha256 before: ff466d503d074de5ef8729fc4df210cbcbe646393a06326b8a1e908566674341
+sha256 after : ff466d503d074de5ef8729fc4df210cbcbe646393a06326b8a1e908566674341   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: the switch is value-addressed, scoped to one demonstration, and refused in the delivered phase
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:400:119
+
+## gw-off-page-smuggled  (clause wiring)
+condition: for (const page of marked) — a mark while the switch is off
+mutation (src/demo/graphics-wiring.ts): for (const page of marked) {
+                     → for (const page of []) {
+sha256 before: ff466d503d074de5ef8729fc4df210cbcbe646393a06326b8a1e908566674341
+sha256 after : ff466d503d074de5ef8729fc4df210cbcbe646393a06326b8a1e908566674341   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: with the layer off, no page and no stylesheet carries it — and the clauses refuse one that does
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:439:137
+
+## gw-off-css-smuggled  (clause wiring)
+condition: the stylesheet carries the layer while the switch is off
+mutation (src/demo/graphics-wiring.ts): if (css.includes(".gfx-icon {") || css.includes(GRAPHICS_MARKER)) {
+                     → if (false && (css.includes(".gfx-icon {") || css.includes(GRAPHICS_MARKER))) {
+sha256 before: ff466d503d074de5ef8729fc4df210cbcbe646393a06326b8a1e908566674341
+sha256 after : ff466d503d074de5ef8729fc4df210cbcbe646393a06326b8a1e908566674341   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: with the layer off, no page and no stylesheet carries it — and the clauses refuse one that does
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:444:5
+
+## gw-on-page-unmarked  (clause wiring)
+condition: if (!marked.includes(page)) — a page with no mark
+mutation (src/demo/graphics-wiring.ts): if (!marked.includes(page)) {
+                     → if (false && !marked.includes(page)) {
+sha256 before: ff466d503d074de5ef8729fc4df210cbcbe646393a06326b8a1e908566674341
+sha256 after : ff466d503d074de5ef8729fc4df210cbcbe646393a06326b8a1e908566674341   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: with the layer off, no page and no stylesheet carries it — and the clauses refuse one that does
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:450:5
+
+## gw-on-css-unmarked  (clause wiring)
+condition: if (!cssCarriesLayer) — the stylesheet with no layer
+mutation (src/demo/graphics-wiring.ts): if (!cssCarriesLayer) {
+                     → if (false && !cssCarriesLayer) {
+sha256 before: ff466d503d074de5ef8729fc4df210cbcbe646393a06326b8a1e908566674341
+sha256 after : ff466d503d074de5ef8729fc4df210cbcbe646393a06326b8a1e908566674341   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: with the layer off, no page and no stylesheet carries it — and the clauses refuse one that does
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:455:5
+
+## gw-mark-unmarked  (clause wiring)
+condition: a gfx mark with no aria-hidden and no role
+mutation (src/demo/graphics-wiring.ts): if (!/aria-hidden="true"/i.test(tag) && !/role="img"/i.test(tag)) {
+                     → if (false && !/aria-hidden="true"/i.test(tag) && !/role="img"/i.test(tag)) {
+sha256 before: ff466d503d074de5ef8729fc4df210cbcbe646393a06326b8a1e908566674341
+sha256 after : ff466d503d074de5ef8729fc4df210cbcbe646393a06326b8a1e908566674341   RESTORED byte-exact
+result: 17 pass / 2 fail
+tests red: the wiring refuses an unmarked mark, a map without its caption, and a mark inside a control | the clauses are wired into the build itself, not only callable
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:465:120
+
+## gw-mark-unfocusable  (clause wiring)
+condition: focusable="false" on a mark
+mutation (src/demo/graphics-wiring.ts): if (!/focusable="false"/i.test(tag)) {
+                     → if (false && !/focusable="false"/i.test(tag)) {
+sha256 before: ff466d503d074de5ef8729fc4df210cbcbe646393a06326b8a1e908566674341
+sha256 after : ff466d503d074de5ef8729fc4df210cbcbe646393a06326b8a1e908566674341   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: the wiring refuses an unmarked mark, a map without its caption, and a mark inside a control
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:467:122
+
+## gw-map-caption  (clause wiring)
+condition: if (shows && !page.html.includes(MAP_CAPTION))
+mutation (src/demo/graphics-wiring.ts): if (shows && !page.html.includes(MAP_CAPTION)) {
+                     → if (false && shows && !page.html.includes(MAP_CAPTION)) {
+sha256 before: ff466d503d074de5ef8729fc4df210cbcbe646393a06326b8a1e908566674341
+sha256 after : ff466d503d074de5ef8729fc4df210cbcbe646393a06326b8a1e908566674341   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: the wiring refuses an unmarked mark, a map without its caption, and a mark inside a control
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:471:125
+
+## gw-mark-in-control  (clause wiring)
+condition: a mark written inside a button-shaped anchor
+mutation (src/demo/graphics-wiring.ts): if (/\bgfx-/.test(control.slice(control.indexOf(">")))) {
+                     → if (false && /\bgfx-/.test(control.slice(control.indexOf(">")))) {
+sha256 before: ff466d503d074de5ef8729fc4df210cbcbe646393a06326b8a1e908566674341
+sha256 after : ff466d503d074de5ef8729fc4df210cbcbe646393a06326b8a1e908566674341   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: the wiring refuses an unmarked mark, a map without its caption, and a mark inside a control
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:479:139
+
+## gw-wiring-in-build  (clause wiring)
+condition: graphicsWiringProblems(...) — the pages the build checks are the bundle's own
+mutation (src/demo/build.ts): ...graphicsWiringProblems({
+      pages,
+      css: vars.css,
+                     → ...graphicsWiringProblems({
+      pages: [],
+      css: vars.css,
+sha256 before: bd3e9af2b4e5769c9c4da6eed8f6eb674f5f140e9d1de46bdb9435f2749964ed
+sha256 after : bd3e9af2b4e5769c9c4da6eed8f6eb674f5f140e9d1de46bdb9435f2749964ed   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: the clauses are wired into the build itself, not only callable
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:491:64
+
+## gw-phone-geometry  (clause guards)
+condition: withoutGeometry: a drawing's path data is not a printed number
+mutation (src/demo/addresses.ts): return html.replace(GEOMETRY_ELEMENTS, " ");
+                     → return html;
+sha256 before: d61f43c3df81064f9f45180ff0c55e5f2e6934c104ec4defa7a085362ef35045
+sha256 after : d61f43c3df81064f9f45180ff0c55e5f2e6934c104ec4defa7a085362ef35045   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: the three guards that read markup now read text: an inline mark is not a phone number, a name or a fetch
+first failure: error: expect(received).toEqual(expected) at /home/team/shared/pipeline/test/graphics.test.ts:498:66
+
+## gw-heading-text  (clause guards)
+condition: headingText: a mark beside a name is not part of it
+mutation (src/demo/family-render.ts): return inner.replace(/<[^>]*>/g, "").trim();
+                     → return inner.trim();
+sha256 before: 3ba7591e3cef5bc3c4d7fe42c798d2584b84de848b7e57d2afe37f76cde1c14d
+sha256 after : 3ba7591e3cef5bc3c4d7fe42c798d2584b84de848b7e57d2afe37f76cde1c14d   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: the three guards that read markup now read text: an inline mark is not a phone number, a name or a fetch
+first failure: error: expect(received).toBe(expected) at /home/team/shared/pipeline/test/graphics.test.ts:506:63
+
+## gw-fetch-image  (clause guards)
+condition: fetchedBy: a raster <image> in a drawing still fetches
+mutation (src/demo/service-card-action.ts): ...(/<image[\s>]/i.test(card) ? ["an <image>"] : []),
+                     → ...((false) ? ["an <image>"] : []),
+sha256 before: 1eb23f670caca13af9f61a6f02b0888abb0b4b4edfe10068d3aa291e83394946
+sha256 after : 1eb23f670caca13af9f61a6f02b0888abb0b4b4edfe10068d3aa291e83394946   RESTORED byte-exact
+result: 18 pass / 1 fail
+tests red: the three guards that read markup now read text: an inline mark is not a phone number, a name or a fetch
+first failure: error: expect(received).toEqual(expected) at /home/team/shared/pipeline/test/graphics.test.ts:513:60
+
+## c4-caption-in-named  (clause 4)
+condition: parts.filter((part) => part.name !== "caption")
+mutation (src/demo/graphics.ts): const named = parts.filter((part) => part.name !== "caption");
+                     → const named = parts.filter(() => true);
+sha256 before: 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5
+sha256 after : 89f99acd47a7d3e1aeeb6b9cdcc5f0447698259d6b40d8ce08574bd40d36c4b5   RESTORED byte-exact
+result: 12 pass / 7 fail
+tests red: the real layer passes all five clauses, and fits its byte caps | clause 1 fires: a layer that reaches the network fails the build | clause 5 fires: every rule is scoped to a .gfx- class, or it is refused | clause 5 fires inside an at-rule, and the refusal says which at-rule | clause 5's stated limits hold at the boundary: key frames, and CSS nesting | the clauses are wired into the build itself, not only callable | the clauses are wired into the build itself, not only callable
+first failure: error: expect(received).toEqual(expected) at /home/team/shared/pipeline/test/graphics.test.ts:130:30
+
+# 52 rows: 0 with no test going red (unguarded), 0 invalid (the row did not apply), 52 guarded
