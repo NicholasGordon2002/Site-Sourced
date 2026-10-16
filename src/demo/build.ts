@@ -5,7 +5,8 @@
  * services.html, about.html, contact.html, privacy.html), one contact-<service>.html per
  * recorded service (the destination a service card is its own link to, owner revision #4,
  * 6 Oct 2026), styles.css, site.js, favicon.svg, the images, the two self-hosted fonts
- * with their OFL licence text (fonts/), manifest.json and a plain-language README.txt.
+ * with their OFL licence text (fonts/), a plain-language README.txt and — while the bundle is
+ * a demonstration — manifest.json, the build's own record of itself.
  * Every reference on every page is a relative path to a file in the same folder, so the
  * bundle opens straight from disk (`file://`) and would also drop onto any host unchanged.
  *
@@ -48,13 +49,14 @@ import {
   DEMO_README_MARKER,
   EXTERNAL_STYLESHEET_PATTERNS,
   FORBIDDEN_SCRIPT_PATTERNS,
+  INTERNAL_RECORD_MARKERS,
   OVERLAY_MARKS,
   PHASE_REFUSAL_LISTS,
   PLACEHOLDER_PATTERNS,
   PROPOSAL_FURNITURE,
   REFUSAL_LISTS,
 } from "./refusal-registry.ts";
-import { manifestClaimProblems, refusalCoverageProblems } from "./refusal-coverage.ts";
+import { manifestClaimProblems, matches, refusalCoverageProblems } from "./refusal-coverage.ts";
 import { contactLabelProblems, familyHonestyProblems, familyProblems, submitLabelProblems } from "./family.ts";
 import { graphicsProblems, type GraphicsPart } from "./graphics.ts";
 import {
@@ -2457,6 +2459,71 @@ export function phaseFurnitureProblems(vars: {
 }
 
 /**
+ * **The build's own record, and the rule that a client never receives one.**
+ *
+ * The record (`manifest.json`) is the build's own account of itself, and it is written for
+ * us: it lists the demonstration's refused furniture by name, quotes the owner's directions
+ * and the lead's rulings with their dates, names our own switches, calls other bundles "the
+ * review copy", and carries reason prose — "…describe an unconfirmed proposal whose details
+ * we had to find, and a client's own site is neither". The plan's rule is flat: **"A client's
+ * files never describe the demonstration phase."** A folder is handed to a client whole, and
+ * its delivered README tells them to upload the folder as it is, so the record does not
+ * merely sit beside the site — it would land in the client's own public web root.
+ *
+ * So the record is a **phase item**, like the banner: required while a bundle is a
+ * demonstration, refused once it is a delivered site. This is one function with two
+ * directions, so the two can never drift apart:
+ *
+ *   `demo`      the folder carries our record, or the build fails. A demonstration without
+ *               its record is a bundle nobody can review from the artifact.
+ *   `business`  the folder carries no record, and no file of the site carries a line of the
+ *               prose written for us. What it found is named, file and line, so the refusal
+ *               says which file in the client's folder printed our working notes.
+ *
+ * It reads **the folder the build has just written** rather than the intention that wrote
+ * it, which is why it is not a clause inside `complianceChecks`: the artifact does not exist
+ * until the bundle is written, and every other rule in this file judges intent. That is also
+ * what makes it provable — doctoring the line that decides whether a delivered bundle ships
+ * the record, and rebuilding the delivered fixture, leaves the record on disk and this
+ * refuses the folder by name (`test/delivered-record.test.ts`, and the build evidence in
+ * `docs/handover-pack.md`).
+ */
+export function internalRecordProblems(vars: {
+  mode: FormDeliveryMode;
+  /** Every text file of the bundle folder, read back after the build wrote it. */
+  carried: readonly { file: string; contents: string }[];
+}): string[] {
+  const { mode, carried } = vars;
+  const found: { file: string; what: string }[] = [];
+  for (const file of carried) {
+    for (const [what, pattern] of INTERNAL_RECORD_MARKERS) {
+      if (matches(pattern, file.contents)) found.push({ file: file.file, what });
+    }
+  }
+
+  // Entry 0 of the marker list is the record's own mark — the line every record this build
+  // writes opens with, whatever the file is called. Both directions read it, so a marker
+  // table that lost it would leave the required half checking nothing.
+  const mark = INTERNAL_RECORD_MARKERS[0]!;
+
+  if (mode === "demo") {
+    return found.some((hit) => hit.what === mark[0])
+      ? []
+      : [
+          `this folder is a demonstration and carries no record of itself: the build's own record (manifest.json, marked with the line ${JSON.stringify(mark[1].source)}) is not in it. ` +
+            `The record is how a reviewer reads what a bundle did rather than inferring it (WORKFLOW.md, "Modular development" rule 4c), so the demonstration phase requires it exactly as it requires the proposal banner — and a demonstration is the one phase allowed to carry it.`,
+        ];
+  }
+
+  return found.map(
+    (hit) =>
+      `${hit.file}: carries ${hit.what}, but this bundle is a delivered site. ` +
+      `A client's files never describe the demonstration phase: the build's own record is written for us, not for them — it lists the furniture a proposal carries, quotes the owner's directions and the lead's rulings, and explains decisions in a register the client did not ask for. ` +
+      `A delivered bundle is the site and the client's own README; the demonstration keeps every line of the record.`,
+  );
+}
+
+/**
  * The refusals themselves, checked as a **class** rather than one at a time.
  *
  * Every refusal in this generator is a named pattern in a list, and a pattern can stop
@@ -3024,6 +3091,28 @@ export async function pruneLeftovers(dir: string, keep: Set<string>): Promise<{ 
 }
 
 /**
+ * Every text file of a bundle folder, read back from disk — the artifact a client receives,
+ * not the list of paths a build meant to write.
+ *
+ * Binary files (the JPEGs, the two WOFF2 fonts) are skipped by extension: the refusals this
+ * feeds are prose patterns, and decoding a photograph as UTF-8 to run a regex over it would
+ * be both meaningless and slow.
+ */
+const BUNDLE_TEXT_FILE = /\.(?:html|css|js|svg|txt|json|xml|md|webmanifest)$/i;
+
+export async function readBundleTexts(dir: string): Promise<{ file: string; contents: string }[]> {
+  const out: { file: string; contents: string }[] = [];
+  const present = await readdir(dir, { recursive: true, withFileTypes: true });
+  for (const entry of present) {
+    if (!entry.isFile()) continue;
+    const rel = entry.parentPath ? relative(dir, join(entry.parentPath, entry.name)) : entry.name;
+    if (!BUNDLE_TEXT_FILE.test(rel)) continue;
+    out.push({ file: rel, contents: await Bun.file(join(dir, rel)).text() });
+  }
+  return out.sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0));
+}
+
+/**
  * The build's own ordering, in one place: **resolve the form → derive the delivery from the
  * record and that form → compose the copy → write the notification title against the
  * provider's own subject key.**
@@ -3360,10 +3449,20 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   // go the same way when they end up empty: the gate audit of 6 Oct found an empty `img/`
   // on every fixture bundle, left by the build's own `mkdir` for images that are written
   // elsewhere today.
-  const keep = new Set<string>([...files, "manifest.json"]);
+  // The record is a phase item, like the proposal banner: a demonstration ships one and a
+  // delivered site must not (`internalRecordProblems`), so the prune keeps `manifest.json`
+  // only while this build is allowed to write it. A folder about to be handed to a client
+  // therefore loses a record an earlier demonstration run left in it, instead of carrying
+  // our own account of the build into the client's files.
+  const shipsRecord = delivery.mode === "demo";
+  const keep = new Set<string>(shipsRecord ? [...files, "manifest.json"] : files);
   const pruned = await pruneLeftovers(dir, keep);
   for (const rel of pruned.files) {
-    warnings.push(`removed ${rel}, a file inside this bundle that this build did not write (a leftover from an earlier run).`);
+    warnings.push(
+      rel === "manifest.json" && !shipsRecord
+        ? `removed manifest.json, the build's own record, left in this folder by an earlier run: a delivered bundle ships the site and the client's README and no record of ours, because the record is written for us and describes the demonstration phase.`
+        : `removed ${rel}, a file inside this bundle that this build did not write (a leftover from an earlier run).`,
+    );
   }
   for (const rel of pruned.dirs) {
     warnings.push(`removed ${rel}, an empty directory inside this bundle — it holds no file the bundle ships, and an empty folder in a published path is a path a visitor can still land on.`);
@@ -3458,7 +3557,7 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
       provenance_line: copy.provenance.attribution,
       provenance_basis: copy.provenance.basis,
     },
-    files: [...files, "manifest.json"].sort(),
+    files: (shipsRecord ? [...files, "manifest.json"] : [...files]).sort(),
     images,
     /* The home header on the hero photograph (owner retouch, 6 Oct): the cell the header
        and the body share, the wash, its lightest alpha and the contrast white reaches on
@@ -3877,7 +3976,19 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
     warnings,
   };
 
-  await write("manifest.json", JSON.stringify(manifest, null, 2) + "\n");
+  // …and the record itself is written only while the bundle is a demonstration.
+  if (shipsRecord) await write("manifest.json", JSON.stringify(manifest, null, 2) + "\n");
+
+  // The record's own rule, judged on the folder as it now stands rather than on the
+  // intention that wrote it: a delivered folder that carries our record — or any file of
+  // the site carrying a line of the prose we write for ourselves — fails here, by name, and
+  // a demonstration that has lost its record fails too. Every other rule in this file
+  // judges intent; this one reads the artifact, because the artifact is what a client
+  // receives (`internalRecordProblems`).
+  const recordProblems = internalRecordProblems({ mode: delivery.mode, carried: await readBundleTexts(dir) });
+  if (recordProblems.length > 0) {
+    await fail(`the bundle's own record does not answer to the phase for ${slug}:\n  - ${recordProblems.join(`\n  - `)}`);
+  }
 
   let total = 0;
   for (const f of files) total += (await stat(join(dir, f))).size;
@@ -3885,7 +3996,12 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   return { slug, dir, files: manifest.files, images, warnings, bytes: total };
 }
 
-/** Every bundle output file, in the order a human would read them. */
+/**
+ * Every bundle output file, in the order a human would read them.
+ *
+ * `manifest.json` is the **demonstration's** file: the record is written for us, so a
+ * delivered bundle ships every entry above it and no record (`internalRecordProblems`).
+ */
 export const BUNDLE_FILES = [
   ...PAGE_IDS.map((id) => PAGE_SPECS[id].file),
   "styles.css",

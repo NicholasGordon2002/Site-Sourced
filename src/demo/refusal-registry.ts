@@ -125,6 +125,70 @@ const PHASE_SAMPLES: Record<string, readonly string[]> = {
   ],
 };
 
+/* ------------------------------- the build's own record, which is ours and not a client's */
+
+/**
+ * The build's **own record** — `manifest.json` — and the prose only it carries.
+ *
+ * The record is written so a reviewer reads what a bundle did rather than inferring it
+ * (WORKFLOW.md, "Modular development" rule 4c). It is written **for us**: it names the
+ * demonstration's refused furniture by name, quotes the owner's directions and the lead's
+ * rulings with their dates, names our own switches (`DEMO_GHOST_CONTROLS`,
+ * `DEMO_SERVICE_CARD_ACTION_BAR`), calls other bundles "the review copy", and carries
+ * internal reason prose — "…describe an unconfirmed proposal whose details we had to find,
+ * and a client's own site is neither". The rule it answers to is the plan's: **"A client's
+ * files never describe the demonstration phase."**
+ *
+ * A **delivered** bundle therefore ships no record at all: not the file, and not a word of
+ * its prose in any file that *is* the site. `build.ts` writes the record while a bundle is
+ * a demonstration and refuses one in the delivered phase, naming what it found
+ * (`internalRecordProblems`); this list is the pattern half of that refusal, so the pair is
+ * declared once and the coverage check holds both ends to it.
+ *
+ * The two halves are deliberately narrow, because these patterns are run over a **client's
+ * own** pages and README as well:
+ *
+ *   - the record's own mark is the generator line every record this build writes opens
+ *     with, so it finds the record whatever the file is called;
+ *   - `DEMO_*` names a configuration switch of ours, in the screaming-snake case only our
+ *     own source uses;
+ *   - the decision-record words are the register we write *about* a build, never the
+ *     register a business writes *to* its customers.
+ *
+ * None of them can fire on a record's own wording: a client whose copy says "the owner
+ * directed…" is not a case these names reach, and `NEUTRAL_PROSE` guards that claim.
+ */
+export const INTERNAL_RECORD_MARKERS: [string, RegExp][] = [
+  // Entry 0 is the record's own mark, and `internalRecordProblems` reads it in both
+  // directions: refused in the delivered phase, and required while a bundle is a
+  // demonstration. `test/delivered-record.test.ts` pins that entry 0 is this one.
+  ["the build's own record", /sitesourced-demo-generator/],
+  ["a configuration variable of our own", /\bDEMO_[A-Z0-9_]+\b/],
+  [
+    "a line from our own decision record",
+    /\b(?:owner|lead)(?:'s|s')?[\s-]+(?:direction|ruling|correction|decision|brief|approv(?:ed|al))\b/i,
+  ],
+];
+
+/**
+ * One instance of each, taken verbatim from the record this build writes.
+ *
+ * These are lines of the real record, not paraphrases: entry 0 is its first field, and the
+ * other two are `basis` sentences the build composes today. The delivered-phase test asserts
+ * each sample is really in the record before it asserts the marker can refuse the folder
+ * that carries it — a sample that drifts away from the artifact would make a green run mean
+ * nothing.
+ */
+const INTERNAL_RECORD_SAMPLES: Record<string, readonly string[]> = {
+  "the build's own record": ['"generator": "sitesourced-demo-generator/0.1",'],
+  "a configuration variable of our own": [
+    '"basis": "DEMO_GHOST_CONTROLS is not set in this build, so every button of the review copy — the header action, the nested card CTA, the CTA band\'s action, the form\'s submit, Get directions and the home hero\'s two actions — wears the filled button it wears today',
+  ],
+  "a line from our own decision record": [
+    '"basis": "The header\'s second row is the page\'s primary-action slot (owner-approved 6 Oct 2026): the label is primaryActionLabel(record, copy)',
+  ],
+};
+
 /* --------------------------------------------------------------- what a visitor reads */
 
 /**
@@ -268,6 +332,7 @@ const WINDOW_SAMPLES: Record<string, readonly string[]> = {
 /** Every sample the registry knows, by entry name. */
 export const REFUSAL_SAMPLES: Record<string, readonly string[]> = {
   ...PHASE_SAMPLES,
+  ...INTERNAL_RECORD_SAMPLES,
   ...PLACEHOLDER_SAMPLES,
   ...SOURCING_SAMPLES,
   ...EXTERNAL_STYLESHEET_SAMPLES,
@@ -322,6 +387,11 @@ export const REFUSAL_LISTS: RefusalList[] = [
     "DEMO_SOURCING_CLAIMS",
     "the demonstration's sourcing sentences (provenance.ts, the business-phase half)",
     DEMO_SOURCING_CLAIMS,
+  ),
+  list(
+    "INTERNAL_RECORD_MARKERS",
+    "the build's own record and the prose written for us rather than for a client (build.ts)",
+    INTERNAL_RECORD_MARKERS,
   ),
   list("PLACEHOLDER_PATTERNS", "placeholder data reaching visitor-facing text (build.ts)", PLACEHOLDER_PATTERNS),
   list(
