@@ -84,7 +84,7 @@
  * no glyph at all — it is the label and an outline, and nothing else.
  */
 import { serviceActionLabel, type ConversionFamily } from "./family.ts";
-import { serviceCardMeasure, type ServiceCardShape } from "./family-render.ts";
+import { headingText, serviceCardMeasure, type ServiceCardShape } from "./family-render.ts";
 import { GHOST_PAPER_FILL_ACTIVE, GHOST_PAPER_FILL_HOVER, GHOST_PAPER_INK } from "./ghost-controls.ts";
 import type { BusinessRecord, FormDeliveryMode } from "./types.ts";
 
@@ -653,9 +653,17 @@ function wholeCardActionProblems(vars: {
   for (const card of barCards) {
     const requests = [
       ...new Set([
-        ...(card.match(/<\/?(img|svg|object|embed|iframe|script|picture|source|video|audio)\b/gi) ?? []).map((tag) =>
+        ...(card.match(/<\/?(img|object|embed|iframe|script|picture|source|video|audio)\b/gi) ?? []).map((tag) =>
           tag.replace(/[</]/g, "").toLowerCase(),
         ),
+        // An **inline** `<svg>` fetches nothing, so `svg` is out of the tag list above: the
+        // graphics layer draws every mark inline (`graphics.ts`), from `currentColor` and the
+        // bundle's own tokens, so there is no file to ship and none to license. What fetches
+        // *inside* a drawing is named here instead, so the clause keeps exactly the teeth it
+        // had — a card may not take a file from anywhere.
+        ...(/<svg[^>]*\bsrc\s*=/i.test(card) ? ["an <svg src>"] : []),
+        ...(/<image[\s>]/i.test(card) ? ["an <image>"] : []),
+        ...(/<use[^>]*href="(?!#)/i.test(card) ? ["an external <use>"] : []),
         ...(/\bsrc\s*=/i.test(card) ? ["src="] : []),
         ...(/\bhttps?:\/\//i.test(card) ? ["a remote address"] : []),
         ...(/url\(/i.test(card) ? ["url(...)"] : []),
@@ -769,7 +777,9 @@ function nestedCtaActionProblems(vars: {
         continue;
       }
       const href = /\bhref="([^"]*)"/.exec(anchor[1] ?? "")?.[1]?.trim() ?? "";
-      const heading = /<h[1-6]\b[^>]*>([\s\S]*?)<\/h[1-6]>/i.exec(card)?.[1]?.trim() ?? "";
+      // The heading's **text** (`headingText`): a card may carry the graphics layer's mark
+      // beside the recorded name, and a mark is not part of the name the record carries.
+      const heading = headingText(/<h[1-6]\b[^>]*>([\s\S]*?)<\/h[1-6]>/i.exec(card)?.[1] ?? "");
       const name = services.get(unescapeText(heading).replace(/&#39;/g, "'"));
       if (!name) {
         problems.push(
@@ -841,9 +851,17 @@ function nestedCtaActionProblems(vars: {
     if (!card) continue;
     const requests = [
       ...new Set([
-        ...(card.match(/<\/?(img|svg|object|embed|iframe|script|picture|source|video|audio)\b/gi) ?? []).map((tag) =>
+        ...(card.match(/<\/?(img|object|embed|iframe|script|picture|source|video|audio)\b/gi) ?? []).map((tag) =>
           tag.replace(/[</]/g, "").toLowerCase(),
         ),
+        // An **inline** `<svg>` fetches nothing, so `svg` is out of the tag list above: the
+        // graphics layer draws every mark inline (`graphics.ts`), from `currentColor` and the
+        // bundle's own tokens, so there is no file to ship and none to license. What fetches
+        // *inside* a drawing is named here instead, so the clause keeps exactly the teeth it
+        // had — a card may not take a file from anywhere.
+        ...(/<svg[^>]*\bsrc\s*=/i.test(card) ? ["an <svg src>"] : []),
+        ...(/<image[\s>]/i.test(card) ? ["an <image>"] : []),
+        ...(/<use[^>]*href="(?!#)/i.test(card) ? ["an external <use>"] : []),
         ...(/\bsrc\s*=/i.test(card) ? ["src="] : []),
         ...(/\bhttps?:\/\//i.test(card) ? ["a remote address"] : []),
         ...(/url\(/i.test(card) ? ["url(...)"] : []),

@@ -58,6 +58,15 @@ import { manifestClaimProblems, refusalCoverageProblems } from "./refusal-covera
 import { contactLabelProblems, familyHonestyProblems, familyProblems, submitLabelProblems } from "./family.ts";
 import { graphicsProblems, type GraphicsPart } from "./graphics.ts";
 import {
+  GRAPHICS_MARKER,
+  GRAPHICS_SCOPES,
+  GRAPHICS_SLUG,
+  GRAPHICS_VAR,
+  graphicsDecision,
+  graphicsWiringProblems,
+  type GraphicsDecision,
+} from "./graphics-wiring.ts";
+import {
   SECTION_ORDER,
   extrasLines,
   familyRenderingProblems,
@@ -2521,6 +2530,13 @@ export function complianceChecks(vars: {
    */
   graphics?: GraphicsPart[];
   /**
+   * What this build decided about the **graphics layer's wiring** (`graphics-wiring.ts`,
+   * opt-in from `DEMO_GRAPHICS`). Absent means the layer is not in force, which is the state
+   * of every published build: the clauses then refuse a page or a stylesheet that carries it
+   * anyway.
+   */
+  graphicsWiring?: GraphicsDecision | null;
+  /**
    * The delivered README, when the caller has it. It ships inside the bundle and carries
    * the same phase furniture as the pages, so `phaseFurnitureProblems` checks it too —
    * `build.ts` always passes it. Left optional only so a caller that is checking a page
@@ -2793,6 +2809,24 @@ export function complianceChecks(vars: {
   // parts (a test proving a clause can fire) gets those audited; the default is the real
   // layer, so no build path can skip the check by forgetting to ask for it.
   problems.push(...graphicsProblems(vars.graphics));
+  // The **wiring's** own clauses (`graphics-wiring.ts`): the switch is one this build reads,
+  // the layer is on every page when it is on and on none when it is off, every mark on a page
+  // is marked, the schematic map keeps its caption, and no mark sits inside a control whose
+  // box the owner has already been shown. The layer's clauses above audit the layer's own
+  // output; these audit the pages it was written into.
+  problems.push(
+    ...graphicsWiringProblems({
+      pages,
+      css: vars.css,
+      decision: vars.graphicsWiring ?? {
+        enabled: false,
+        scope: null,
+        raw: "",
+        unrecognised: null,
+        basis: `the caller passed no ${GRAPHICS_VAR} decision, so this check makes no claim about the layer's wiring.`,
+      },
+    }),
+  );
   problems.push(...placeholderProblems(pages));
   return problems;
 }
@@ -3159,6 +3193,13 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
    * off (docs/ghost-controls.md carries the before/after table).
    */
   const ghost: GhostControlsDecision = ghostControlsDecision({ slug, phase: delivery.mode });
+  /**
+   * The **graphics layer** (`graphics.ts`, S3), wired on the one demonstration the owner is
+   * reviewing — the plan's own next step after the button work. Unlike the ghost controls it
+   * is not a stylesheet treatment: it writes marks into the pages as well, so a build without
+   * the opt-in writes the pages and the stylesheet master builds, byte for byte.
+   */
+  const graphics: GraphicsDecision = graphicsDecision({ slug, phase: delivery.mode });
   const ctx: RenderContext = {
     record,
     copy,
@@ -3170,6 +3211,7 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
     slug,
     generatedAt: new Date().toISOString(),
     ...(cardAction.enabled ? { serviceCardAction: cardAction } : {}),
+    ...(graphics.enabled ? { graphics: true } : {}),
   };
 
   const pages = renderPages(ctx);
@@ -3207,6 +3249,7 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   const css = renderCss(profile, slug, {
     ...(cardAction.enabled ? { serviceCardAction: cardAction.shape } : {}),
     ...(ghost.enabled ? { ghostControls: true } : {}),
+    ...(graphics.enabled ? { graphics: true } : {}),
   });
   const js = renderJs();
   const favicon = renderFavicon(record, profile);
@@ -3221,6 +3264,11 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
      problem by `ghostControlsProblems` clause 0a, so the build fails and the refusal is what
      the run prints — and a warning pushed above `fail()` is never printed by anything, which
      would leave two accounts of one event with only one of them ever reaching a reader. */
+  if (graphics.enabled) {
+    warnings.push(
+      `graphics layer: the pages of ${slug} carry the layer's marks and styles.css carries its rules — a proposal, not part of the design signed off on 7 Oct. Every mark is inline SVG beside a label it belongs to: no file is added to the bundle and no request is added to a page. ${graphics.basis}`,
+    );
+  }
   if (cardAction.enabled) {
     warnings.push(
       cardAction.shape === "nested-cta"
@@ -3232,7 +3280,7 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   const problems = [
     ...problemsBeforeWrite,
     ...practiceRead.problems,
-    ...complianceChecks({ pages, record, copy, form, delivery, images, privacy, practice, css, js, readme, demoBookingUrl, cardShape, ghostControls: ghost }),
+    ...complianceChecks({ pages, record, copy, form, delivery, images, privacy, practice, css, js, readme, demoBookingUrl, cardShape, ghostControls: ghost, graphicsWiring: graphics }),
     // The comparison page's own checks, including the carve-out that keeps the exception to
     // one file: a remote script, frame or embed on any OTHER page is refused here by name,
     // and the page is refused outright in the delivered phase and on any other record.
@@ -3446,6 +3494,53 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
       pages_changed: [],
       note: "The treatment is written in styles.css alone: with the opt-in set, not one page of this bundle changes, which is why `pages_changed` is empty by design and not by omission. The wash-side numbers for the home page's ghost are in `header.surface`, and the two refused resolutions of the contrast problem (a white ghost everywhere at 1.00:1, and dark inner-page headers) are named in docs/ghost-controls.md.",
     },
+    /* The graphics layer (S3), as wired. Written **only when the layer is on**: with the
+       switch off the manifest of every fixture is the manifest master writes, apart from
+       the two timestamps — which is what makes the byte-identity claim a diff rather than
+       a promise. */
+    ...(graphics.enabled
+      ? {
+      graphics_layer: {
+        enabled: true,
+        treatment: graphics.scope,
+        basis: graphics.basis,
+        marker: GRAPHICS_MARKER,
+        version_marker: css.includes(GRAPHICS_MARKER),
+        switched_off_leaves: `${GRAPHICS_VAR} unset writes every page and stylesheet of this bundle exactly as master builds it; the four fixtures are compared with diff -r on a build with the switch off (docs/graphics-wiring.md)`,
+        marks: [
+              "the page's own mark in each inner page's eyebrow (Services, About, Contact, Privacy) and one arc divider under the band",
+              "the services mark beside each recorded service name, inside the name block both card shapes share",
+              "the hours mark on the Opening hours heading and the pin on the location heading",
+              "the email and phone marks beside the printed details in the contact block",
+              "the privacy mark beside the footer's notice link and beside the form's",
+              "the message mark on the CTA band's heading",
+              "the arrow-right after the home page's More about link",
+              "the schematic map with its visible caption in the contact page's location column",
+              "the no-photograph ground on the hero of a record that carries no picture",
+        ],
+        mark_sites: {
+          page_head: "pageHead — PAGE_MARKS[id] in the eyebrow, divider('arc') under the band",
+          service_card: "servicesBlock — icon('services') inside the heading both shapes share",
+          hours_and_location: "hoursAddressSection — icon('hours'), icon('pin'), and the map on the contact page",
+          printed_details: "fallbackBlock — icon('email'), icon('phone')",
+          footer_and_form: "footerBlock and contactFormSection — icon('privacy')",
+          cta_band: "contactCtaSection — icon('message')",
+          about_link: "aboutSection — icon('arrow-right') after More about {name}",
+          hero: "heroSection — ground('no-photo') when the record carries no hero photograph",
+          booking: "bookingBlock — icon('appointment') beside the demonstration link, never inside it",
+        },
+        not_wired: [
+          "the wordmark: it belongs in the header, and wordmarkLinkProblems requires the header's link to carry the business's name as plain text and nothing else — replacing it is a change to a page signed off on 7 Oct",
+          "any mark inside a control: the measured button boxes (108x44, 270x44, 488x44) are the numbers the owner has been shown",
+          "a ground behind a control or behind body text: the CTA band's and the cards' surfaces carry the outlined buttons' measured contrast",
+        ],
+        requests_added: 0,
+        files_added: 0,
+        note: "Zero files and zero requests is not a promise: every mark is inline SVG and every rule is CSS, which the layer's own byte report carries as assets 0 / requests 0 (graphicsByteReport), and the per-page cold weights on and off are measured in docs/graphics-wiring.md.",
+
+        },
+        }
+      : {}),
     /* The header's action slot and the touch controls beside it: what the action says,
        where it points and why, which pages omit it, and how big every thumb target is. */
     header_action: headerActionMeasure({

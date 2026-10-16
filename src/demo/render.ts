@@ -51,6 +51,17 @@ import { SECTION_ORDER, extrasLines, type SectionId, type ServiceCardShape } fro
 import { serviceActionLabel } from "./family.ts";
 import { ghostControlsCss } from "./ghost-controls.ts";
 import {
+  MAP_CAPTION,
+  divider,
+  graphicsCss,
+  ground,
+  icon,
+  schematicMap,
+  type IconName,
+  type IconSize,
+} from "./graphics.ts";
+import { graphicsWiringCss } from "./graphics-wiring.ts";
+import {
   SERVICE_CARD_ACTION_BODY_CLASS,
   SERVICE_CARD_ACTION_CARD_CLASS,
   SERVICE_CARD_ACTION_NESTED_CARD_CLASS,
@@ -85,6 +96,40 @@ export interface RenderContext {
    * that renders a card. A decision that is present but not `enabled` changes nothing.
    */
   serviceCardAction?: ServiceCardActionDecision;
+  /**
+   * **The graphics layer** (`graphics.ts`, S3), attached by `build.ts` only when
+   * `DEMO_GRAPHICS` opts in and names a treatment this build paints
+   * (`graphics-wiring.ts`). Absent — the repository's state, and every published build —
+   * means every renderer writes the markup the owner signed off on 7 Oct 2026, byte for
+   * byte: no mark, no divider, no map, no ground.
+   *
+   * A flag rather than a decision, because nothing on a page depends on *which* treatment
+   * was named: either the layer is on and the marks are written, or it is off and the page
+   * is its published self.
+   */
+  graphics?: boolean;
+}
+
+/**
+ * The mark a page's own vocabulary calls for, in its eyebrow — the layer's rule is that a
+ * mark sits beside the label it belongs to, and never that a glyph replaces a word. The
+ * home page has no page head (its first screen is the hero), so its row is never reached.
+ */
+const PAGE_MARKS: Record<PageId, IconName> = {
+  index: "services",
+  services: "services",
+  about: "info",
+  contact: "message",
+  privacy: "privacy",
+};
+
+/**
+ * A mark beside its label, when the layer is on; **nothing at all** when it is off, so a
+ * build without the opt-in writes the bytes it wrote before. The trailing space is part of
+ * the label line, not decoration: an icon set flush against its word reads as one glyph.
+ */
+function mark(ctx: RenderContext, name: IconName, size: IconSize = 20): string {
+  return ctx.graphics ? `${icon(name, { size })} ` : "";
 }
 
 export type PageId = "index" | "services" | "about" | "contact" | "privacy";
@@ -243,6 +288,7 @@ function servicesBlock(
   level: 2 | 3,
   copy: DemoCopy,
   shape: ServiceCardShape | null = null,
+  graphics = false,
 ): string {
   const services = normaliseServices(record);
   const heading = `h${level}`;
@@ -270,7 +316,9 @@ function servicesBlock(
     .map((s) => {
       const label = esc(serviceActionLabel(copy.conversion.family, s.name));
       const href = esc(serviceActionHref(s.name));
-      const head = `<${heading}>${esc(s.name)}</${heading}>${s.note ? `<p>${esc(s.note)}</p>` : ""}`;
+      // The mark goes **inside the name block both card shapes share**, so the shapes
+      // themselves are untouched: same one link, same one control, same 44px target.
+      const head = `<${heading}>${graphics ? `${icon("services", { size: 24 })} ` : ""}${esc(s.name)}</${heading}>${s.note ? `<p>${esc(s.note)}</p>` : ""}`;
       // Treatment 1 (`service-card-action.ts`): the recorded name and note in a body block,
       // then a full-width action bar at the card's foot — still inside the card's one link,
       // still one target and one tab stop, because the bar is a styled element and not a
@@ -540,6 +588,12 @@ function headerActionBlock(ctx: RenderContext, id: PageId | null): string {
 
 function headerBlock(ctx: RenderContext, id: PageId | null): string {
   const { record, copy } = ctx;
+  // The header's name stays **plain text** even with the graphics layer on: the wordmark
+  // component (`graphics.ts`) belongs here, and the header's own approved check refuses it
+  // there — `wordmarkLinkProblems` requires the link to carry the business's name as plain
+  // text and nothing else. Replacing the name with a mark is a change to a page signed off
+  // on 7 Oct 2026, so it is the owner's call, not a wiring session's (see the "not wired"
+  // list in docs/graphics-wiring.md).
   const action = headerActionBlock(ctx, id);
   return `  <header class="site-header">
     <div class="wrap header-inner">
@@ -581,8 +635,8 @@ function fallbackBlock(ctx: RenderContext): string {
   const tel = record.phone ? telHref(record.phone) : "";
   return `        <div class="contact-fallback">
           <h3>${esc(copy.fallback.heading)}</h3>
-${record.email ? `          <p>${esc(copy.fallback.emailIntro)} <a href="mailto:${esc(record.email)}">${esc(record.email)}</a></p>` : `          <p>${esc(copy.fallback.noEmail)}</p>`}
-${record.phone ? `          <p>${esc(copy.fallback.phoneIntro)} <a href="${tel}">${esc(record.phone)}</a></p>` : `          <p>${esc(copy.fallback.noPhone)}</p>`}
+${record.email ? `          <p>${mark(ctx, "email")}${esc(copy.fallback.emailIntro)} <a href="mailto:${esc(record.email)}">${esc(record.email)}</a></p>` : `          <p>${esc(copy.fallback.noEmail)}</p>`}
+${record.phone ? `          <p>${mark(ctx, "phone")}${esc(copy.fallback.phoneIntro)} <a href="${tel}">${esc(record.phone)}</a></p>` : `          <p>${esc(copy.fallback.noPhone)}</p>`}
 ${copy.contactCaveat ? `          <!-- Compliance: the caveat that belongs with these printed details, derived from the
                record's source. Do not remove. -->
           <p class="muted">${esc(copy.contactCaveat)}</p>\n` : ""}        </div>`;
@@ -622,7 +676,7 @@ ${copy.contactCaveat && spec?.printsDetails ? `        <!-- Compliance: the cave
              copy of the page navigation, which item 54 removed; this link is now the
              footer's only route to it. Do not remove. -->
         <p class="footer-small">
-          <a href="${PAGE_SPECS.privacy.file}">Privacy notice</a>
+          ${mark(ctx, "privacy")}<a href="${PAGE_SPECS.privacy.file}">Privacy notice</a>
         </p>
         <!-- Compliance: the provenance line, derived from the record's source. It may not
              credit a source the record does not name. Do not remove. -->
@@ -642,11 +696,15 @@ function pageHead(ctx: RenderContext, id: PageId): string {
   const city = record.address?.city;
   const eyebrow = [record.category, city ? `${city}, ${record.address?.province ?? "ON"}` : ""].filter(Boolean).join(" · ");
   const lead = copy.pages[id].lead;
+  // The layer's mark for this page's own vocabulary, and the shallow arc that breaks the
+  // band. Both are inside the `wrap`, and both are absent without the opt-in.
+  const pageMark = mark(ctx, PAGE_MARKS[id]);
+  const rule = ctx.graphics ? `        ${divider("arc")}\n` : "";
   return `    <header class="page-head">
       <div class="wrap">
-        <p class="eyebrow">${esc(eyebrow)}</p>
+        <p class="eyebrow">${pageMark}${esc(eyebrow)}</p>
         <h1>${esc(copy.pages[id].title)}</h1>
-${lead ? `        <p class="lead">${esc(lead)}</p>\n` : ""}      </div>
+${lead ? `        <p class="lead">${esc(lead)}</p>\n` : ""}${rule}      </div>
     </header>`;
 }
 
@@ -658,8 +716,12 @@ function heroSection(ctx: RenderContext): string {
   const heroSrc = hero ? heroSrcset(hero) : "";
   const caption = illustrationCaption(images, "hero", record.name);
   const tel = record.phone ? telHref(record.phone) : "";
+  // A record with no hero photograph gets the layer's own fallback ground: the hero is
+  // already an ink surface carrying white type (`.hero` in the stylesheet), so the arcs and
+  // the accent hairline are an addition over it, not a repaint — no colour moves.
+  const heroGround = !hero && ctx.graphics ? ` ${ground("no-photo")}` : "";
   return `    <figure class="hero-figure">
-      <div class="hero${hero ? " hero--photo" : " hero--plain"}">
+      <div class="hero${hero ? " hero--photo" : ` hero--plain${heroGround}`}">
 ${hero ? `        <!-- The hero is a real <img>, not a CSS background: it carries its own
              dimensions, a load priority and a srcset, which is what stops a phone
              reflowing the page as the picture arrives and what lets it fetch the
@@ -688,28 +750,38 @@ function aboutSection(ctx: RenderContext, paragraphs: string[], heading: boolean
   return `    <section class="section" id="about">
       <div class="wrap">
 ${heading ? `        <h2>About ${esc(record.name)}</h2>\n` : ""}${paragraphs.map((p) => `        <p>${esc(p)}</p>`).join("\n")}
-${paragraphs.length < copy.about.length ? `        <p><a class="link-quiet link-quiet--inline" href="${PAGE_SPECS.about.file}">More about ${esc(record.name)}</a></p>\n` : ""}${image ? `        <figure class="about-figure">
+${paragraphs.length < copy.about.length ? `        <p><a class="link-quiet link-quiet--inline" href="${PAGE_SPECS.about.file}">More about ${esc(record.name)}</a>${ctx.graphics ? ` ${icon("arrow-right", { size: 20 })}` : ""}</p>\n` : ""}${image ? `        <figure class="about-figure">
           <img class="about-photo" src="${esc(image.file!)}"${sizeAttrs(image)} alt="" loading="lazy" decoding="async">
 ${caption ? `          <!-- Compliance: an AI-generated placeholder is labelled as an illustration. Do not remove. -->
           <figcaption class="muted">${esc(caption)}</figcaption>\n` : ""}        </figure>\n` : ""}      </div>
     </section>`;
 }
 
-function hoursAddressSection(ctx: RenderContext): string {
+function hoursAddressSection(ctx: RenderContext, id: PageId | null): string {
   const { record, copy } = ctx;
   const addr = addressLine(record);
   const hasStreet = Boolean(record.address?.street?.trim());
+  // The schematic map rides the **contact page's** location column and nowhere else: it is
+  // a stand-in drawn beside the address a visitor would look up, not a decoration to repeat
+  // on four pages. It is `aria-hidden` and the caption below it is its only meaning.
+  const map =
+    ctx.graphics && id === "contact"
+      ? `          <figure class="gfx-map-figure">
+${schematicMap()}
+            <figcaption class="gfx-map-caption">${esc(MAP_CAPTION)}</figcaption>
+          </figure>\n`
+      : "";
   return `    <section class="section" id="hours">
       <div class="wrap two-col">
         <div>
-          <h2>Opening hours</h2>
+          <h2>${mark(ctx, "hours", 24)}Opening hours</h2>
           <p class="muted">${esc(copy.hoursIntro)}</p>
 ${hoursBlock(record, copy)}
         </div>
         <div>
-          <h2>${esc(copy.locationHeading)}</h2>
+          <h2>${mark(ctx, "pin", 24)}${esc(copy.locationHeading)}</h2>
 ${copy.locationIntro ? `          <p class="muted">${esc(copy.locationIntro)}</p>\n` : ""}          ${addr ? `<address class="address">${esc(addr)}</address>` : `<p class="address muted">${esc(copy.locationEmpty)}</p>`}
-${hasStreet ? `          <p class="address-links">
+${map}${hasStreet ? `          <p class="address-links">
             <a class="button button--small" href="${directionsLink(record)}" target="_blank" rel="noopener noreferrer">${esc(copy.ui.directions)}</a>
           </p>\n` : ""}        </div>
       </div>
@@ -730,7 +802,7 @@ function contactCtaSection(ctx: RenderContext, alt: boolean): string {
   const { copy } = ctx;
   return `    <section class="section${alt ? " section--alt" : ""}" id="contact">
       <div class="wrap">
-        <h2>${esc(copy.contactCtaHeading)}</h2>
+        <h2>${mark(ctx, "message", 24)}${esc(copy.contactCtaHeading)}</h2>
         <p class="muted">${esc(copy.contactCtaIntro)}</p>
         <p class="cta-actions"><a class="${copy.booking.mode === "business" ? "link-quiet link-quiet--inline" : "button"}" href="${PAGE_SPECS.contact.file}">${esc(copy.contactLabel.label)}</a></p>
 ${fallbackBlock(ctx)}
@@ -877,7 +949,7 @@ function bookingBlock(ctx: RenderContext): string {
         <p class="form-note">${esc(booking.notice)}</p>\n`
     : "";
   return `        <p class="booking">
-          <a class="${BOOKING_ANCHOR_CLASS}" href="${esc(booking.href)}"${external}>${esc(booking.label)}&nbsp;${BOOKING_ARROW}</a>
+          ${mark(ctx, "appointment")}<a class="${BOOKING_ANCHOR_CLASS}" href="${esc(booking.href)}"${external}>${esc(booking.label)}&nbsp;${BOOKING_ARROW}</a>
         </p>
 ${notice}`;
 }
@@ -938,7 +1010,7 @@ ${hidden}
           <p class="form-status" id="form-status" role="status" aria-live="polite"></p>
         </form>
 
-        <p class="form-privacy"><a href="${PAGE_SPECS.privacy.file}">${esc(copy.ui.privacyLink)}</a></p>
+        <p class="form-privacy">${mark(ctx, "privacy")}<a href="${PAGE_SPECS.privacy.file}">${esc(copy.ui.privacyLink)}</a></p>
 
 ${fallbackBlock(ctx)}
       </div>
@@ -991,7 +1063,7 @@ function sectionHtml(ctx: RenderContext, id: PageId, section: SectionId, variant
     case "how":
       return stepsSection(ctx);
     case "hours":
-      return hoursAddressSection(ctx);
+      return hoursAddressSection(ctx, id);
     case "extras":
       return extrasSection(ctx);
     case "form":
@@ -1026,7 +1098,7 @@ function servicesHomeSection(ctx: RenderContext): string {
   return `    <section class="section section--alt" id="services">
       <div class="wrap">
         <h2>${esc(title)}</h2>
-${copy.servicesIntro ? `        <p class="muted">${esc(copy.servicesIntro)}</p>\n` : ""}${servicesBlock(record, 3, copy, cardShapeFor(ctx, "home"))}
+${copy.servicesIntro ? `        <p class="muted">${esc(copy.servicesIntro)}</p>\n` : ""}${servicesBlock(record, 3, copy, cardShapeFor(ctx, "home"), ctx.graphics === true)}
       </div>
     </section>`;
 }
@@ -1035,7 +1107,7 @@ ${copy.servicesIntro ? `        <p class="muted">${esc(copy.servicesIntro)}</p>\
 function servicesPageSection(ctx: RenderContext): string {
   return `    <section class="section" id="services">
       <div class="wrap">
-${servicesBlock(ctx.record, 2, ctx.copy, cardShapeFor(ctx, "services"))}
+${servicesBlock(ctx.record, 2, ctx.copy, cardShapeFor(ctx, "services"), ctx.graphics === true)}
       </div>
     </section>`;
 }
@@ -1079,7 +1151,7 @@ function extrasSection(ctx: RenderContext): string {
     .join("\n");
   return `    <section class="section" id="extras">
       <div class="wrap">
-        <h2>${esc(copy.ui.extrasHeading)}</h2>
+        <h2>${mark(ctx, "info", 24)}${esc(copy.ui.extrasHeading)}</h2>
         <dl class="card extras">
 ${items}
         </dl>
@@ -1244,6 +1316,12 @@ export function renderCss(
      * CSS-only, and not one page moves even when it is on.
      */
     ghostControls?: boolean;
+    /**
+     * Write the **graphics layer** onto the stylesheet (`graphics-wiring.ts`, opt-in from
+     * `DEMO_GRAPHICS`). Absent — the default, and every published build — writes the
+     * stylesheet byte for byte as it is.
+     */
+    graphics?: boolean;
   } = {},
 ): string {
   return `/* Site Sourced demo stylesheet — ${slug}
@@ -2135,7 +2213,7 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
   html { scroll-behavior: auto; }
   * { transition: none !important; animation: none !important; }
 }
-${options.serviceCardAction ? serviceCardActionCss(options.serviceCardAction) : ""}${options.ghostControls ? ghostControlsCss() : ""}`;
+${options.serviceCardAction ? serviceCardActionCss(options.serviceCardAction) : ""}${options.ghostControls ? ghostControlsCss() : ""}${options.graphics ? graphicsCss() + graphicsWiringCss() : ""}`;
 }
 
 /**

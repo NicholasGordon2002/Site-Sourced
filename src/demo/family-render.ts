@@ -593,6 +593,21 @@ export type ServiceCardShape = "whole-card" | "nested-cta";
  * inferred: a whole-card card that grows a button must fail, and a nested-CTA card with
  * no CTA, two controls, or a label the family did not compose must fail.
  */
+/**
+ * The **text** a heading carries, with any mark stripped out of it.
+ *
+ * A service card may carry the graphics layer's icon beside the recorded name
+ * (`graphics.ts`, wired by `graphics-wiring.ts`), and a mark is not part of the name the
+ * record carries. Reading the heading as markup made an inline `<svg>` part of the
+ * service's name — the two clauses below compare the heading with the record, and the
+ * record is text. Only tags are removed: entities and spacing are left exactly as the page
+ * wrote them, because `esc()` escapes an apostrophe into `&#39;` and the record is compared
+ * in the same escaped form.
+ */
+export function headingText(inner: string): string {
+  return inner.replace(/<[^>]*>/g, "").trim();
+}
+
 export function serviceCardProblems(vars: {
   pages: { file: string; html: string }[];
   record: BusinessRecord;
@@ -748,7 +763,7 @@ export function serviceCardProblems(vars: {
           card, outside the CTA when the card is a container. */
     const headingMatch = /<(h[1-6])\b[^>]*>([\s\S]*?)<\/\1>/i.exec(card.html);
     const headingTag = headingMatch?.[1]?.toLowerCase() ?? "";
-    const heading = headingMatch?.[2]?.trim() ?? "";
+    const heading = headingText(headingMatch?.[2] ?? "");
     const headingInsideLink = headingTag ? new RegExp(`<${headingTag}\\b`, "i").test(inner) : false;
     if (cardShape === "whole-card") {
       if (headingTag && !headingInsideLink) {
@@ -927,7 +942,7 @@ export function serviceCardProblems(vars: {
       if (!page || !page.html.includes('id="services"')) continue;
       const onPage = cards.filter((card) => card.page === file);
       for (const [escaped, name] of recorded) {
-        const matching = onPage.filter((card) => /<h[1-6][^>]*>([\s\S]*?)<\/h[1-6]>/.exec(card.html)?.[1]?.trim() === escaped);
+        const matching = onPage.filter((card) => headingText(/<h[1-6][^>]*>([\s\S]*?)<\/h[1-6]>/.exec(card.html)?.[1] ?? "") === escaped);
         if (matching.length !== 1) {
           problems.push(
             `${file}: the recorded service "${name}" has ${matching.length} service cards, not one. Every recorded service is one card on each page that lists them, so a visitor can ask about it from wherever they are reading.`,

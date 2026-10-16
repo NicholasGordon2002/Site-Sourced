@@ -273,6 +273,32 @@ export function resolvePhone(vars: {
  * hero's call-to-action pair, the contact-details block or the fallback block, and a
  * number only one of those prints is still printed.
  */
+/**
+ * The page as **a reader** meets it: a drawing's geometry is not text.
+ *
+ * The graphics layer (`graphics.ts`, S3) writes inline SVG, and an SVG's geometry attributes
+ * carry coordinates — `d="M12.6 3.4h6.1a1.9 1.9 0 0 1 1.9 1.9…"`. A run of coordinate digits
+ * can read to a digit counter as an eleven-digit number starting with 1, i.e. as a phone
+ * number, and the `services` icon does exactly that. No visitor can see a coordinate, so a
+ * coordinate is not a number "printed" in any sense this clause is about.
+ *
+ * So the geometry elements are removed before the digits are read — and **nothing else is**:
+ * every other tag, every attribute and every `<text>` element inside a drawing stays in the
+ * scan (the schematic map's own `SCHEMATIC — NOT TO SCALE` label is an `<svg>` `<text>`), so
+ * a number written in an `alt`, an `aria-label`, a meta description, a `value` or a paragraph
+ * is still caught exactly as before. The clause keeps its teeth where it had them.
+ *
+ * The limit, stated rather than hidden: a phone number deliberately drawn inside a geometry
+ * attribute — which is not rendered as text by any browser — would no longer be caught. A
+ * `<text>` element that printed one still is.
+ */
+const GEOMETRY_ELEMENTS = /<\/?(?:path|rect|circle|ellipse|line|polyline|polygon|defs|use|symbol|marker|clipPath|mask|pattern|linearGradient|radialGradient|stop)\b[^>]*>/gi;
+
+/** A page's HTML with the drawings' geometry stripped, everything readable left in place. */
+function withoutGeometry(html: string): string {
+  return html.replace(GEOMETRY_ELEMENTS, " ");
+}
+
 export function phonesPrintedIn(page: { file: string; html: string }): { number: string; places: string[] }[] {
   const found = new Map<string, { number: string; places: string[] }>();
   const add = (raw: string, place: string) => {
@@ -290,7 +316,9 @@ export function phonesPrintedIn(page: { file: string; html: string }): { number:
   for (const m of page.html.matchAll(/href="tel:([^"]*)"/gi)) add(m[1]!, `the call link on ${page.file}`);
   // A run of digits and the punctuation a phone number is written with. The digit count
   // is what decides: a postcode, a year or a font weight never reaches ten digits.
-  for (const m of page.html.matchAll(/\+?\d[\d\s().-]{7,}\d/g)) {
+  // The scan runs over the page **without its drawings' geometry** (`withoutGeometry`):
+  // an inline SVG's coordinates are not a number anybody printed.
+  for (const m of withoutGeometry(page.html).matchAll(/\+?\d[\d\s().-]{7,}\d/g)) {
     const raw = m[0]!;
     const digits = digitsOf(raw);
     if (digits.length !== 10 && !(digits.length === 11 && digits.startsWith("1"))) continue;
