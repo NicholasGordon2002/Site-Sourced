@@ -9,27 +9,34 @@ This doc is the one the build's own manifest points at
 (`graphics_layer.note` and `graphics_layer.switched_off_leaves`, `src/demo/build.ts`), which is
 why it exists as a file rather than only in a report.
 
-Nothing here is staged or published: the switch is unset in the repository, and the one
-demonstration it can move is behind it.
+**Widened on 24 Nov 2026** (owner direction) to the Northshore Garden Works inquiry demo
+beside it, so the layer now paints both review copies, one of each family: `GRAPHICS_SLUG` is a
+set of two, everything else below is unchanged, and Maple Avenue's output is byte-identical
+(§7).
+
+Nothing here is staged or published: the switch is unset in the repository, and the two
+demonstrations it can move are behind it.
 
 ## 1. The switch, exactly
 
-`DEMO_GRAPHICS` (`GRAPHICS_VAR`, `src/demo/graphics-wiring.ts:81`). It is **value-addressed**,
+`DEMO_GRAPHICS` (`GRAPHICS_VAR`, `src/demo/graphics-wiring.ts:83`). It is **value-addressed**,
 like `DEMO_GHOST_CONTROLS` and `DEMO_SERVICE_CARD_ACTION_BAR` beside it: the **value** names the
 treatment, and a value the build cannot read is **refused rather than guessed at**.
 
 | value | effect |
 | --- | --- |
 | `layer` (the treatment's own name) | the layer is written onto the pages and into the stylesheet |
-| `marks`, `graphics`, `1`, `true`, `on`, `yes` | the same thing — `GRAPHICS_SCOPES`, `graphics-wiring.ts:103-111`; the value is trimmed and lowercased first |
-| unset, empty, `0`, `false`, `off` | off: no page and no stylesheet moves (`graphicsRequested`, `graphics-wiring.ts:138`) |
+| `marks`, `graphics`, `1`, `true`, `on`, `yes` | the same thing — `GRAPHICS_SCOPES`, `graphics-wiring.ts:113-121`; the value is trimmed and lowercased first |
+| unset, empty, `0`, `false`, `off` | off: no page and no stylesheet moves (`graphicsRequested`, `graphics-wiring.ts:148`) |
 | anything else (`shiny`, `Layer2`, …) | **refused** — `graphicsDecision` records it in `unrecognised`, and `graphicsWiringProblems` clause 0 stops the build |
 
 Two scope rules ride on top of the value, both refusals with their reason written into the
 manifest's `graphics_layer.basis`:
 
-- **one record** — the layer is wired into `maple-avenue-barber-shop` (`GRAPHICS_SLUG`) only, the
-  copy the owner is reviewing. Another record's build reads the same variable and nothing moves;
+- **two records** — the layer is wired into `maple-avenue-barber-shop` and
+  `northshore-garden-works` (`GRAPHICS_SLUG`, a set of two — `graphics-wiring.ts:90`), the two
+  review copies, one of each family. Any other record's build reads the same variable and nothing
+  moves;
 - **never delivered** — a bundle in the delivered phase (`form_delivery: business`) refuses it: a
   client's site carries the design the client agreed to, and section marks are a proposal.
 
@@ -66,11 +73,29 @@ its inner markup against `icon(name)` for the 14 names in `ICON_NAMES` (§6 has 
 | `about.html` | **7** — info×2, hours, pin, phone, privacy, message |
 | `contact.html` | **6** — privacy×2 (the form's and the footer's), hours, pin, phone, message; the schematic map with its caption |
 | `privacy.html` | **2** — privacy×2 (its own eyebrow + the footer's link) |
-| `contact-<service>.html` (×4) | identical to `contact.html`: **6** marks, the map, the caption, the divider |
+| `contact-<service>.html` (×4) | identical to `contact.html`: **6** marks, the map and its caption |
 | `booking-comparison.html` | **1** — the footer's privacy mark (it carries no page band) |
 
 The home page's hero here carries a photograph, so the `no-photo` ground is not on it: it appears
 only for a record with no hero picture (`render.ts:722`).
+
+**Northshore Garden Works, counted the same way on a real build** — the same command the live
+review copy runs (`DEMO_SERVICE_CARD_ACTION_BAR=nested DEMO_GHOST_CONTROLS=surface
+DEMO_GRAPHICS=layer bun run src/demo/cli.ts --record test/fixtures/northshore-garden-works.json
+--out out/demos`), 21 files, 675 KB, heaviest page `index.html` at 166 KB cold at 360 px:
+
+| page | marks |
+| --- | --- |
+| `index.html` | **11** — services×5 (one per service card), hours, pin, phone, privacy, message, arrow-right |
+| `services.html` | **11** — services×6 (the page's own eyebrow + one per card), hours, pin, phone, privacy, message |
+| `about.html` | **7** — info×2, hours, pin, phone, privacy, message |
+| `contact.html` | **6** — privacy×2 (the form's and the footer's), hours, pin, phone, message; the schematic map with its caption |
+| `privacy.html` | **2** — privacy×2 (its own eyebrow + the footer's link) |
+| `contact-<service>.html` (×5) | identical to `contact.html`: **6** marks, the map and its caption |
+
+The counts are one higher than Maple Avenue's on the home and services pages because this record
+carries five services to the barber's four. The inquiry family has no `booking-comparison.html`,
+so there is no one-mark page here.
 
 ## 3. What is not wired, and why
 
@@ -138,7 +163,7 @@ what holds a phone load honest, not the KB figure alone.
 
 ## 5. The check, and the sweep that proves each condition can fail
 
-`graphicsWiringProblems` (`graphics-wiring.ts:256`) runs inside `complianceChecks()`
+`graphicsWiringProblems` (`graphics-wiring.ts:266`) runs inside `complianceChecks()`
 (`build.ts:3283` passes it the bundle's own pages, stylesheet and decision), so a bundle that
 breaks one of its clauses **fails the build**:
 
@@ -157,11 +182,23 @@ bun run tools/graphics-sweep.ts --out <dir>
 ```
 
 mutates one condition at a time, runs `test/graphics.test.ts`, restores the file and prints the
-sha256 before and after. **Result on this branch (17 Oct):**
+sha256 before and after. **Result on this branch (24 Nov, after the scope widened):**
 
 ```
-# 52 rows: 0 with no test going red (unguarded), 0 invalid (the row did not apply), 52 guarded
+# 53 rows: 0 with no test going red (unguarded), 0 invalid (the row did not apply), 53 guarded
 ```
+
+**The three refusals each have a row that goes red**, which is what "a rule with no test is no
+rule" asks for:
+
+- `gw-slug-scoped` — disables `if (!GRAPHICS_SLUG.has(vars.slug))`; red against *the switch is
+  value-addressed, scoped to the two review demonstrations, and refused in the delivered phase*
+  and *the scope is the two review demonstrations, one of each family, and nothing else*;
+- `gw-business-refused` — disables the delivered-phase refusal; red against the same two tests;
+- `gw-unrecognised` — disables `if (decision.unrecognised !== null)`; red against the first;
+- `gw-scope-northshore` (new, 24 Nov) — **removes `"northshore-garden-works"` from the set**; red
+  against *the scope is the two review demonstrations, one of each family, and nothing else*, so
+  dropping the second demo cannot pass silently.
 
 **Three rows were repaired to get there, and the two ways a row can stop applying are now refused
 by the tool rather than reported as a skip:**
@@ -192,3 +229,20 @@ disagree, the images map is wrong. The per-page mark counts come from matching e
 The suite is `SS_RETENTION_LOG=/home/team/shared/ops/retention-log.md bun test` from
 `/home/team/shared/pipeline`; the layer's own proofs, per-part byte caps and pixel contrast are in
 `docs/graphics-layer.md` and `docs/graphics-check-doctor-proofs.md`.
+
+## 7. The 24 Nov widening: what moved, and what did not
+
+**The scope is the only thing that moved.** `GRAPHICS_SLUG` is a `Set` of the two slugs
+(`graphics-wiring.ts:90`) and the decision asks `GRAPHICS_SLUG.has(vars.slug)`; the renderer, the
+wiring sites in §2 and the stylesheet block are untouched. Nothing on either demo was redesigned:
+no copy, no layout, no mark inside a control, and the arc under the subpage band stays removed on
+the owner's word (24 Nov, `c58ab7a`).
+
+**Maple Avenue's output is byte-identical.** Built on `master` (`c58ab7a`) and on this branch with
+the live review copy's three switches, the two bundles differ in **`manifest.json` only**, and in it
+only the two timestamps and the `graphics_layer.basis` sentence this change rewrites. Every page,
+`styles.css`, `site.js`, the images and the README are the same bytes.
+
+**Northshore's marks are the same wiring, on a different record**: five service cards instead of
+four, no booking link, and no booking-comparison page. The home page's three equal-weight white
+outlines and the rest of the button review are unchanged on both copies.

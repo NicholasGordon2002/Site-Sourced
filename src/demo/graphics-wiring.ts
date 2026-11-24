@@ -13,10 +13,11 @@
  * `DEMO_GRAPHICS` is **value-addressed**, exactly like the two above: its value names
  * the treatment, and a value this build cannot read is **refused rather than guessed
  * at**. The accepted spellings are `1`/`true`/`on`/`yes` and the treatment's own names
- * (`layer`, `marks`, `graphics`). The scope is the same one demonstration the button
- * treatments are scoped to — `maple-avenue-barber-shop` — because *one change in front
- * of the owner at a time* is the standing rule: the owner is reviewing the every-button
- * treatment on that demo right now, so the layer goes on beside it, on a branch, and
+ * (`layer`, `marks`, `graphics`). The scope is the **two demonstrations the owner reviews**
+ * — `maple-avenue-barber-shop` and `northshore-garden-works`, one of each family — because
+ * *one change in front of the owner at a time* is the standing rule: the owner is reviewing
+ * the every-button treatment on Maple Avenue, and widened the layer to the Northshore
+ * inquiry demo beside it on 24 Nov 2026. Any other record is refused, so the layer is
  * nowhere near a client build. The treatment is also **refused in the delivered phase**:
  * a client's site carries the design the client agreed to, and section marks are a
  * proposal, not part of a signed design.
@@ -27,7 +28,8 @@
  * rule (`graphics.ts`, rule 2), which is also why it emits no icon-only control:
  *
  *   - the page head of each inner page carries the page's own mark in its eyebrow
- *     (Services, About, Contact, Privacy) and a divider under the band;
+ *     (Services, About, Contact, Privacy), and nothing else — the arc that used to break
+ *     the band was removed on the owner's word, 24 Nov 2026;
  *   - each service card carries the **services** mark beside its recorded name — the card
  *     shapes themselves are untouched (`service-card-action.ts`), the mark goes inside the
  *     name block both shapes share;
@@ -80,10 +82,18 @@ import type { FormDeliveryMode } from "./types.ts";
 /** The configuration switch that turns the layer on. It carries no content. */
 export const GRAPHICS_VAR = "DEMO_GRAPHICS";
 /**
- * The demonstration it is scoped to — the same Maple Avenue appointment demo the owner's
- * button treatments are being reviewed on. Any other record refuses it.
+ * The demonstrations it is scoped to — **the two review copies the owner looks at**, one of
+ * each family: the Maple Avenue appointment demo the button treatments are reviewed on, and
+ * the Northshore Garden Works inquiry demo beside it (owner direction, 24 Nov 2026). Any
+ * other record refuses it.
  */
-export const GRAPHICS_SLUG = "maple-avenue-barber-shop";
+export const GRAPHICS_SLUG: ReadonlySet<string> = new Set([
+  "maple-avenue-barber-shop",
+  "northshore-garden-works",
+]);
+
+/** The scope as a reviewer reads it in the basis, derived from the set above. */
+const GRAPHICS_SLUG_LIST = [...GRAPHICS_SLUG].join(", ");
 
 /**
  * **The marker the wiring declares in the stylesheet**, so the build can see the layer in
@@ -115,7 +125,7 @@ export const GRAPHICS_SCOPES: Record<string, "layer"> = {
  * our word for it.
  */
 export const GRAPHICS_BASIS =
-  "the graphics layer (S3, src/demo/graphics.ts, docs/graphics-layer.md) — built and proved on 16–17 Oct 2026 with no wiring into any demo, and the plan's own sequence (S3 → hand-over pack), which puts the layer on the pages before the pack is written";
+  "the graphics layer (S3, src/demo/graphics.ts, docs/graphics-layer.md) — built and proved on 16–17 Oct 2026 with no wiring into any demo, wired onto the Maple Avenue review copy on 17 Oct, and widened on 24 Nov 2026 to the Northshore Garden Works inquiry demo beside it (owner direction: marks only where they improve orientation or hierarchy), with the plan's own sequence (S3 → hand-over pack) putting the layer on the pages before the pack is written";
 
 export interface GraphicsDecision {
   /** Whether this build writes the layer onto the pages and into the stylesheet. */
@@ -175,14 +185,14 @@ export function graphicsDecision(vars: {
     return {
       ...off,
       scope,
-      basis: `refused: this bundle is in the delivered phase. The graphics layer is a proposal — section marks, a divider and a schematic map the owner has not signed off — and a client's site carries the design the client agreed to, so ${GRAPHICS_VAR} carries no weight in a client build (${GRAPHICS_BASIS}).`,
+      basis: `refused: this bundle is in the delivered phase. The graphics layer is a proposal — section marks and a schematic map the owner has not signed off — and a client's site carries the design the client agreed to, so ${GRAPHICS_VAR} carries no weight in a client build (${GRAPHICS_BASIS}).`,
     };
   }
-  if (vars.slug !== GRAPHICS_SLUG) {
+  if (!GRAPHICS_SLUG.has(vars.slug)) {
     return {
       ...off,
       scope,
-      basis: `refused: the layer is wired into the ${GRAPHICS_SLUG} appointment demonstration, the copy the owner is reviewing. ${GRAPHICS_VAR} is set but this record is "${vars.slug}", so no page and no stylesheet of this bundle moves (${GRAPHICS_BASIS}).`,
+      basis: `refused: the layer is wired into the ${GRAPHICS_SLUG_LIST} demonstrations, the copies the owner is reviewing. ${GRAPHICS_VAR} is set but this record is "${vars.slug}", so no page and no stylesheet of this bundle moves (${GRAPHICS_BASIS}).`,
     };
   }
   return {
@@ -190,7 +200,7 @@ export function graphicsDecision(vars: {
     scope,
     raw,
     unrecognised: null,
-    basis: `${GRAPHICS_VAR} is set to "${raw.trim()}" and this record is the ${GRAPHICS_SLUG} demonstration, so the pages carry the layer: the page mark in each inner page's eyebrow and a divider under its band, the services mark on each recorded service card, the hours and pin marks on the hours and location headings, the email and phone marks beside the printed details, the privacy mark on the footer's notice link, the message mark on the CTA band, the arrow-right on the home page's "More about" link, the schematic map with its caption in the contact page's location column, and the no-photograph ground on a record with no hero picture. Every mark is inline SVG beside a label it belongs to, so the layer adds no file and no request (${GRAPHICS_BASIS}).`,
+    basis: `${GRAPHICS_VAR} is set to "${raw.trim()}" and this record is one of the ${GRAPHICS_SLUG_LIST} demonstrations, so the pages carry the layer: the page mark in each inner page's eyebrow, the services mark on each recorded service card, the hours and pin marks on the hours and location headings, the email and phone marks beside the printed details, the privacy mark on the footer's notice link, the message mark on the CTA band, the arrow-right on the home page's "More about" link, the schematic map with its caption in the contact page's location column, and the no-photograph ground on a record with no hero picture. Every mark is inline SVG beside a label it belongs to, so the layer adds no file and no request (${GRAPHICS_BASIS}).`,
   };
 }
 
@@ -299,13 +309,13 @@ export function graphicsWiringProblems(vars: {
   for (const page of pages) {
     if (!marked.includes(page)) {
       problems.push(
-        `${page.file}: carries no graphics-layer mark while ${GRAPHICS_VAR} is in force and this record is the ${GRAPHICS_SLUG} demonstration. The switch asked for the layer and the page came out plain — a review copy that does not show what the reviewer asked to see.`,
+        `${page.file}: carries no graphics-layer mark while ${GRAPHICS_VAR} is in force and this record is one of the ${GRAPHICS_SLUG_LIST} demonstrations. The switch asked for the layer and the page came out plain — a review copy that does not show what the reviewer asked to see.`,
       );
     }
   }
   if (!cssCarriesLayer) {
     problems.push(
-      `the stylesheet this bundle ships carries no graphics layer while ${GRAPHICS_VAR} is set and this record is the ${GRAPHICS_SLUG} demonstration: it needs the layer's own rules (.gfx-icon and the rest) and the marker ${GRAPHICS_MARKER} that says the opt-in was honoured. ${decision.basis}`,
+      `the stylesheet this bundle ships carries no graphics layer while ${GRAPHICS_VAR} is set and this record is one of the ${GRAPHICS_SLUG_LIST} demonstrations: it needs the layer's own rules (.gfx-icon and the rest) and the marker ${GRAPHICS_MARKER} that says the opt-in was honoured. ${decision.basis}`,
     );
   }
 
