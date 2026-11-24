@@ -60,6 +60,7 @@ import {
   type IconSize,
 } from "./graphics.ts";
 import { graphicsWiringCss } from "./graphics-wiring.ts";
+import { northshoreCss } from "./theme-northshore.ts";
 import {
   SERVICE_CARD_ACTION_BODY_CLASS,
   SERVICE_CARD_ACTION_CARD_CLASS,
@@ -1321,6 +1322,13 @@ export function renderCss(
      * stylesheet byte for byte as it is.
      */
     graphics?: boolean;
+    /**
+     * Write the **Northshore theme** onto the stylesheet (`theme-northshore.ts`, the owner's
+     * experimental design pass, 24 Nov 2026). Absent — the default, and every other bundle —
+     * writes the stylesheet byte for byte as it is. Written last, so it wins at equal
+     * specificity by document order, and it writes no page of any bundle.
+     */
+    theme?: boolean;
   } = {},
 ): string {
   return `/* Site Sourced demo stylesheet — ${slug}
@@ -2212,7 +2220,7 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
   html { scroll-behavior: auto; }
   * { transition: none !important; animation: none !important; }
 }
-${options.serviceCardAction ? serviceCardActionCss(options.serviceCardAction) : ""}${options.ghostControls ? ghostControlsCss() : ""}${options.graphics ? graphicsCss() + graphicsWiringCss() : ""}`;
+${options.serviceCardAction ? serviceCardActionCss(options.serviceCardAction) : ""}${options.ghostControls ? ghostControlsCss() : ""}${options.graphics ? graphicsCss() + graphicsWiringCss() : ""}${options.theme ? northshoreCss() : ""}`;
 }
 
 /**

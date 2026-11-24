@@ -107,6 +107,14 @@ import {
   ghostControlsDecision,
   type GhostControlsDecision,
 } from "./ghost-controls.ts";
+import {
+  NORTHSHORE_THEME_MARKER,
+  NORTHSHORE_THEME_NAME,
+  NORTHSHORE_THEME_SLUG,
+  northshoreThemeDecision,
+  northshoreThemeProblems,
+  type NorthshoreThemeDecision,
+} from "./theme-northshore.ts";
 import { currentRetentionPractice, PRACTICE_FILE, readRetentionPractice, type RetentionPractice } from "./retention.ts";
 import type { FormDelivery } from "./delivery.ts";
 import { formDeliveryProblems, resolveDelivery, type FormDeliveryMode } from "./delivery.ts";
@@ -2616,6 +2624,13 @@ export function complianceChecks(vars: {
    * and a caller with no demonstration page makes no demonstration-mode claim.
    */
   demoBookingUrl?: string;
+  /**
+   * What this build decided about the **Northshore theme** (`theme-northshore.ts`, the
+   * owner's experimental design pass of 24 Nov 2026). Absent means the theme is not in
+   * force, which is the state of every other bundle: the clause then refuses a stylesheet
+   * that carries it anyway.
+   */
+  theme?: NorthshoreThemeDecision | null;
 }): string[] {
   const { pages, record, copy, form, delivery, images, privacy } = vars;
   const practice = vars.practice === undefined ? currentRetentionPractice() : vars.practice;
@@ -2818,6 +2833,22 @@ export function complianceChecks(vars: {
       pageForService: servicePageFile,
       css: vars.css,
       cardShape: vars.cardShape ?? "whole-card",
+    }),
+  );
+  /* The Northshore theme (the owner's design pass, 24 Nov 2026): present iff it is in force,
+     and every colour pair it introduces measured off the stylesheet this build ships. A
+     caller that passed no decision makes no claim about the theme — and a stylesheet that
+     carries it anyway is still refused, by the slug this check is handed. */
+  problems.push(
+    ...northshoreThemeProblems({
+      slug: record.slug,
+      css: vars.css ?? "",
+      decision: vars.theme ?? {
+        enabled: false,
+        slug: record.slug,
+        name: null,
+        basis: `the caller passed no Northshore theme decision, so this check makes no claim about the design pass.`,
+      },
     }),
   );
   problems.push(...privacyLinkProblems(pages));
@@ -3388,6 +3419,15 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
    * the opt-in writes the pages and the stylesheet master builds, byte for byte.
    */
   const graphics: GraphicsDecision = graphicsDecision({ slug, phase: delivery.mode });
+  /**
+   * The **Northshore theme** — the owner's experimental design pass on one demonstration
+   * (24 Nov 2026). Like the ghost controls it is a stylesheet treatment: the decision changes
+   * what `renderCss` writes and nothing else, so no page of any bundle moves. Unlike them it
+   * has no switch: it is keyed to the record and to the demonstration phase, because the
+   * owner asked for this demo to *be* the design pass. It is refused by name on every other
+   * record and in the delivered phase (`northshoreThemeProblems`).
+   */
+  const theme: NorthshoreThemeDecision = northshoreThemeDecision({ slug, phase: delivery.mode });
   const ctx: RenderContext = {
     record,
     copy,
@@ -3438,6 +3478,7 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
     ...(cardAction.enabled ? { serviceCardAction: cardAction.shape } : {}),
     ...(ghost.enabled ? { ghostControls: true } : {}),
     ...(graphics.enabled ? { graphics: true } : {}),
+    ...(theme.enabled ? { theme: true } : {}),
   });
   const js = renderJs();
   const favicon = renderFavicon(record, profile);
@@ -3457,6 +3498,11 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
       `graphics layer: the pages of ${slug} carry the layer's marks and styles.css carries its rules — a proposal, not part of the design signed off on 7 Oct. Every mark is inline SVG beside a label it belongs to: no file is added to the bundle and no request is added to a page. ${graphics.basis}`,
     );
   }
+  if (theme.enabled) {
+    warnings.push(
+      `theme: ${slug} carries the Northshore theme — the owner's experimental design pass of 24 Nov 2026 (bone paper, evergreen ink, squared corners, ruled lists, dark title bands). It is written in styles.css alone: not one page of this bundle changes, and every other record keeps the shared design. ${theme.basis}`,
+    );
+  }
   if (cardAction.enabled) {
     warnings.push(
       cardAction.shape === "nested-cta"
@@ -3468,7 +3514,7 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   const problems = [
     ...problemsBeforeWrite,
     ...practiceRead.problems,
-    ...complianceChecks({ pages, record, copy, form, delivery, images, privacy, practice, css, js, readme, demoBookingUrl, cardShape, ghostControls: ghost, graphicsWiring: graphics }),
+    ...complianceChecks({ pages, record, copy, form, delivery, images, privacy, practice, css, js, readme, demoBookingUrl, cardShape, ghostControls: ghost, graphicsWiring: graphics, theme }),
     // The comparison page's own checks, including the carve-out that keeps the exception to
     // one file: a remote script, frame or embed on any OTHER page is refused here by name,
     // and the page is refused outright in the delivered phase and on any other record.
@@ -3703,6 +3749,21 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
       pages_changed: [],
       note: "The treatment is written in styles.css alone: with the opt-in set, not one page of this bundle changes, which is why `pages_changed` is empty by design and not by omission. The wash-side numbers for the home page's ghost are in `header.surface`, and the two refused resolutions of the contrast problem (a white ghost everywhere at 1.00:1, and dark inner-page headers) are named in docs/ghost-controls.md.",
     },
+    /* The Northshore theme — the owner's experimental design pass of 24 Nov 2026. Written
+       only when the theme is in force, so every other manifest is the one master writes. */
+    ...(theme.enabled
+      ? {
+          theme: {
+            enabled: true as const,
+            treatment: NORTHSHORE_THEME_NAME,
+            marker: NORTHSHORE_THEME_MARKER,
+            basis: theme.basis,
+            scope: "styles.css alone — the palette, the type scale, the squared shape tokens, the ruled lists, the dark title band on every inner page and the dark band for the inquiry steps",
+            pages_changed: [] as string[],
+            note: "The design pass is written in the stylesheet: not one page of this bundle changes, which is why `pages_changed` is empty by design and not by omission. Every colour pair it introduces is measured at build time against the floor it needs (PAIRS in src/demo/theme-northshore.ts).",
+          },
+        }
+      : {}),
     /* The graphics layer (S3), as wired. Written **only when the layer is on**: with the
        switch off the manifest of every fixture is the manifest master writes, apart from
        the two timestamps — which is what makes the byte-identity claim a diff rather than
