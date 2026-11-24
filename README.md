@@ -300,7 +300,7 @@ declares its source and everything the page says about it is derived
 (`src/demo/provenance.ts`):
 
 ```json
-"source_kind": "openstreetmap" | "public-listings" | "fictional",
+"source_kind": "openstreetmap" | "public-listings" | "fictional" | "client-supplied",
 "source": "free-text note for our own records (optional)"
 ```
 
@@ -309,13 +309,16 @@ declares its source and everything the page says about it is derived
 | `openstreetmap` | the details came from OpenStreetMap via Overpass | "© OpenStreetMap contributors", ODbL 1.0, public mapping data | the frozen "as published in public listings — please confirm" line |
 | `public-listings` | the details were read from a listing the business published | public listings; **no** mapping data | the same frozen line |
 | `fictional` | this is a made-up example business, invented to show the layout | neither; nothing was taken from a real business, a listing or a website | the fictional-example line (the frozen one would be false) |
+| `client-supplied` | the business told us its own details — a delivered client’s site only | nothing of ours: the details are the client’s own | none; asking a visitor to confirm facts the client supplied would be wrong |
 
 `source_kind` is **required**: a record that declares nothing fails the build, because no
 attribution can be chosen on its behalf and printing unconfirmed details with no caveat
 is not an option either. The same guard refuses a bundle whose page keeps the
 OpenStreetMap credit (or the wrong caveat) while the record declares another source, and
-refuses a `fictional` record whose form delivers to it as a client's own site. The
-manifest records the declared kind, the exact line derived from it, and why
+refuses a `fictional` record whose form delivers to it as a client's own site. A
+demonstration may not declare `client-supplied` at all: a proposal is built from details
+we had to go and find, so the guard refuses that combination by name. The manifest
+records the declared kind, the exact line derived from it, and why
 (`business.source_kind` / `provenance_line` / `provenance_basis`).
 
 ## Flags
