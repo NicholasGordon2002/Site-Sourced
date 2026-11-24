@@ -18,7 +18,7 @@
 import { copyFile, mkdir, readdir, rm, rmdir, stat } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 
-import type { BundleResult, BusinessRecord, DemoManifest, ManifestHeaderAction, ManifestImage } from "./types.ts";
+import type { BundleResult, BusinessRecord, DeliveredBuildRecord, DemoManifest, ManifestHeaderAction, ManifestImage } from "./types.ts";
 import type { BookingCopy, DemoCopy, PrivacyNotice } from "./copy.ts";
 import { BOOKING_ANCHOR_CLASS, BOOKING_ARROW, bookingBelongs, DEMO_BOOKING_URL_VAR } from "./booking.ts";
 import {
@@ -3113,6 +3113,94 @@ export async function readBundleTexts(dir: string): Promise<{ file: string; cont
 }
 
 /**
+ * Where **our own record of a delivered build** lives: `<slug>.build-record.json` in the
+ * output root, a sibling of the bundle folder and never a file inside it.
+ *
+ * The rule it answers to is the plan's — "A client's folder carries the site and the client's
+ * own README, nothing of ours" — so a delivered folder ships no `manifest.json`
+ * (`internalRecordProblems`). That leaves the delivered phase with no audit trail at all: the
+ * CLI's `--summary` names the slug, the folder, the file list, the bytes and the warnings, and
+ * none of the bases that decided what the pages say. `docs/handover-pack.md` §5.1 asks for the
+ * record beside the bundle; this is that path.
+ */
+export const BUILD_RECORD_SUFFIX = ".build-record.json";
+
+export function buildRecordPath(outRoot: string, slug: string): string {
+  return join(outRoot, `${slug}${BUILD_RECORD_SUFFIX}`);
+}
+
+/**
+ * The record itself, shaped from the manifest the build has just composed.
+ *
+ * Every base is **copied from that manifest** rather than re-derived here, so the record and
+ * the build cannot disagree about the family, the booking mode, the phone version, the
+ * provenance line or the retention practice — and a later audit reads the same object a
+ * reviewer of the demonstration would have read. The demonstration-only treatments
+ * (the ghost controls, the header overlay, the proposal furniture) are deliberately **not**
+ * carried: they are what a delivered site refuses, and the `bases.phase` entry records that
+ * refusal by name.
+ */
+export function deliveredBuildRecord(vars: { manifest: DemoManifest; dir: string; bytes: number }): DeliveredBuildRecord {
+  const m = vars.manifest;
+  return {
+    generator: m.generator,
+    generated_at: m.generated_at,
+    slug: m.slug,
+    phase: "business",
+    dir: vars.dir,
+    files: [...m.files],
+    bytes: vars.bytes,
+    warnings: [...m.warnings],
+    bases: {
+      phase: m.compliance.phase,
+      delivery: m.form.delivery,
+      conversion: {
+        family: m.conversion.family,
+        source: m.conversion.source,
+        basis: m.conversion.basis,
+        category_profile: m.conversion.category_profile,
+        matched_category_word: m.conversion.matched_category_word,
+        contact_label: m.conversion.contact_label,
+        contact_label_source: m.conversion.contact_label_source,
+        contact_label_basis: m.conversion.contact_label_basis,
+        form: m.conversion.form,
+        narrative: m.conversion.narrative,
+        section_order: m.conversion.section_order,
+      },
+      booking: m.booking,
+      phone: m.phone,
+      provenance: m.business,
+      privacy: m.privacy,
+      form: {
+        provider: m.form.provider,
+        fields: m.form.fields,
+        submit_label: m.form.submit_label,
+        stores_submissions: m.form.stores_submissions,
+        free_tier: m.form.free_tier,
+        if_it_lapses: m.form.if_it_lapses,
+        fallback_shown: m.form.fallback_shown,
+      },
+      compliance: {
+        robots_meta: m.compliance.robots_meta,
+        contact_details_caveat: m.compliance.contact_details_caveat,
+        external_requests_on_load: m.compliance.external_requests_on_load,
+        per_page: m.compliance.per_page,
+      },
+      images: m.images.map((image) => ({
+        role: image.role,
+        file: image.file,
+        source: image.source,
+        source_url: image.source_url,
+        license: image.license,
+        author: image.author,
+        retrieved_at: image.retrieved_at,
+      })),
+      handoff: m.handoff,
+    },
+  };
+}
+
+/**
  * The build's own ordering, in one place: **resolve the form → derive the delivery from the
  * record and that form → compose the copy → write the notification title against the
  * provider's own subject key.**
@@ -3148,13 +3236,23 @@ export function resolveBuildParts(
 export async function buildBundle(record: BusinessRecord, opts: BuildOptions): Promise<BundleResult> {
   const slug = (record.slug ?? "").trim() || slugify(record.name);
   const dir = join(opts.outRoot, slug);
+  // Our own record of this build lives **beside** the folder, never inside it: a client's
+  // folder is the site and the client's own README, nothing of ours (`internalRecordProblems`),
+  // and a demonstration's record is `manifest.json` inside its own folder. One path per slug,
+  // so the record beside a folder always describes the last build of that folder.
+  const recordPath = buildRecordPath(opts.outRoot, slug);
   // Tracked so a failed build can leave no half-written bundle behind: a folder
   // that existed before this run (a previous, valid bundle) is left alone, but
   // one this run created is removed rather than left looking publishable.
   const existedBefore = await stat(dir).then(() => true).catch(() => false);
   await mkdir(join(dir, "img"), { recursive: true });
   const fail = async (message: string): Promise<never> => {
-    if (!existedBefore) await rm(dir, { recursive: true, force: true });
+    if (!existedBefore) {
+      await rm(dir, { recursive: true, force: true });
+      // …and no record dangles beside a folder that is not there: the record describes a
+      // bundle on disk, so a build that leaves no folder leaves no record either.
+      await rm(recordPath, { force: true });
+    }
     throw new Error(message);
   };
 
@@ -3466,6 +3564,17 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   }
   for (const rel of pruned.dirs) {
     warnings.push(`removed ${rel}, an empty directory inside this bundle — it holds no file the bundle ships, and an empty folder in a published path is a path a visitor can still land on.`);
+  }
+
+  // The record beside the folder answers to the same rule the folder does. A demonstration's
+  // record is `manifest.json` **inside** the bundle, so a record of an earlier delivered build
+  // left beside this slug describes a folder that is no longer a client's site: it goes, and the
+  // removal is named, because a file this build did not write is never silently discarded.
+  if (shipsRecord && (await stat(recordPath).then(() => true).catch(() => false))) {
+    await rm(recordPath, { force: true });
+    warnings.push(
+      `removed ${slug}${BUILD_RECORD_SUFFIX}, our record of an earlier delivered build beside this folder: this build is a demonstration, and a demonstration's record is manifest.json inside the bundle.`,
+    );
   }
 
   // Every page, not just the home page: a nav link to a file that was never written,
@@ -3992,6 +4101,18 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
 
   let total = 0;
   for (const f of files) total += (await stat(join(dir, f))).size;
+
+  // Our own record of the build, written **beside** the folder and never inside it: a delivered
+  // folder is the client's site and the client's own README, and a client's files never describe
+  // the demonstration phase (`internalRecordProblems`). The delivered phase therefore has no
+  // record on disk unless this writes one, and `docs/handover-pack.md` §5.1 asks for exactly
+  // this: the summary's slug, phase, files, bytes and warnings, plus the derivation bases
+  // `--summary` omits. Written last, from the manifest the build composed, so it records the
+  // bundle that is on disk — and only for a delivered build: a demonstration keeps its record
+  // inside the bundle and its folder and bytes are untouched by this.
+  if (!shipsRecord) {
+    await Bun.write(recordPath, JSON.stringify(deliveredBuildRecord({ manifest, dir, bytes: total }), null, 2) + "\n");
+  }
 
   return { slug, dir, files: manifest.files, images, warnings, bytes: total };
 }

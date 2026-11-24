@@ -34,17 +34,23 @@
  *      time on a custom order" and "our lead stylist" are all clean, because a client's
  *      build must never fail on the client's own words;
  *   6. a delivered build **clears** a record an earlier demonstration run left in the
- *      folder, rather than shipping it.
+ *      folder, rather than shipping it;
+ *   7. our **own** record of a delivered build is written **beside** the folder
+ *      (`<slug>.build-record.json` in the output root) — never inside it — carrying the
+ *      slug, the phase, the file list, the bytes measured from disk, the warnings and the
+ *      derivation bases the CLI's `--summary` omits, each copied from the build's own
+ *      manifest; a demonstration writes none beside it and clears one an earlier delivered
+ *      build left there, and a build that fails leaves none behind.
  */
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { buildBundle, internalRecordProblems, readBundleTexts } from "../src/demo/build.ts";
+import { BUILD_RECORD_SUFFIX, buildBundle, internalRecordProblems, readBundleTexts } from "../src/demo/build.ts";
 import { INTERNAL_RECORD_MARKERS, REFUSAL_SAMPLES } from "../src/demo/refusal-registry.ts";
-import type { BusinessRecord } from "../src/demo/types.ts";
+import type { BusinessRecord, DeliveredBuildRecord } from "../src/demo/types.ts";
 
 /** The test-only delivered-phase record (`test/records/business-phase.json`). */
 const RECORD = JSON.parse(await Bun.file(join(import.meta.dir, "records", "business-phase.json")).text()) as BusinessRecord;
@@ -74,9 +80,11 @@ const DELIVERED_TEXT_FILES = [
 ];
 
 interface Built {
+  slug: string;
   dir: string;
   files: string[];
   warnings: string[];
+  bytes: number;
 }
 
 /** Build a record the way the CLI does, into a folder the test owns. */
@@ -89,7 +97,7 @@ async function build(record: BusinessRecord, into: string): Promise<Built> {
     refresh: false,
     onNote: () => {},
   });
-  return { dir: result.dir, files: result.files, warnings: result.warnings };
+  return { slug: result.slug, dir: result.dir, files: result.files, warnings: result.warnings, bytes: result.bytes };
 }
 
 /** A folder the test owns, removed whatever the test does. */
@@ -217,5 +225,111 @@ test("a delivered build clears a record an earlier demonstration run left in the
     expect(second.files.includes("manifest.json")).toBe(false);
     expect(second.warnings.join(" | ")).toContain("removed manifest.json, the build's own record, left in this folder by an earlier run");
     expect(internalRecordProblems({ mode: "business", carried: await readBundleTexts(second.dir) })).toEqual([]);
+  });
+});
+
+/* ------------------------- our own record of a delivered build: beside the folder, never in it */
+
+/** The name the build gives the record, typed once here so a rename cannot pass unnoticed. */
+const RECORD_FILE = "business-phase-fixture.build-record.json";
+
+/** Every file inside a folder, counted from disk rather than from what the build said it wrote. */
+async function filesIn(dir: string): Promise<number> {
+  return (await readdir(dir, { recursive: true, withFileTypes: true })).filter((e) => e.isFile()).length;
+}
+
+test("a delivered build writes our record of it beside the folder, never inside it", async () => {
+  await temp(async (tmp) => {
+    const b = await build(DELIVERED, tmp);
+    expect(RECORD_FILE.endsWith(BUILD_RECORD_SUFFIX)).toBe(true);
+    expect(b.slug).toBe("business-phase-fixture");
+    expect(existsSync(join(tmp, RECORD_FILE))).toBe(true);
+    // Nothing of ours went into the client's folder, and the folder is still eighteen files.
+    expect(existsSync(join(b.dir, RECORD_FILE))).toBe(false);
+    expect(b.files.some((f) => f.endsWith(BUILD_RECORD_SUFFIX))).toBe(false);
+    expect(await filesIn(b.dir)).toBe(18);
+
+    const record = JSON.parse(await Bun.file(join(tmp, RECORD_FILE)).text()) as DeliveredBuildRecord;
+    expect(record.slug).toBe(b.slug);
+    expect(record.phase).toBe("business");
+    expect(record.dir).toBe(b.dir);
+    expect(record.files).toEqual(b.files);
+    expect(record.warnings).toEqual(b.warnings);
+    // The bytes are the folder's own, added up from disk — not a number taken from the build.
+    let sum = 0;
+    for (const f of record.files) sum += (await stat(join(b.dir, f))).size;
+    expect(record.bytes).toBe(sum);
+    expect(record.bytes).toBe(b.bytes);
+  });
+});
+
+test("the record carries the bases the CLI's --summary omits — the build's own, not a restatement", async () => {
+  await temp(async (tmp) => {
+    const b = await build(DELIVERED, tmp);
+    const record = JSON.parse(await Bun.file(join(tmp, RECORD_FILE)).text()) as DeliveredBuildRecord;
+    const bases = record.bases;
+    // Why this folder is a delivered site and not a demonstration.
+    expect(bases.phase.mode).toBe("business");
+    expect(bases.phase.refused.length).toBeGreaterThan(0);
+    expect(bases.delivery.mode).toBe("business");
+    expect(bases.delivery.recipient).toBe(DELIVERED.form_recipient);
+    // The family, the label it carries and the form the record supports.
+    expect(bases.conversion.family).toBe("appointment");
+    expect(bases.conversion.contact_label.length).toBeGreaterThan(0);
+    expect(bases.conversion.basis.length).toBeGreaterThan(0);
+    expect(Object.keys(bases.conversion.section_order).length).toBeGreaterThan(0);
+    // The booking link the record carries, and which mode it resolved to.
+    expect(bases.booking.mode).toBe("business");
+    expect(bases.booking.url).toBe(DELIVERED.booking_url);
+    // Which of the owner's three phone versions the pages print.
+    expect(bases.phone.mode).toBe("client");
+    // Where the details came from — and the line proved against the page this build wrote,
+    // so the record is a description of THIS bundle rather than a shape that could describe any.
+    expect(bases.provenance.source_kind).toBe("public-listings");
+    expect((await Bun.file(join(b.dir, "index.html")).text()).includes(bases.provenance.provenance_line)).toBe(true);
+    // What the privacy notice's retention half was composed from.
+    expect(bases.privacy.mode).toBe("business");
+    expect(bases.privacy.retention.source).toContain("retention-log.md");
+    // Every picture's source and licence, and what the client is told they own.
+    expect(bases.images.length).toBeGreaterThan(0);
+    for (const image of bases.images) expect(image.license.length).toBeGreaterThan(0);
+    expect(bases.handoff.day_one_ownership.length).toBeGreaterThan(0);
+  });
+});
+
+test("a demonstration writes no record beside the folder: its record is manifest.json inside it", async () => {
+  await temp(async (tmp) => {
+    const demo = await build(DEMONSTRATION, tmp);
+    expect(existsSync(join(tmp, RECORD_FILE))).toBe(false);
+    expect(demo.files.includes("manifest.json")).toBe(true);
+    expect(demo.files.length).toBe(19);
+    expect(demo.files.filter((f) => f !== "manifest.json").length).toBe(18);
+    expect(await filesIn(demo.dir)).toBe(19);
+    expect(internalRecordProblems({ mode: "demo", carried: await readBundleTexts(demo.dir) })).toEqual([]);
+  });
+});
+
+test("a demonstration clears the record an earlier delivered build left beside the folder", async () => {
+  await temp(async (tmp) => {
+    const delivered = await build(DELIVERED, tmp);
+    expect(existsSync(join(tmp, RECORD_FILE))).toBe(true);
+    const demo = await build(DEMONSTRATION, tmp);
+    expect(demo.dir).toBe(delivered.dir);
+    expect(existsSync(join(tmp, RECORD_FILE))).toBe(false);
+    expect(demo.warnings.join(" | ")).toContain(
+      `removed ${RECORD_FILE}, our record of an earlier delivered build beside this folder`,
+    );
+    expect(internalRecordProblems({ mode: "demo", carried: await readBundleTexts(demo.dir) })).toEqual([]);
+  });
+});
+
+test("a build that fails leaves no record beside a folder it did not create", async () => {
+  await temp(async (tmp) => {
+    // The demonstration twin of the delivered record, still carrying the business's own booking
+    // link: refused by name (gbp §5.3 rule 1), so no folder — and no record of one.
+    const refused: BusinessRecord = { ...DELIVERED, form_recipient: OUR_INBOX, form_delivery: "demo" };
+    await expect(build(refused, tmp)).rejects.toThrow(/booking link points at a business's own booking page/);
+    expect(existsSync(join(tmp, RECORD_FILE))).toBe(false);
+    expect(existsSync(join(tmp, "business-phase-fixture"))).toBe(false);
   });
 });

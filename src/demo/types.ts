@@ -565,3 +565,88 @@ export interface BundleResult {
   warnings: string[];
   bytes: number;
 }
+
+/**
+ * Our own record of a **delivered** build, written **beside** the bundle and never inside it.
+ *
+ * A client's folder is the site and the client's own README, nothing of ours
+ * (`internalRecordProblems`), so the record that a demonstration keeps in `manifest.json`
+ * has nowhere to live once a folder is handed over. The CLI's `--summary` is not a
+ * substitute: it carries the slug, the folder, the file list, the bytes and the warnings, and
+ * none of the **bases** — why the build is a delivered site, which family it is for, what the
+ * booking link resolved to, which of the owner's phone versions the pages print, where the
+ * printed details came from, and what the privacy notice's retention half was composed from.
+ *
+ * So it is written as `<slug>.build-record.json` in the output root, a sibling of the folder
+ * it describes. Every base below is **copied from the build's own manifest**, not restated,
+ * so the record and the build cannot disagree; `docs/handover-pack.md` §5.1 is the ask.
+ */
+export interface DeliveredBuildRecord {
+  generator: string;
+  generated_at: string;
+  slug: string;
+  /** Always `business`: a demonstration's record is `manifest.json` **inside** its folder. */
+  phase: "business";
+  /** The bundle folder this record describes, as this build wrote it. */
+  dir: string;
+  files: string[];
+  bytes: number;
+  warnings: string[];
+  bases: {
+    /** The phase decision: the furniture a delivered site must not carry, and why. */
+    phase: DemoManifest["compliance"]["phase"];
+    /** Who a form submission reaches, and how that was worked out (recipient vs published address). */
+    delivery: DemoManifest["form"]["delivery"];
+    /** The conversion family, the label it carries, the form it supports and the page order. */
+    conversion: {
+      family: DemoManifest["conversion"]["family"];
+      source: DemoManifest["conversion"]["source"];
+      basis: string;
+      category_profile: string;
+      matched_category_word: string | null;
+      contact_label: string;
+      contact_label_source: DemoManifest["conversion"]["contact_label_source"];
+      contact_label_basis: string;
+      form: DemoManifest["conversion"]["form"];
+      narrative: DemoManifest["conversion"]["narrative"];
+      section_order: Record<string, string[]>;
+    };
+    /** The booking link: which mode it resolved to, where it points, and on what basis. */
+    booking: DemoManifest["booking"];
+    /** Which phone version the pages print, and why. */
+    phone: DemoManifest["phone"];
+    /** Where the page says its details came from, and the line it prints for it. */
+    provenance: DemoManifest["business"];
+    /** The privacy notice and what its retention section was composed from. */
+    privacy: DemoManifest["privacy"];
+    /** The form account the client owns, and what the client's README says about it. */
+    form: {
+      provider: string;
+      fields: string[];
+      submit_label: string;
+      stores_submissions: string;
+      free_tier: string;
+      if_it_lapses: string;
+      fallback_shown: string;
+    };
+    /** What the pages tell search engines, what they fetch, and the per-page obligations. */
+    compliance: {
+      robots_meta: string;
+      contact_details_caveat: string | null;
+      external_requests_on_load: string[];
+      per_page: DemoManifest["compliance"]["per_page"];
+    };
+    /** Every picture in the folder, its source and its licence. */
+    images: {
+      role: string;
+      file: string | null;
+      source: string;
+      source_url: string;
+      license: string;
+      author: string;
+      retrieved_at: string;
+    }[];
+    /** What the client is told they own on day one, and what recurs. */
+    handoff: DemoManifest["handoff"];
+  };
+}
