@@ -28,7 +28,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { resolveBuildParts, serviceCardImageProblems } from "../src/demo/build.ts";
-import { composePrivacy, illustrationLabel, profileFor } from "../src/demo/copy.ts";
+import { composePrivacy, profileFor, serviceCardIllustrationLabel } from "../src/demo/copy.ts";
 import { esc, renderPages, type RenderContext, type RenderedPage } from "../src/demo/render.ts";
 import { SERVICE_CARD_ACTION_VAR, serviceCardActionDecision } from "../src/demo/service-card-action.ts";
 import { inspectSuppliedImage } from "../src/demo/supplied.ts";
@@ -115,7 +115,7 @@ test("all five service cards carry their own labelled illustration, and the gate
   const cards = images.filter((image) => image.role === "service");
   expect(cards).toHaveLength(5);
 
-  const label = esc(illustrationLabel(RECORD.name));
+  const label = esc(serviceCardIllustrationLabel());
   for (const file of ["index.html", "services.html"]) {
     const blocks = cardsOf(pageOf(pages, file));
     expect(blocks).toHaveLength(5);
@@ -190,7 +190,7 @@ test("a card picture that names no service is refused — nothing guesses the ca
   const problems = check(record, mutated, pages);
   expect(problems).toHaveLength(1);
   expect(problems[0]).toContain("names no service");
-  expect(problems[0]).toContain("images/hedge-trimming-600.jpg");
+  expect(problems[0]).toContain("images/hedge-trimming-900.jpg");
 });
 
 /* ------------------------------------------------- 4. the card prints the AI label */
@@ -198,7 +198,7 @@ test("a card picture that names no service is refused — nothing guesses the ca
 test("a card that shows its picture with no label is refused, naming the service", async () => {
   const images = await manifestImages(RECORD);
   const pages = render(RECORD, images);
-  const label = esc(illustrationLabel(RECORD.name));
+  const label = esc(serviceCardIllustrationLabel());
   expect(pageOf(pages, "services.html").split(label)).toHaveLength(6); // five cards, one label each
 
   // The first card on the page loses its label; the picture stays.
