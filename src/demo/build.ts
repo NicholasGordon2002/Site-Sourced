@@ -3381,8 +3381,9 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
    */
   const ghost: GhostControlsDecision = ghostControlsDecision({ slug, phase: delivery.mode });
   /**
-   * The **graphics layer** (`graphics.ts`, S3), wired on the one demonstration the owner is
-   * reviewing — the plan's own next step after the button work. Unlike the ghost controls it
+   * The **graphics layer** (`graphics.ts`, S3), wired on the two demonstrations the owner is
+   * reviewing — Maple Avenue and Northshore Garden Works, widened on 24 Nov 2026 — the plan's own
+   * next step after the button work. Unlike the ghost controls it
    * is not a stylesheet treatment: it writes marks into the pages as well, so a build without
    * the opt-in writes the pages and the stylesheet master builds, byte for byte.
    */

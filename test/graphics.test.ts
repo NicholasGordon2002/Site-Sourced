@@ -355,9 +355,13 @@ test("the layers' own exports do not collide with the template's class names", (
 
 /* ------------------------------------------- the wiring (`DEMO_GRAPHICS`, S3 wired) */
 
-/** The decision a build of the one demonstration this layer is scoped to makes. */
+/** The two demonstrations this layer is scoped to — one of each family. */
+const MAPLE = "maple-avenue-barber-shop";
+const NORTHSHORE = "northshore-garden-works";
+
+/** The decision a build of a demonstration this layer is scoped to makes. */
 function decision(env: Record<string, string | undefined>, phase: "demo" | "business" = "demo"): GraphicsDecision {
-  return graphicsDecision({ slug: GRAPHICS_SLUG, phase, env });
+  return graphicsDecision({ slug: MAPLE, phase, env });
 }
 const ON = decision({ [GRAPHICS_VAR]: "layer" });
 const OFF = decision({});
@@ -388,7 +392,7 @@ function bundle(html: string) {
   return [{ id: "index" as const, file: "index.html", html }];
 }
 
-test("the switch is value-addressed, scoped to one demonstration, and refused in the delivered phase", () => {
+test("the switch is value-addressed, scoped to the two review demonstrations, and refused in the delivered phase", () => {
   expect(OFF.enabled).toBe(false);
   expect(OFF.unrecognised).toBe(null);
   expect(ON.enabled).toBe(true);
@@ -408,6 +412,28 @@ test("the switch is value-addressed, scoped to one demonstration, and refused in
   const client = decision({ [GRAPHICS_VAR]: "layer" }, "business");
   expect(client.enabled).toBe(false);
   expect(client.basis).toContain("delivered phase");
+});
+
+test("the scope is the two review demonstrations, one of each family, and nothing else", () => {
+  // The scope is a set, and it is exactly these two: widening it is a decision, not a typo.
+  expect([...GRAPHICS_SLUG].sort()).toEqual([MAPLE, NORTHSHORE].sort());
+  // Both demonstrations paint the layer — the appointment copy and the inquiry copy.
+  for (const slug of [MAPLE, NORTHSHORE]) {
+    const on = graphicsDecision({ slug, phase: "demo", env: { [GRAPHICS_VAR]: "layer" } });
+    expect(on.enabled).toBe(true);
+    expect(on.scope).toBe("layer");
+    expect(on.basis).toContain(MAPLE);
+    expect(on.basis).toContain(NORTHSHORE);
+    // ...and the delivered phase refuses it on both, for the same reason as before.
+    const client = graphicsDecision({ slug, phase: "business", env: { [GRAPHICS_VAR]: "layer" } });
+    expect(client.enabled).toBe(false);
+    expect(client.basis).toContain("delivered phase");
+  }
+  // A record outside the scope is refused, and the refusal names the record it refused.
+  const outside = graphicsDecision({ slug: "red-hill-property-care", phase: "demo", env: { [GRAPHICS_VAR]: "layer" } });
+  expect(outside.enabled).toBe(false);
+  expect(outside.basis).toContain('"red-hill-property-care"');
+  expect(outside.basis).toContain(NORTHSHORE);
 });
 
 test("with the layer on, every page carries a marked mark and the stylesheet carries the layer", () => {

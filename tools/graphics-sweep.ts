@@ -102,7 +102,10 @@ const ROWS: Row[] = [
   // ---- the wiring's own clauses (graphics-wiring.ts) and the three guards the layer's
   //      inline marks pushed back to reading text
   { id: "gw-requested", clause: "wiring", condition: "graphicsRequested: a truthy value", file: WIRING, from: `  return raw !== "" && raw !== "0" && raw !== "false" && raw !== "off";`, to: `  return false;` },
-  { id: "gw-slug-scoped", clause: "wiring", condition: "if (vars.slug !== GRAPHICS_SLUG) — one demonstration only", file: WIRING, from: `  if (vars.slug !== GRAPHICS_SLUG) {`, to: `  if (false && vars.slug !== GRAPHICS_SLUG) {` },
+  { id: "gw-slug-scoped", clause: "wiring", condition: "if (!GRAPHICS_SLUG.has(vars.slug)) — the two review demonstrations only", file: WIRING, from: `  if (!GRAPHICS_SLUG.has(vars.slug)) {`, to: `  if (false && !GRAPHICS_SLUG.has(vars.slug)) {` },
+  // The scope is a set of two, and dropping one of them must be caught: the layer is wired
+  // into the Northshore inquiry demo as well as Maple Avenue (owner direction, 24 Nov 2026).
+  { id: "gw-scope-northshore", clause: "wiring", condition: `"northshore-garden-works" in GRAPHICS_SLUG — the second demonstration in the scope`, file: WIRING, from: `  "northshore-garden-works",\n`, to: `` },
   { id: "gw-business-refused", clause: "wiring", condition: "if (vars.phase === \"business\") — the delivered phase", file: WIRING, from: `  if (vars.phase === "business") {`, to: `  if (false && vars.phase === "business") {` },
   { id: "gw-unrecognised", clause: "wiring", condition: "if (decision.unrecognised !== null)", file: WIRING, from: `  if (decision.unrecognised !== null) {`, to: `  if (false && decision.unrecognised !== null) {` },
   { id: "gw-off-page-smuggled", clause: "wiring", condition: "for (const page of marked) — a mark while the switch is off", file: WIRING, from: `    for (const page of marked) {`, to: `    for (const page of []) {` },
