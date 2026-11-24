@@ -1342,14 +1342,18 @@ export function renderCss(
 
 /* ------------------------------------------------------------------ fonts */
 
-@font-face {
+/* The display face is the theme's when the theme is in force (theme-northshore.ts): that
+   pass brings its own open-licence display face, and a bundle ships the fonts it uses — so
+   the shared face is neither declared in that stylesheet nor copied into that bundle
+   (build.ts). Every other build writes this block exactly as it always has. */
+${options.theme ? "" : `@font-face {
   font-family: "Fraunces";
   src: url("fonts/fraunces-latin-600.woff2") format("woff2");
   font-weight: 600;
   font-style: normal;
   font-display: swap;
 }
-
+`}
 @font-face {
   font-family: "Source Sans 3";
   src: url("fonts/source-sans-3-latin.woff2") format("woff2");

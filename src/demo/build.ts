@@ -111,6 +111,8 @@ import {
   NORTHSHORE_THEME_MARKER,
   NORTHSHORE_THEME_NAME,
   NORTHSHORE_THEME_SLUG,
+  NORTHSHORE_THEME_FONT_FILES,
+  NORTHSHORE_THEME_REPLACED_FONT_FILES,
   northshoreThemeDecision,
   northshoreThemeProblems,
   type NorthshoreThemeDecision,
@@ -3559,8 +3561,16 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   await write("README.txt", readme);
 
   // The page's fonts, and the licence that must travel with them. A missing asset is a
-  // build failure, not a warning: the stylesheet would be pointing at nothing.
-  for (const name of FONT_ASSETS) {
+  // build failure, not a warning: the stylesheet would be pointing at nothing. The Northshore
+  // theme brings its own display face and its own licence, and the face it replaces is not
+  // copied: a bundle ships the fonts its stylesheet asks for, and no others.
+  const fontAssets: readonly string[] = theme.enabled
+    ? [
+        ...FONT_ASSETS.filter((name) => !(NORTHSHORE_THEME_REPLACED_FONT_FILES as readonly string[]).includes(name)),
+        ...NORTHSHORE_THEME_FONT_FILES,
+      ]
+    : FONT_ASSETS;
+  for (const name of fontAssets) {
     try {
       await mkdir(join(dir, "fonts"), { recursive: true });
       await copyFile(join(FONT_SOURCE_DIR, name), join(dir, "fonts", name));

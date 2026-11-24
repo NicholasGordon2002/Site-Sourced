@@ -64,6 +64,20 @@ export const NORTHSHORE_THEME_MARKER = "--theme";
 /** The theme's own name, as the marker's value and the manifest's `treatment`. */
 export const NORTHSHORE_THEME_NAME = "northshore-field-guide";
 
+/**
+ * The font files this pass brings into the bundle, and the shared face it replaces.
+ *
+ * Both files are copied into `fonts/` by `buildBundle` when — and only when — the theme is in
+ * force, and the shared display face is left out of that bundle entirely: a bundle ships the
+ * fonts it uses. The `.woff2` is a latin subset of **Source Serif 4** at weight 600, self-hosted
+ * and loaded by a relative `url()` from `styles.css`, so the page fetches nothing from anyone
+ * else's server; the `.txt` is its SIL Open Font License text, which has to travel with it.
+ */
+export const NORTHSHORE_THEME_FONT_FILES = ["source-serif-4-latin-600.woff2", "OFL-source-serif-4.txt"] as const;
+
+/** The shared display face the theme's own face stands in for, and the bundle does not carry. */
+export const NORTHSHORE_THEME_REPLACED_FONT_FILES = ["fraunces-latin-600.woff2"] as const;
+
 /** What this build decided about the theme. */
 export interface NorthshoreThemeDecision {
   enabled: boolean;
@@ -106,13 +120,27 @@ export function northshoreThemeDecision(vars: { slug: string; phase: FormDeliver
  */
 export function northshoreCss(): string {
   return `
-/* ==================== the Northshore theme — the owner's experimental design pass (24 Nov 2026)
-   A field guide, not a barbershop: bone paper, evergreen ink, squared corners, hairline rules,
-   ruled lists, small-caps controls, and a dark evergreen band for every inner page's title.
+/* ==================== the Northshore theme — the owner's second experimental pass (24 Nov 2026)
+   A field guide, not a barbershop: bone paper, evergreen ink, hairline rules, ruled lists,
+   restrained corners, and a dark evergreen band for every inner page's title. The type is one
+   open-licence superfamily in two roles — Source Serif 4 for display, Source Sans 3 for text —
+   both files inside the bundle.
    Written for one demonstration (${NORTHSHORE_THEME_SLUG}) and appended to that bundle's
    stylesheet alone. It paints no mark of its own, adds no request, and touches no page.
    Source: src/demo/theme-northshore.ts — the measured pairs are in PAIRS there. */
 .ns-theme { ${NORTHSHORE_THEME_MARKER}: ${NORTHSHORE_THEME_NAME}; }
+
+/* The display face this pass brings with it: a self-hosted latin subset of Source Serif 4 at
+   one weight (SIL Open Font License 1.1, fonts/OFL-source-serif-4.txt travels with it). The
+   shared Fraunces face is not written into this bundle's stylesheet and its file is not copied
+   into it (render.ts, build.ts): a bundle ships the fonts it uses. */
+@font-face {
+  font-family: "Source Serif 4";
+  src: url("fonts/source-serif-4-latin-600.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
 
 :root {
   /* Colour. The ink is a deep evergreen rather than a blue-black, the accent is the green of
@@ -128,28 +156,37 @@ export function northshoreCss(): string {
   --line: #D9D2C0;
   --footer-ink: #C9D2C6;
 
-  /* Type. The same two self-hosted faces, set differently: a larger, tighter display line,
-     a slightly wider label, and a section heading that sits closer to its own hairline. */
-  --fs-display: clamp(2.7rem, 13vw, 4.2rem);
-  --fs-page: clamp(2.2rem, 9vw, 3.2rem);
-  --fs-h2: clamp(1.55rem, 5.5vw, 2.15rem);
-  --fs-h3: 1.3rem;
+  /* Type. One superfamily in two roles: Source Serif 4 (600) carries the display line, the
+     section headings, the wordmark and the figures; Source Sans 3 carries every word a visitor
+     reads in a sentence. The scale is a little smaller and a lot calmer than the first pass —
+     a serif with a 1.03 line-height at 3.6rem needs no tighter tracking to hold together. */
+  --font-display: "Source Serif 4", "Source Serif Pro", Georgia, "Times New Roman", serif;
+  --fs-display: clamp(2.35rem, 11vw, 3.6rem);
+  --fs-page: clamp(1.95rem, 8vw, 2.75rem);
+  --fs-h2: clamp(1.4rem, 5vw, 1.95rem);
+  --fs-h3: 1.25rem;
   --fs-lead: clamp(1.0625rem, 2.4vw, 1.1875rem);
-  --fs-label: 0.7rem;
+  --fs-label: 0.6875rem;
 
   /* Space: one step more generous than the shared rhythm at every section boundary. */
-  --section-y: clamp(3.5rem, 9vw, 6rem);
+  --section-y: clamp(3.25rem, 8.5vw, 5.5rem);
 
-  /* Shape: everything squares off. A garden plan is drawn with a rule, not a pill. */
-  --r-sm: 3px;
-  --r-md: 3px;
-  --r-lg: 3px;
+  /* Shape: a restrained radius, two steps — 6px on anything a thumb presses (buttons, fields,
+     chips, the numbered steps) and 10px on anything that is a surface (the menu panel, a
+     notice, the framed form). Never a pill, never a hard square. */
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-lg: 10px;
 }
 
 body { background: var(--paper); color: var(--body-text); }
-h1 { line-height: 0.98; letter-spacing: -0.03em; }
-h2 { letter-spacing: -0.02em; }
-p { line-height: 1.65; }
+h1 { line-height: 1.03; letter-spacing: -0.012em; }
+h2 { line-height: 1.14; letter-spacing: -0.008em; }
+h3 { letter-spacing: 0; }
+p { line-height: 1.62; }
+/* Figures that line up in a column — the hours table is the one place a visitor compares
+   numbers row against row, and proportional digits make that harder than it needs to be. */
+.hours-row, .hours dt, .hours dd, .step-num { font-variant-numeric: tabular-nums; }
 
 /* The proposal banner is honest furniture and stays first, in flow and visible without
    scrolling — but it is a notice, not a headline: a bone strip with the page's own hairline
@@ -165,32 +202,62 @@ p { line-height: 1.65; }
 /* A paper header ruled off with the ink itself, on every page but the home page — where the
    header is on the photograph and the shared overlay block owns it (untouched here). */
 .site-header { border-bottom: 1px solid var(--ink); }
-.wordmark { font-size: 1.2rem; letter-spacing: -0.015em; }
+.wordmark { font-size: 1.1875rem; letter-spacing: -0.005em; }
 
+/* ---------------------------------------------- the menu: one control, not two */
+/* The owner's first fix of this pass: the open menu must feel like the same control as the
+   button that opened it. Four things make a panel read as a second, separate control — its
+   own shape, its own shadow, a different fill from its trigger, and a gap of page between
+   them. All four go:
+     - the trigger and the panel are the same paper with the same 1px ink outline;
+     - the panel loses its shadow, so nothing floats;
+     - the trigger's open state is drawn on the trigger itself — the three bars become an X;
+     - where the browser supports anchor positioning, the panel hangs from the trigger's own
+       bottom-left corner, its top-left corner squared off into the tab above it, so the two
+       boxes share one outline. Every other browser keeps the panel under the header (the
+       shared sheet's own position), now in the same paper and ink.
+   Nothing here changes what the control does: a native <details>, keyboard-operable, no script. */
 .site-menu-summary {
   border: 1px solid var(--ink);
   border-radius: var(--r-md);
   background: var(--paper);
+  color: var(--ink);
 }
-.site-menu[open] .site-menu-summary { background: var(--accent-soft); border-color: var(--ink); }
+.site-menu[open] .site-menu-summary { background: var(--paper); border-color: var(--ink); }
+/* The same element in its open state: two bars crossed. The closed state's three bars are one
+   element and two shadows; the open state is the same element, undrawn, plus two rotated bars. */
+.site-menu-icon { position: relative; }
+.site-menu[open] .site-menu-icon { background: none; box-shadow: none; }
+.site-menu[open] .site-menu-icon::before,
+.site-menu[open] .site-menu-icon::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: currentColor;
+}
+.site-menu[open] .site-menu-icon::before { transform: rotate(45deg); }
+.site-menu[open] .site-menu-icon::after { transform: rotate(-45deg); }
 
 /* The phone's panel: a ruled card of small-caps links rather than a stack of grey chips. */
 .site-nav {
+  width: min(46vw, 13rem);
+  margin-top: 0;
+  padding: var(--s-1) 0;
   background: var(--paper);
   border: 1px solid var(--ink);
-  border-radius: var(--r-md);
-  padding: var(--s-1) var(--s-3);
+  border-radius: var(--r-lg);
+  box-shadow: none;
 }
 .site-nav ul { gap: 0; }
 .site-nav a {
   min-height: 2.75rem;
-  padding: 0;
+  padding: 0 var(--s-3);
   border-radius: 0;
   border-bottom: 1px solid var(--line);
   background: none;
-  font-size: 0.8125rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--ink);
 }
@@ -198,18 +265,49 @@ p { line-height: 1.65; }
 .site-nav a:hover { background: none; color: var(--accent-ink); }
 .site-nav a[aria-current="page"] { background: none; color: var(--accent-ink); }
 
+/* The joined state. The anchor-name property puts the trigger's own box on the map; the panel is then
+   placed against it rather than against the header, so it hangs from the trigger on every
+   page whatever the header's height — the home header is two rows and an inner page's is one.
+   The trigger's bottom edge opens into the panel (no bottom border, no bottom radius) and the
+   panel's top rule starts where the trigger's right border ends, so the two boxes read as one
+   outline with the trigger as its tab. */
+@supports (position-anchor: --ns-pages) {
+  .site-menu-summary { anchor-name: --ns-pages; }
+  .site-nav {
+    position-anchor: --ns-pages;
+    top: anchor(bottom);
+    left: anchor(left);
+    margin-top: 0;
+    border-top: 0;
+    border-radius: 0 var(--r-lg) var(--r-lg) var(--r-lg);
+  }
+  .site-nav::before {
+    content: "";
+    position: absolute;
+    top: -1px;
+    left: 2.75rem;
+    right: 0;
+    height: 1px;
+    background: var(--ink);
+  }
+  .site-menu[open] .site-menu-summary {
+    border-bottom: 0;
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
+  }
+}
+
 /* --------------------------------------------------------------- buttons */
 /* Shape only. The fill, the ink, the white ghost over the photograph and every state belong
    to the treatment in the shared sheet, and the theme leaves all of it alone. */
 .button, .call-button {
   border-radius: var(--r-md);
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   font-weight: 700;
-  letter-spacing: 0.09em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  padding-inline: 1.2rem;
+  padding-inline: 1.05rem;
 }
-.button--small { font-size: 0.75rem; padding-inline: 1rem; }
+.button--small { font-size: 0.6875rem; padding-inline: 0.9rem; }
 
 /* ------------------------------------------------------------------- hero */
 /* The photograph keeps the first screen; the copy over it is the theme's. The two actions
@@ -217,13 +315,13 @@ p { line-height: 1.65; }
    ranked by weight rather than by fill: the message form — the one route that works on a
    demonstration — carries the heavier outline and the larger box, the phone number the
    lighter one. Nothing is reordered, so the tab order still matches the eye's order. */
-.hero h1 { font-size: var(--fs-display); max-width: 14ch; }
+.hero h1 { font-size: var(--fs-display); max-width: 15ch; }
 .hero-lead { max-width: 27rem; }
 .hero-inner { padding-bottom: var(--s-7); }
 .hero-actions { flex-direction: column; align-items: stretch; gap: var(--s-2); }
 .hero-actions .button { width: 100%; }
-.hero-actions .button--paper { min-height: 2.75rem; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.07em; }
-.hero-actions .button--ghost { min-height: 3rem; border-width: 2px; font-size: 0.875rem; letter-spacing: 0.1em; }
+.hero-actions .button--paper { min-height: 2.75rem; font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.08em; }
+.hero-actions .button--ghost { min-height: 3rem; border-width: 2px; font-size: 0.8125rem; letter-spacing: 0.1em; }
 .hero-caption { font-size: 0.8125rem; max-width: 40em; }
 
 /* --------------------------------------------------------------- page head */
@@ -272,16 +370,25 @@ p { line-height: 1.65; }
   border-radius: 0;
   box-shadow: none;
 }
-.services .service-tile--cta .service-tile-body { padding: var(--s-5) 0 var(--s-4); }
-.services h3 { font-size: 1.35rem; letter-spacing: -0.015em; }
+.services .service-tile--cta .service-tile-body { padding: var(--s-5) 0 var(--s-3); }
+.services h3 { font-size: 1.3rem; letter-spacing: -0.005em; }
 .services p { font-size: 0.9375rem; }
+/* The card's action, sized to sit with its card rather than on top of it (the owner's second
+   fix of this pass). The first pass set it in 0.75rem caps at 700 with wide tracking, which
+   made a 44px ink-outlined slab the heaviest thing in a row whose heading is one line of
+   serif — the button read as the card's headline. It keeps the 44px target, the outlined
+   treatment and its own ink; what it loses is the weight and the letter-spacing that made it
+   shout, and the padding that made it wide. It hugs its label and sits at the card's own
+   left edge, one step below the note it belongs to. */
 .services .service-tile--cta .service-cta {
   align-self: flex-start;
-  margin: 0 0 var(--s-5);
-  padding: 0 1.1rem;
+  min-height: 2.75rem;
+  max-width: 100%;
+  margin: 0 0 var(--s-4);
+  padding: 0 0.8rem;
   border-radius: var(--r-md);
-  font-size: 0.75rem;
-  font-weight: 700;
+  font-size: 0.6875rem;
+  font-weight: 600;
   letter-spacing: 0.09em;
   text-transform: uppercase;
 }
@@ -321,16 +428,17 @@ p { line-height: 1.65; }
 
 /* ------------------------------------------------------------ contact + form */
 /* The form is the contact page's work, so it is framed by the same ink rule and its fields
-   are squared and filled with the page's own paper. */
+   are filled with the page's own paper. The notice is a surface, so it takes the surface
+   radius; the fields are things a thumb presses, so they take the control radius. */
 .notice, .form-notice {
   background: var(--paper-2);
   border: 1px solid var(--line);
   border-left: 3px solid var(--accent);
-  border-radius: 0;
+  border-radius: var(--r-lg);
 }
 .contact-form { border-top: 2px solid var(--ink); padding-top: var(--s-5); }
-.field input, .field textarea, .field select { border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--paper); }
-.chip-text { border-radius: var(--r-sm); }
+.field input, .field textarea, .field select { border: 1px solid var(--line); border-radius: var(--r-md); background: var(--paper); }
+.chip-text { border-radius: var(--r-md); }
 .chip input:checked + .chip-text { border-color: var(--ink); }
 .field-group-legend, .extras-item dt { letter-spacing: 0.14em; }
 .contact-fallback { border-top: 1px solid var(--line); }
@@ -361,7 +469,19 @@ p { line-height: 1.65; }
   .services .service-tile--cta { flex-direction: row; align-items: center; justify-content: space-between; gap: var(--s-6); }
   .services .service-tile--cta .service-tile-body { padding: var(--s-5) 0; }
   .services .service-tile--cta .service-cta { flex: none; margin: 0; }
-  .site-nav { border: 0; padding: 0; }
+  /* The panel's geometry is undone up here, and so is its paper: the wide row sits on the
+     header's own surface (the photograph on the home page), where the links are white. The
+     first pass left the paper fill in place and drew white links on it — nothing at all. */
+  .site-nav {
+    background: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    width: auto;
+    min-width: 0;
+    padding: 0;
+  }
+  .site-nav::before { display: none; }
   .site-nav a { border-bottom: 2px solid transparent; font-size: 0.75rem; letter-spacing: 0.1em; }
   .site-nav li:last-child a { border-bottom: 2px solid transparent; }
   .site-nav a:hover { border-bottom-color: var(--line); }
