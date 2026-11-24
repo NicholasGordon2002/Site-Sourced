@@ -44,7 +44,7 @@ import type { CategoryProfile } from "./copy.ts";
 import { addressLine } from "./addresses.ts";
 import { familyFields, normaliseHours, normaliseServices, slugify } from "./copy.ts";
 import { BOOKING_ANCHOR_CLASS, BOOKING_ARROW, type BookingMode } from "./booking.ts";
-import { illustrationLabel, isIllustrativeImage } from "./copy.ts";
+import { clientPhotoCredit, illustrationLabel, isClientSuppliedImage, isIllustrativeImage } from "./copy.ts";
 import type { FormDelivery } from "./delivery.ts";
 import type { FieldGroup, FieldSpec } from "./fields.ts";
 import { SECTION_ORDER, extrasLines, type SectionId, type ServiceCardShape } from "./family-render.ts";
@@ -398,7 +398,7 @@ function aboutImage(images: ManifestImage[]): ManifestImage | undefined {
 }
 
 /**
- * The visible caption for an AI-generated placeholder image, or "" when the image in
+ * The visible caption an AI-generated placeholder image carries, or "" when the image in
  * that slot is not illustrative.
  *
  * The caption is a plain `<figcaption>` in normal flow: no hover, no no-JS fallback
@@ -407,8 +407,27 @@ function aboutImage(images: ManifestImage[]): ManifestImage | undefined {
  * while that page carries no such label.
  */
 function illustrationCaption(images: ManifestImage[], role: "hero" | "about", businessName: string): string {
-  const image = images.find((i) => i.role === role && isIllustrativeImage(i));
-  return image ? illustrationLabel(businessName) : "";
+  const image = images.find((i) => i.role === role && i.file);
+  return image && isIllustrativeImage(image) ? illustrationLabel(businessName) : "";
+}
+
+/**
+ * The visible credit line a photograph the client supplied carries, or "" when the image
+ * in that slot is not one.
+ *
+ * The second kind of caption, and a different sentence for a different reason: an
+ * AI-generated placeholder is labelled as an illustration, while the client's own
+ * photograph is credited to the author the record names (`clientPhotoCredit` in copy.ts) —
+ * it is the business's own picture, not a stock one, and it is not free of copyright.
+ * `clientPhotoProblems` (build.ts) refuses a page that shows the picture with no credit,
+ * and a page that prints the credit with no picture.
+ *
+ * A CC0/public-domain photograph carries no caption at all: it is generic artwork, it
+ * claims nothing about this business, and CC0 asks for no attribution.
+ */
+function clientPhotoCaption(images: ManifestImage[], role: "hero" | "about", businessName: string): string {
+  const image = images.find((i) => i.role === role && i.file);
+  return image && isClientSuppliedImage(image) ? clientPhotoCredit(businessName, image.author) : "";
 }
 
 /* ----------------------------------------------------------------- page shell */
@@ -714,7 +733,9 @@ function heroSection(ctx: RenderContext): string {
   const { record, copy, images } = ctx;
   const hero = heroImage(images);
   const heroSrc = hero ? heroSrcset(hero) : "";
-  const caption = illustrationCaption(images, "hero", record.name);
+  const illustration = illustrationCaption(images, "hero", record.name);
+  const photo = clientPhotoCaption(images, "hero", record.name);
+  const caption = illustration || photo;
   const tel = record.phone ? telHref(record.phone) : "";
   // A record with no hero photograph gets the layer's own fallback ground: the hero is
   // already an ink surface carrying white type (`.hero` in the stylesheet), so the arcs and
@@ -738,22 +759,27 @@ ${record.phone ? `            <a class="button button--paper" href="${tel}">${es
           </p>
         </div>
       </div>
-${caption ? `      <!-- Compliance: an AI-generated placeholder is labelled as an illustration, not a
+${illustration ? `      <!-- Compliance: an AI-generated placeholder is labelled as an illustration, not a
            photograph of the business. Do not remove. -->
-      <figcaption class="wrap muted hero-caption">${esc(caption)}</figcaption>\n` : ""}    </figure>`;
+` : ""}${photo ? `      <!-- Compliance: the client's own photograph is credited to the author the record
+           names. Do not remove. -->
+` : ""}${caption ? `      <figcaption class="wrap muted hero-caption">${esc(caption)}</figcaption>\n` : ""}    </figure>`;
 }
 
 function aboutSection(ctx: RenderContext, paragraphs: string[], heading: boolean): string {
   const { record, copy, images } = ctx;
   const image = aboutImage(images);
-  const caption = illustrationCaption(images, "about", record.name);
+  const illustration = illustrationCaption(images, "about", record.name);
+  const photo = clientPhotoCaption(images, "about", record.name);
+  const caption = illustration || photo;
   return `    <section class="section" id="about">
       <div class="wrap">
 ${heading ? `        <h2>About ${esc(record.name)}</h2>\n` : ""}${paragraphs.map((p) => `        <p>${esc(p)}</p>`).join("\n")}
 ${paragraphs.length < copy.about.length ? `        <p><a class="link-quiet link-quiet--inline" href="${PAGE_SPECS.about.file}">More about ${esc(record.name)}</a>${ctx.graphics ? ` ${icon("arrow-right", { size: 20 })}` : ""}</p>\n` : ""}${image ? `        <figure class="about-figure">
           <img class="about-photo" src="${esc(image.file!)}"${sizeAttrs(image)} alt="" loading="lazy" decoding="async">
-${caption ? `          <!-- Compliance: an AI-generated placeholder is labelled as an illustration. Do not remove. -->
-          <figcaption class="muted">${esc(caption)}</figcaption>\n` : ""}        </figure>\n` : ""}      </div>
+${illustration ? `          <!-- Compliance: an AI-generated placeholder is labelled as an illustration. Do not remove. -->
+` : ""}${photo ? `          <!-- Compliance: the client's own photograph is credited to the author the record names. Do not remove. -->
+` : ""}${caption ? `          <figcaption class="muted">${esc(caption)}</figcaption>\n` : ""}        </figure>\n` : ""}      </div>
     </section>`;
 }
 
@@ -2436,6 +2462,10 @@ export function renderEditingReadme(ctx: RenderContext, pages: RenderedPage[]): 
   // What the page says about its own imagery has to match the licences actually
   // recorded for it: an AI-generated placeholder is never a stock photograph.
   const aiHero = images.some((i) => /^AI-generated/i.test(i.license ?? ""));
+  // ...and a photograph the client supplied is neither of the other two: it is their own
+  // picture, published with their permission, and the note must not call it free-to-use.
+  // Only a delivered build can carry one (`clientPhotoProblems` refuses it elsewhere).
+  const clientHero = images.some((i) => i.role === "hero" && isClientSuppliedImage(i));
   // What the page says about its own imagery has to match the licences actually
   // recorded for it: an AI-generated placeholder is never a stock photograph.
   //
@@ -2446,7 +2476,12 @@ export function renderEditingReadme(ctx: RenderContext, pages: RenderedPage[]): 
   // tells the client to do a thing that has already happened, and is false about the
   // page they are holding. What survives in both phases is the part that is true of
   // both — the picture is not a photograph of the business, and the page labels it.
-  const imageNote = aiHero
+  const imageNote = clientHero
+    ? `The hero photograph on this page was supplied by you and is your own: it is published with
+the credit line under the picture, and no free-to-use licence applies to it. If you replace the
+file, keep the same file name — or update the name in styles.css and index.html — and the layout
+follows automatically.`
+    : aiHero
     ? businessPhase
       ? `The hero picture on this page is an AI-generated illustration (a labelled fallback used
 because no suitable free-to-use photograph existed). It is not a photograph of your

@@ -291,15 +291,25 @@ const EXT_BY_MIME: Record<string, string> = {
   "image/webp": ".webp",
 };
 
-function checkOverrideLicence(image: ImageOverride): boolean {
+/**
+ * Which kind of licence the record declares for a supplied image: free-to-use (CC0/public
+ * domain), a labelled AI placeholder, or the client's own photograph.
+ *
+ * Three kinds and no others. The record's own wording is what the manifest keeps and what
+ * the page's caption is derived from, so the page, the audit trail and the credit cannot
+ * describe one picture three ways. A licence we cannot place is a refusal: a photograph
+ * whose terms nobody can state is not one we may publish.
+ */
+type SuppliedLicenceKind = "free-to-use" | "ai-generated" | "client-supplied";
+
+function checkOverrideLicence(image: ImageOverride): SuppliedLicenceKind {
   const low = image.license.toLowerCase();
-  const ok = /^cc0|cc-zero|public domain|\bpd\b|pd-|pdm/.test(low) || low.startsWith("ai-generated");
-  if (!ok) {
-    throw new Error(
-      `image ${image.file} declares licence "${image.license}" — only CC0, public domain, or a labelled AI-generated fallback may be used.`,
-    );
-  }
-  return low.startsWith("ai-generated");
+  if (low.startsWith("ai-generated")) return "ai-generated";
+  if (low.startsWith("client-supplied")) return "client-supplied";
+  if (/^cc0|cc-zero|public domain|\bpd\b|pd-|pdm/.test(low)) return "free-to-use";
+  throw new Error(
+    `image ${image.file} declares licence "${image.license}" — only CC0, public domain, a labelled AI-generated fallback, or a client-supplied photograph may be used.`,
+  );
 }
 
 function fallbackHero(retrievedAt: string, reason: string): ManifestImage {
@@ -327,7 +337,7 @@ function fallbackHero(retrievedAt: string, reason: string): ManifestImage {
  * number nobody checked.
  */
 function suppliedImage(img: ImageOverride, retrievedAt: string): ManifestImage {
-  const isAi = checkOverrideLicence(img);
+  const kind = checkOverrideLicence(img);
   const variants = (img.variants ?? []).filter((v) => v.file);
   const file = (variants.length > 0 ? [...variants].sort((a, b) => b.width - a.width)[0]!.file : img.file) ?? null;
   if (!file) {
@@ -339,15 +349,22 @@ function suppliedImage(img: ImageOverride, retrievedAt: string): ManifestImage {
   return {
     role: img.role,
     file,
-    source: isAi ? "supplied: AI-generated fallback" : "supplied: CC0/public domain",
+    source:
+      kind === "ai-generated"
+        ? "supplied: AI-generated fallback"
+        : kind === "client-supplied"
+          ? "supplied: the client's own photograph"
+          : "supplied: CC0/public domain",
     source_url: img.source_url,
     license: img.license,
     author: img.author,
     retrieved_at: retrievedAt,
     variants: variants.length > 0 ? variants : undefined,
-    notes: (isAi
+    notes: (kind === "ai-generated"
       ? "AI-generated image used as a fallback, labelled on the page as an illustration and not a photograph of this business."
-      : "Supplied from our own CC0/public-domain library.") + sizes,
+      : kind === "client-supplied"
+        ? "The client's own photograph, published with their permission and credited on the page to the author recorded here. It is not a stock photograph and carries no free-to-use licence."
+        : "Supplied from our own CC0/public-domain library.") + sizes,
   };
 }
 
