@@ -53,11 +53,27 @@ export interface ImageVariant {
 }
 
 /**
+ * Where a picture sits in the page.
+ *
+ * `hero` and `about` are the two page slots the template has always had. `service` is a
+ * **card** picture: it illustrates one recorded service, and it names which one
+ * (`service` below), so the card for that service and no other can show it.
+ */
+export type ImageRole = "hero" | "about" | "service";
+
+/**
  * An image supplied by hand: a CC0/PD file we already hold, a labelled AI fallback, or —
  * on a delivered build only — a photograph the client supplied of their own business.
  */
 export interface ImageOverride {
-  role: "hero" | "about";
+  role: ImageRole;
+  /**
+   * The recorded service this picture illustrates — **required for `role: "service"` and
+   * refused on any other role**, because a card picture belongs to one card. It must name
+   * a service the record actually lists; a picture for a service nobody offers has no card
+   * to sit on (`serviceCardImageProblems` in build.ts refuses both).
+   */
+  service?: string;
   /**
    * Absolute or repo-relative path to a local file. Copied into the bundle.
    *
@@ -198,7 +214,13 @@ export interface LoadedRecord {
 
 /** One image that ended up inside the bundle (or a recorded fallback with no file). */
 export interface ManifestImage {
-  role: "hero" | "about";
+  role: ImageRole;
+  /**
+   * The recorded service a **card** picture illustrates (`role: "service"`), carried into
+   * the manifest so the audit trail says which card the picture belongs to. Absent on a
+   * hero or about picture, and dropped from the JSON when absent.
+   */
+  service?: string;
   /** Path inside the bundle, `null` when we fell back to a CSS/SVG treatment. */
   file: string | null;
   /** Where it came from, e.g. "Wikimedia Commons", "css-gradient-fallback". */

@@ -106,7 +106,7 @@ export function northshoreThemeDecision(vars: { slug: string; phase: FormDeliver
         ? `the theme is ${NORTHSHORE_THEME_SLUG}'s own design pass (owner direction, 24 Nov 2026) and this record is "${vars.slug}"; every other bundle — Maple Avenue and every client build — keeps the shared design.`
         : vars.phase !== "demo"
           ? `the theme is a review copy's design pass; ${NORTHSHORE_THEME_SLUG} is being built as a delivered site, and a delivered site carries the design its owner agreed to, not our experiment.`
-          : `${NORTHSHORE_THEME_SLUG} is a demonstration, so this build carries the theme: the field-guide palette, squared corners, ruled lists and dark title bands described in src/demo/theme-northshore.ts. It is written in styles.css alone — no page of the bundle changes.`,
+          : `${NORTHSHORE_THEME_SLUG} is a demonstration, so this build carries the theme: the field-guide palette, squared corners, ruled lists and dark title bands described in src/demo/theme-northshore.ts. Most of it is styles.css, and two pieces of markup move with it, on this record alone: the service cards carry no repeated mark, and the home hero no longer repeats the header's Contact Us button (the call and the form stay).`,
   };
 }
 

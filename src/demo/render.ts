@@ -38,7 +38,7 @@
  * can find their own sentences and change them.
  */
 
-import type { BusinessRecord, ManifestImage } from "./types.ts";
+import type { BusinessRecord, ImageRole, ManifestImage } from "./types.ts";
 import type { DemoCopy, PrivacyNotice } from "./copy.ts";
 import type { CategoryProfile } from "./copy.ts";
 import { addressLine } from "./addresses.ts";
@@ -108,6 +108,22 @@ export interface RenderContext {
    * is its published self.
    */
   graphics?: boolean;
+  /**
+   * **The Northshore field guide** (`theme-northshore.ts`, the owner's experimental design
+   * pass of 24 Nov 2026), attached by `build.ts` from the theme decision. On that one
+   * demonstration it changes two pieces of markup — the rest of the pass is stylesheet:
+   *
+   *   - **no mark on a service card.** The same `services` glyph beside all five names
+   *     repeated a label instead of ranking anything, which is the one thing the owner's
+   *     graphics rule of 24 Nov forbids. The marks stay everywhere they orient a reader.
+   *   - **no `Contact Us` in the home hero.** The header already carries it on every page;
+   *     the hero keeps the call and the page keeps its form, so the home page stops asking
+   *     the same thing twice in one screen.
+   *
+   * Absent — every other record, and every delivered build — writes the markup it always
+   * wrote, byte for byte.
+   */
+  fieldGuide?: boolean;
 }
 
 /**
@@ -148,12 +164,12 @@ export interface PageSpec {
   file: string;
   printsDetails: boolean;
   carriesForm: boolean;
-  slots: ("hero" | "about")[];
+  slots: ImageRole[];
 }
 
 export const PAGE_SPECS: Record<PageId, PageSpec> = {
   index: { id: "index", file: "index.html", printsDetails: true, carriesForm: false, slots: ["hero", "about"] },
-  services: { id: "services", file: "services.html", printsDetails: true, carriesForm: false, slots: [] },
+  services: { id: "services", file: "services.html", printsDetails: true, carriesForm: false, slots: ["service"] },
   about: { id: "about", file: "about.html", printsDetails: true, carriesForm: false, slots: ["about"] },
   contact: { id: "contact", file: "contact.html", printsDetails: true, carriesForm: true, slots: [] },
   privacy: { id: "privacy", file: "privacy.html", printsDetails: false, carriesForm: false, slots: [] },
@@ -289,6 +305,8 @@ function servicesBlock(
   copy: DemoCopy,
   shape: ServiceCardShape | null = null,
   graphics = false,
+  images: ManifestImage[] = [],
+  fieldGuide = false,
 ): string {
   const services = normaliseServices(record);
   const heading = `h${level}`;
@@ -317,8 +335,15 @@ function servicesBlock(
       const label = esc(serviceActionLabel(copy.conversion.family, s.name));
       const href = esc(serviceActionHref(s.name));
       // The mark goes **inside the name block both card shapes share**, so the shapes
-      // themselves are untouched: same one link, same one control, same 44px target.
-      const head = `<${heading}>${graphics ? `${icon("services", { size: 24 })} ` : ""}${esc(s.name)}</${heading}>${s.note ? `<p>${esc(s.note)}</p>` : ""}`;
+      // themselves are untouched: same one link, same one control, same 44px target. It is
+      // left out of the Northshore field guide, where the same glyph beside all five names
+      // repeated a label instead of ranking anything (owner's graphics rule, 24 Nov 2026).
+      const markHere = graphics && !fieldGuide ? `${icon("services", { size: 24 })} ` : "";
+      // The card's picture, when the record gave this service one: inside the same body
+      // block as the name, so both card shapes carry it and neither shape moves.
+      const cardImage = serviceCardImage(images, s.name);
+      const figure = cardImage ? serviceCardFigure(cardImage, record.name) : "";
+      const head = `<${heading}>${markHere}${esc(s.name)}</${heading}>${s.note ? `<p>${esc(s.note)}</p>` : ""}`;
       // Treatment 1 (`service-card-action.ts`): the recorded name and note in a body block,
       // then a full-width action bar at the card's foot — still inside the card's one link,
       // still one target and one tab stop, because the bar is a styled element and not a
@@ -328,7 +353,7 @@ function servicesBlock(
         return (
           `          <li>\n` +
           `            <a class="card service-tile ${SERVICE_CARD_ACTION_CARD_CLASS}" href="${href}">` +
-          `<div class="${SERVICE_CARD_ACTION_BODY_CLASS}">${head}</div>` +
+          `<div class="${SERVICE_CARD_ACTION_BODY_CLASS}">${figure}${head}</div>` +
           serviceActionBarMarkup(label) +
           `</a>\n` +
           `          </li>`
@@ -345,7 +370,7 @@ function servicesBlock(
         return (
           `          <li>\n` +
           `            <div class="card service-tile ${SERVICE_CARD_ACTION_NESTED_CARD_CLASS}">` +
-          `<div class="${SERVICE_CARD_ACTION_BODY_CLASS}">${head}</div>` +
+          `<div class="${SERVICE_CARD_ACTION_BODY_CLASS}">${figure}${head}</div>` +
           serviceActionCtaMarkup(label, href) +
           `</div>\n` +
           `          </li>`
@@ -354,6 +379,7 @@ function servicesBlock(
       return (
         `          <li>\n` +
         `            <a class="card service-tile" href="${href}">` +
+        figure +
         head +
         `<p class="service-action">${label}</p>` +
         `</a>\n` +
@@ -369,18 +395,18 @@ function heroImage(images: ManifestImage[]): ManifestImage | undefined {
 }
 
 /**
- * The hero's `srcset`, built from the sizes the bundle actually holds.
+ * A `srcset`, built from the sizes the bundle actually holds.
  *
  * A bundle with one file gets a single candidate: valid markup, and the browser
  * downloads exactly that file. With `images/hero-600.jpg … hero-1536.jpg` listed as
  * `variants` on the manifest image, this same markup asks a phone for the 600px file
- * instead of the 1536px one. `sizes="100vw"` because the hero is full-bleed at every
- * breakpoint.
+ * instead of the 1536px one. The hero passes `sizes="100vw"` because it is full-bleed at
+ * every breakpoint; a service card passes the width of its own column.
  */
-function heroSrcset(hero: ManifestImage): string {
-  const variants = (hero.variants ?? []).filter((v) => v.file && v.width > 0);
+function imageSrcset(image: ManifestImage): string {
+  const variants = (image.variants ?? []).filter((v) => v.file && v.width > 0);
   if (variants.length > 0) return variants.map((v) => `${v.file} ${v.width}w`).join(", ");
-  return hero.width ? `${hero.file} ${hero.width}w` : "";
+  return image.width ? `${image.file} ${image.width}w` : "";
 }
 
 /**
@@ -395,6 +421,44 @@ function sizeAttrs(image: ManifestImage): string {
 
 function aboutImage(images: ManifestImage[]): ManifestImage | undefined {
   return images.find((i) => i.role === "about" && i.file);
+}
+
+/**
+ * The picture recorded for **one service's card**, if the record gave it one.
+ *
+ * The match is the recorded service name, compared case-insensitively and trimmed, and it
+ * is the only thing that decides which card a picture lands on: a card picture names its
+ * service in the record (`ImageOverride.service`), the build refuses one that names a
+ * service the record does not list, and nothing here guesses from a file name or a
+ * position in the list. A service with no picture of its own simply gets no figure.
+ */
+function serviceCardImage(images: ManifestImage[], service: string): ManifestImage | undefined {
+  const key = service.trim().toLowerCase();
+  return images.find((i) => i.role === "service" && i.file && (i.service ?? "").trim().toLowerCase() === key);
+}
+
+/**
+ * The figure a service card carries: the picture, and — when it is an AI-generated
+ * placeholder — the label saying so.
+ *
+ * `alt=""` for the same reason the hero and the about photograph use it: the card's own
+ * heading names the service, so the picture is decoration beside a word a screen reader
+ * already reads, and the caption below it is the sentence that describes what it is. The
+ * label comes from `illustrationLabel`, the one function the manifest's notes and the
+ * build's own check read too, so a card cannot show a placeholder the page does not admit
+ * to (`serviceCardImageProblems` in build.ts).
+ */
+function serviceCardFigure(image: ManifestImage, businessName: string): string {
+  const srcset = imageSrcset(image);
+  const label = isIllustrativeImage(image) ? illustrationLabel(businessName) : "";
+  return (
+    `<figure class="service-figure">` +
+    `<img class="service-img" src="${esc(image.file!)}"` +
+    (srcset ? ` srcset="${esc(srcset)}" sizes="(min-width: 64rem) 22rem, (min-width: 48rem) 40vw, 90vw"` : "") +
+    `${sizeAttrs(image)} alt="" loading="lazy" decoding="async">` +
+    (label ? `<figcaption class="muted service-caption">${esc(label)}</figcaption>` : "") +
+    `</figure>`
+  );
 }
 
 /**
@@ -732,7 +796,7 @@ ${lead ? `        <p class="lead">${esc(lead)}</p>\n` : ""}      </div>
 function heroSection(ctx: RenderContext): string {
   const { record, copy, images } = ctx;
   const hero = heroImage(images);
-  const heroSrc = hero ? heroSrcset(hero) : "";
+  const heroSrc = hero ? imageSrcset(hero) : "";
   const illustration = illustrationCaption(images, "hero", record.name);
   const photo = clientPhotoCaption(images, "hero", record.name);
   const caption = illustration || photo;
@@ -741,6 +805,18 @@ function heroSection(ctx: RenderContext): string {
   // already an ink surface carrying white type (`.hero` in the stylesheet), so the arcs and
   // the accent hairline are an addition over it, not a repaint — no colour moves.
   const heroGround = !hero && ctx.graphics ? ` ${ground("no-photo")}` : "";
+  // The hero's actions, as the list they are. The **call** is the hero's own action and
+  // stays on every record that has a phone. The **`Contact Us` button** is the header's
+  // slot repeated a second time on the same screen; the Northshore field guide leaves it
+  // out, because the header carries it on every page and the page keeps its form and its
+  // CTA band. With neither action available the paragraph is not written at all, rather
+  // than left as an empty box.
+  const heroActions = [
+    record.phone ? `            <a class="button button--paper" href="${tel}">${esc(copy.ui.callLabel)} ${esc(record.phone)}</a>` : "",
+    ctx.fieldGuide ? "" : `            <a class="button button--ghost" href="${PAGE_SPECS.contact.file}">${esc(copy.contactLabel.label)}</a>`,
+  ]
+    .filter(Boolean)
+    .join("\n");
   return `    <figure class="hero-figure">
       <div class="hero${hero ? " hero--photo" : ` hero--plain${heroGround}`}">
 ${hero ? `        <!-- The hero is a real <img>, not a CSS background: it carries its own
@@ -754,10 +830,10 @@ ${hero ? `        <!-- The hero is a real <img>, not a CSS background: it carrie
 ` : ""}        <div class="wrap hero-inner">
           <p class="eyebrow">${esc(copy.heroEyebrow)}</p>
           <h1>${esc(record.name)}</h1>
-${copy.heroLead ? `          <p class="hero-lead">${esc(copy.heroLead)}</p>\n` : ""}          <p class="hero-actions">
-${record.phone ? `            <a class="button button--paper" href="${tel}">${esc(copy.ui.callLabel)} ${esc(record.phone)}</a>\n` : ""}            <a class="button button--ghost" href="${PAGE_SPECS.contact.file}">${esc(copy.contactLabel.label)}</a>
+${copy.heroLead ? `          <p class="hero-lead">${esc(copy.heroLead)}</p>\n` : ""}${heroActions ? `          <p class="hero-actions">
+${heroActions}
           </p>
-        </div>
+` : ""}        </div>
       </div>
 ${illustration ? `      <!-- Compliance: an AI-generated placeholder is labelled as an illustration, not a
            photograph of the business. Do not remove. -->
@@ -1124,7 +1200,7 @@ function servicesHomeSection(ctx: RenderContext): string {
   return `    <section class="section section--alt" id="services">
       <div class="wrap">
         <h2>${esc(title)}</h2>
-${copy.servicesIntro ? `        <p class="muted">${esc(copy.servicesIntro)}</p>\n` : ""}${servicesBlock(record, 3, copy, cardShapeFor(ctx, "home"), ctx.graphics === true)}
+${copy.servicesIntro ? `        <p class="muted">${esc(copy.servicesIntro)}</p>\n` : ""}${servicesBlock(record, 3, copy, cardShapeFor(ctx, "home"), ctx.graphics === true, ctx.images, ctx.fieldGuide === true)}
       </div>
     </section>`;
 }
@@ -1133,7 +1209,7 @@ ${copy.servicesIntro ? `        <p class="muted">${esc(copy.servicesIntro)}</p>\
 function servicesPageSection(ctx: RenderContext): string {
   return `    <section class="section" id="services">
       <div class="wrap">
-${servicesBlock(ctx.record, 2, ctx.copy, cardShapeFor(ctx, "services"), ctx.graphics === true)}
+${servicesBlock(ctx.record, 2, ctx.copy, cardShapeFor(ctx, "services"), ctx.graphics === true, ctx.images, ctx.fieldGuide === true)}
       </div>
     </section>`;
 }
@@ -1324,6 +1400,25 @@ export function renderComparisonHead(ctx: RenderContext, title: string): string 
 
 /* -------------------------------------------------------------- the stylesheet */
 
+/**
+ * The rules a service card's picture needs, and nothing else.
+ *
+ * Written **only** when this bundle carries a card picture, because a bundle ships the
+ * rules it uses: Maple Avenue and every client build keep the stylesheet they had, byte for
+ * byte. The figure sits inside the card's own body block, so the card's padding, surface
+ * and shape are untouched — the picture is a block that fills the column it is given, and
+ * the caption under it is the same muted line the other captions use. No radius, border or
+ * shadow of its own: those belong to the card and to the theme drawn around it.
+ */
+export function serviceCardImagesCss(): string {
+  return `
+/* ---- service card pictures (a record may illustrate the card for one service) ---- */
+.service-figure { margin: 0 0 var(--s-4); }
+.service-img { display: block; width: 100%; height: auto; }
+.service-caption { margin: var(--s-2) 0 0; font-size: 0.8125rem; line-height: 1.45; }
+`;
+}
+
 export function renderCss(
   profile: CategoryProfile,
   slug: string,
@@ -1348,6 +1443,13 @@ export function renderCss(
      * stylesheet byte for byte as it is.
      */
     graphics?: boolean;
+    /**
+     * Write the rules a **service card picture** needs (`serviceCardImagesCss`). Absent —
+     * the default, and every bundle whose record names no card picture — writes the
+     * stylesheet byte for byte as it is, so Maple Avenue and every client build are
+     * untouched by a pass that adds one.
+     */
+    serviceCardImages?: boolean;
     /**
      * Write the **Northshore theme** onto the stylesheet (`theme-northshore.ts`, the owner's
      * experimental design pass, 24 Nov 2026). Absent — the default, and every other bundle —
@@ -2252,7 +2354,7 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
   html { scroll-behavior: auto; }
   * { transition: none !important; animation: none !important; }
 }
-${options.serviceCardAction ? serviceCardActionCss(options.serviceCardAction) : ""}${options.ghostControls ? ghostControlsCss() : ""}${options.graphics ? graphicsCss() + graphicsWiringCss() : ""}${options.theme ? northshoreCss() : ""}`;
+${options.serviceCardAction ? serviceCardActionCss(options.serviceCardAction) : ""}${options.ghostControls ? ghostControlsCss() : ""}${options.graphics ? graphicsCss() + graphicsWiringCss() : ""}${options.serviceCardImages ? serviceCardImagesCss() : ""}${options.theme ? northshoreCss() : ""}`;
 }
 
 /**

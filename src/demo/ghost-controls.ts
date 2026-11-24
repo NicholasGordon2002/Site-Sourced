@@ -316,7 +316,7 @@ export function ghostControlsDecision(vars: {
     surface,
     raw,
     unrecognised: null,
-    basis: `${GHOST_CONTROLS_VAR} is set to "${raw.trim()}" and this record is one of the ${GHOST_CONTROLS_SLUG_LIST} demonstrations, so the stylesheet carries the ghost controls: the header action is transparent with an outline in the surface's own colour (white over the home page's photograph, ink on the paper-surfaced headers), the nested service-card CTA is the same treatment in ink on the card, and so is every other button of the family — the CTA band's action, the form's submit and Get directions in ink on the paper surfaces, and the home hero's two actions in white over the photograph. No page changes at all — the treatment is written in styles.css alone (${GHOST_CONTROLS_BASIS}).`,
+    basis: `${GHOST_CONTROLS_VAR} is set to "${raw.trim()}" and this record is one of the ${GHOST_CONTROLS_SLUG_LIST} demonstrations, so the stylesheet carries the ghost controls: the header action is transparent with an outline in the surface's own colour (white over the home page's photograph, ink on the paper-surfaced headers), the nested service-card CTA is the same treatment in ink on the card, and so is every other button of the family — the CTA band's action, the form's submit and Get directions in ink on the paper surfaces, and ${vars.slug === "northshore-garden-works" ? "the home hero's action" : "the home hero's two actions"} in white over the photograph. No page changes at all — the treatment is written in styles.css alone (${GHOST_CONTROLS_BASIS}).`,
   };
 }
 

@@ -195,12 +195,18 @@ export function graphicsDecision(vars: {
       basis: `refused: the layer is wired into the ${GRAPHICS_SLUG_LIST} demonstrations, the copies the owner is reviewing. ${GRAPHICS_VAR} is set but this record is "${vars.slug}", so no page and no stylesheet of this bundle moves (${GRAPHICS_BASIS}).`,
     };
   }
+  // The Northshore field guide leaves the service cards unmarked (owner's graphics rule,
+  // 24 Nov 2026: the same glyph beside all five names repeated a label instead of ranking
+  // anything), so its manifest must not claim a mark its pages do not carry. Every other
+  // record keeps the sentence it had, byte for byte.
+  const cardMark =
+    vars.slug === "northshore-garden-works" ? "" : "the services mark on each recorded service card, ";
   return {
     enabled: true,
     scope,
     raw,
     unrecognised: null,
-    basis: `${GRAPHICS_VAR} is set to "${raw.trim()}" and this record is one of the ${GRAPHICS_SLUG_LIST} demonstrations, so the pages carry the layer: the page mark in each inner page's eyebrow, the services mark on each recorded service card, the hours and pin marks on the hours and location headings, the email and phone marks beside the printed details, the privacy mark on the footer's notice link, the message mark on the CTA band, the arrow-right on the home page's "More about" link, the schematic map with its caption in the contact page's location column, and the no-photograph ground on a record with no hero picture. Every mark is inline SVG beside a label it belongs to, so the layer adds no file and no request (${GRAPHICS_BASIS}).`,
+    basis: `${GRAPHICS_VAR} is set to "${raw.trim()}" and this record is one of the ${GRAPHICS_SLUG_LIST} demonstrations, so the pages carry the layer: the page mark in each inner page's eyebrow, ${cardMark}the hours and pin marks on the hours and location headings, the email and phone marks beside the printed details, the privacy mark on the footer's notice link, the message mark on the CTA band, the arrow-right on the home page's "More about" link, the schematic map with its caption in the contact page's location column, and the no-photograph ground on a record with no hero picture. Every mark is inline SVG beside a label it belongs to, so the layer adds no file and no request (${GRAPHICS_BASIS}).`,
   };
 }
 
