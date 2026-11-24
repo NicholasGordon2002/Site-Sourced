@@ -1157,9 +1157,18 @@ export function composeCopy(
       services: { title: offeringTitle, lead: servicesIntro },
       about: {
         title: `About ${record.name}`,
-        lead: provenance.published
-          ? `The details published for ${record.name}, and where they came from.`
-          : `An invented example business, shown to demonstrate the layout of a demo page.`,
+        // Three sources, three leads. "The details published for …" is a claim about where
+        // the details came from, so it follows the source like the footer line does: on a
+        // record whose details the client supplied, nothing is known to have been published
+        // anywhere (they may exist only in the client's own answer to our intake), and the
+        // "invented example business" lead belongs to a fictional fixture — on a delivered
+        // client's site it would be false about the client's own business.
+        lead:
+          provenance.kind === "client-supplied"
+            ? `The details ${record.name} gave us for this site.`
+            : provenance.published
+              ? `The details published for ${record.name}, and where they came from.`
+              : `An invented example business, shown to demonstrate the layout of a demo page.`,
       },
       contact: {
         title: businessPhase ? `Contact ${record.name}` : "Contact",

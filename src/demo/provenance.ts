@@ -24,6 +24,15 @@
  *                    page must say the details are invented — crediting OpenStreetMap
  *                    or "public listings" here is exactly the false claim this module
  *                    exists to prevent.
+ *   client-supplied  the business told us its own details: a delivered client's site, whose
+ *                    hours, address, number and services the owner gave us or confirmed at
+ *                    intake. Nothing was read off a listing and nothing was invented, so the
+ *                    page carries no sourcing sentence and no printed-details caveat — the
+ *                    "as published in public listings … please confirm" line would be asking
+ *                    a visitor to double-check facts the client themselves supplied. **Only a
+ *                    delivered site may declare it**: a demonstration is an unsolicited
+ *                    proposal built from details we had to go and find, so `provenanceProblems`
+ *                    refuses `client-supplied` on a demo bundle by name.
  *
  * A record that declares nothing gets no page: `provenanceProblems` refuses the bundle,
  * because we cannot choose an attribution on the record's behalf and printing none
@@ -49,9 +58,14 @@ export type ProvenancePhase = "demo" | "business";
  * Where a record's business details came from. Explicit, because the attribution and
  * the caveat are derived from it and neither can be guessed.
  */
-export type RecordSourceKind = "openstreetmap" | "public-listings" | "fictional";
+export type RecordSourceKind = "openstreetmap" | "public-listings" | "fictional" | "client-supplied";
 
-export const RECORD_SOURCE_KINDS: RecordSourceKind[] = ["openstreetmap", "public-listings", "fictional"];
+export const RECORD_SOURCE_KINDS: RecordSourceKind[] = [
+  "openstreetmap",
+  "public-listings",
+  "fictional",
+  "client-supplied",
+];
 
 export function isRecordSourceKind(value: unknown): value is RecordSourceKind {
   return typeof value === "string" && (RECORD_SOURCE_KINDS as string[]).includes(value);
@@ -154,12 +168,21 @@ export interface Provenance {
  * A **fictional** record has no business-phase variant at all: a made-up business cannot
  * own a website, and `provenanceProblems` refuses that combination outright.
  */
-const BUSINESS_SOURCING: Record<"openstreetmap" | "public-listings", { attribution: string; aboutLine: string }> = {
+const BUSINESS_SOURCING: Record<
+  "openstreetmap" | "public-listings" | "client-supplied",
+  { attribution: string; aboutLine: string }
+> = {
   openstreetmap: {
     attribution: "Map data © OpenStreetMap contributors, available under the ODbL 1.0.",
     aboutLine: "",
   },
   "public-listings": {
+    attribution: "",
+    aboutLine: "",
+  },
+  // Nothing of ours to credit: the details are the client's own, so the delivered page
+  // carries the authorship line (`TAIL`) and no sourcing sentence at all.
+  "client-supplied": {
     attribution: "",
     aboutLine: "",
   },
@@ -201,7 +224,7 @@ export function resolveProvenance(record: BusinessRecord, phase: ProvenancePhase
 
   // What a delivered site says instead: nothing about our sourcing, plus the licence
   // credit where the data is OpenStreetMap's (`BUSINESS_SOURCING`).
-  const delivered = (k: "openstreetmap" | "public-listings") =>
+  const delivered = (k: "openstreetmap" | "public-listings" | "client-supplied") =>
     [BUSINESS_SOURCING[k].attribution, TAIL].filter(Boolean).join(" ");
 
   switch (kind) {
@@ -245,6 +268,26 @@ export function resolveProvenance(record: BusinessRecord, phase: ProvenancePhase
             published: true,
             basis: `the record's details came from public listings (source_kind "public-listings"), so the page credits public listings and credits no mapping data`,
           };
+    case "client-supplied":
+      // The client's own facts. Two things follow, and only two: the page carries the
+      // authorship line and **no** sourcing sentence (there is no listing to credit and no
+      // mapping data to licence), and it prints **no** printed-details caveat — asking a
+      // visitor to "please confirm" the address the client themselves gave us would be
+      // wrong about where it came from. `published` is false because nothing here is known
+      // to be published anywhere: the details may exist only in the client's own reply to
+      // our intake, so "as published for this barber shop" is not a claim we can make. The
+      // delivered copy says "recorded for this …" for exactly that reason (`copy.ts`).
+      return {
+        kind,
+        attribution: delivered(kind),
+        attributionHtml: delivered(kind),
+        caveat: "",
+        aboutLine: BUSINESS_SOURCING[kind].aboutLine,
+        published: false,
+        basis: business
+          ? `the record's details were supplied by the client themselves (source_kind "client-supplied") and this bundle is a delivered site, so the page carries the authorship line only: no "come from public listings" sentence, no "public mapping data" credit and no printed-details caveat, because nothing here was read off a listing we had to find — the details are the client's own`
+          : `the record's details were supplied by the client themselves (source_kind "client-supplied"), which only a delivered site may claim: a demonstration is an unsolicited proposal built from details we had to go and find, so provenanceProblems refuses this bundle by name. The page is composed with the authorship line only — no listing claim and no printed-details caveat`,
+      };
     case "fictional":
       return {
         kind,
@@ -334,11 +377,14 @@ export const DEMO_SOURCING_CLAIMS: [string, RegExp][] = [
  * does not support, **or that only a demonstration may say**:
  *
  *   - a record that declares no source at all, so no honest attribution can be chosen,
- *   - a `source_kind` that is not one of the three kinds,
+ *   - a `source_kind` that is not one of the four kinds,
+ *   - **a demonstration that declares the client supplied the details** (`client-supplied`
+ *     is a delivered site's claim; a proposal has no client to have supplied anything),
  *   - a page that credits OpenStreetMap while the details came from somewhere else,
  *   - a page whose printed details are qualified by a caveat belonging to another
- *     source (the "public listings" line on a fictional business, or the fictional line
- *     on a record whose details really were published),
+ *     source (the "public listings" line on a fictional business or on a record whose
+ *     details the client supplied, or the fictional line on a record whose details really
+ *     were published),
  *   - a page that has lost the attribution line altogether,
  *   - a fictional example business presented as anyone's own website,
  *   - **a delivered site that still introduces its details as somebody else's published
@@ -375,6 +421,20 @@ export function provenanceProblems(vars: {
   if (provenance.kind === "fictional" && deliveryMode === "business") {
     problems.push(
       `the record is a fictional example business (source_kind "fictional") but the form delivers to it as a client's own site. A made-up business cannot own a website: fix source_kind, or fix form_recipient.`,
+    );
+  }
+  // The other direction of the same phase rule, for the newest kind: a client's own facts
+  // exist only once the client has given them to us, which is a delivered site. An
+  // unsolicited proposal has no client, so nothing on it may say the business supplied
+  // anything — the claim is refused by name rather than silently downgraded to another
+  // source, because a demo built from this record would either credit a listing nobody
+  // read or print details with no qualification at all.
+  if (provenance.kind === "client-supplied" && deliveryMode === "demo") {
+    problems.push(
+      `the record's details are declared as supplied by the client themselves (source_kind "client-supplied"), which only a delivered site may claim: this bundle is a demonstration (delivery.mode "demo"), an unsolicited proposal for a business that has agreed to nothing, so no page of it may say the business gave us anything. ` +
+        `For a demonstration, declare where the details really came from — ${RECORD_SOURCE_KINDS.filter((k) => k !== "client-supplied")
+          .map((k) => `"${k}"`)
+          .join(", ")} — or deliver the site (the client's own address as form_recipient) and rebuild.`,
     );
   }
 
@@ -437,6 +497,19 @@ export function provenanceProblems(vars: {
       problems.push(
         `${on}: prints the "as published in public listings" caveat although this is a fictional example business (${provenance.basis}). ` +
           `Nothing about it was published in any listing, so the frozen caveat is false here; the fictional caveat is what belongs on the page.`,
+      );
+    }
+    // The same clause for the source the caveat is newest against: the caveat exists to
+    // qualify details we had to find and to ask the reader to confirm them. Facts the
+    // client gave us are the client's own — they were read off no listing, so the sentence
+    // is false about them, and it must never print for them (owner direction: the caveat
+    // follows the source, and a client's own facts are never qualified as somebody's
+    // listing). Named here rather than left to the phase gate, because this is the rule a
+    // reader of the page can check.
+    if (listingsLine !== "" && provenance.kind === "client-supplied" && text.includes(listingsLine)) {
+      problems.push(
+        `${on}: prints the "as published in public listings" caveat although the record's details were supplied by the client themselves (source_kind "client-supplied"). ` +
+          `The caveat qualifies details we had to go and find and asks the reader to confirm them; the details the client gave us are their own and appeared in no listing we read, so the caveat must never print for them. The composition prints none — this is what refuses one typed back in.`,
       );
     }
 

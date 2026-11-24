@@ -161,11 +161,12 @@ export interface BusinessRecord {
   images?: ImageOverride[];
   /**
    * **What the page's provenance line and contact-details caveat are derived from, and
-   * therefore required.** One of `openstreetmap`, `public-listings`, `fictional` — see
-   * `provenance.ts` for what each one lets a page say. A record whose page prints the
-   * business's details without declaring this cannot be built: no attribution can be
-   * chosen on the record's behalf, and an attribution the record does not support is a
-   * false claim.
+   * therefore required.** One of `openstreetmap`, `public-listings`, `fictional`,
+   * `client-supplied` — see `provenance.ts` for what each one lets a page say. A record
+   * whose page prints the business's details without declaring this cannot be built: no
+   * attribution can be chosen on the record's behalf, and an attribution the record does
+   * not support is a false claim. `client-supplied` (the business told us its own details)
+   * is a **delivered site's** claim: a demonstration that declares it is refused by name.
    */
   source_kind?: RecordSourceKind;
   /** Kept out of the page; carried into the manifest for our own records. */

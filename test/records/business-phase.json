@@ -1,5 +1,5 @@
 {
-  "_note": "TEST-ONLY. A delivered client's own site (delivery.mode 'business') so the business phase can be rendered as a real bundle. It is deliberately NOT in test/fixtures/ — that directory is the published fixture set (four demos) and this record must never become a fifth. Never published, never sent anywhere: its domain, booking URL and phone are all reserved or invented for testing. See test/business-phase.test.ts.",
+  "_note": "TEST-ONLY. A delivered client's own site (delivery.mode 'business') so the business phase can be rendered as a real bundle. It is deliberately NOT in test/fixtures/ — that directory is the published fixture set (four demos) and this record must never become a fifth. Never published, never sent anywhere: its domain, booking URL and phone are all reserved or invented for testing. source_kind is \"client-supplied\", the kind a delivered site uses when the business told us its own details: the values here are invented, but they stand in for facts the client supplies, not for facts read off a listing — declaring \"public-listings\" would describe an origin that never happened. A demonstration that declares \"client-supplied\" is refused by name (provenance.ts), so this record can only ever be built as a delivered site. See test/business-phase.test.ts.",
   "slug": "business-phase-fixture",
   "name": "Delivered Fixture Barber Shop",
   "category": "Barber shop",
@@ -54,7 +54,7 @@
   "form_provider": "formspark",
   "form_access_key": "env:SS_FORMSPARK_FORM_ID",
   "booking_url": "https://bookings.delivered-fixture-barber.ca/",
-  "source": "test record (delivered-phase fixture — invented, never published)",
+  "source": "test record (delivered-phase fixture — invented values standing in for the details a client supplies about their own business; never published)",
   "images": [
     {
       "role": "hero",
@@ -77,5 +77,5 @@
       ]
     }
   ],
-  "source_kind": "public-listings"
+  "source_kind": "client-supplied"
 }

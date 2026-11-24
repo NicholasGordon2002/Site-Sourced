@@ -76,6 +76,20 @@ const RECORD_FOR_RENDER: BusinessRecord = { ...RECORD, form_access_key: "test-fo
 /** Site Sourced's own test inbox — the address that makes a record a *demonstration*. */
 const OUR_INBOX = "site-sourced-311e0184@ctomail.io";
 
+/**
+ * The same record rendered as a **demonstration**. A demonstration may not declare
+ * `client-supplied` — the build refuses it by name, because an unsolicited proposal has
+ * no client to have supplied anything (provenance.ts) — so the twin declares the source
+ * a demo can honestly claim, and every phase assertion below reads that twin.
+ */
+const AS_DEMO: BusinessRecord = {
+  ...RECORD_FOR_RENDER,
+  source_kind: "public-listings",
+  form_recipient: OUR_INBOX,
+  form_delivery: "demo",
+  booking_url: "",
+};
+
 /** The authorship line, the one provenance sentence both phases carry. */
 const AUTHORSHIP = "Copy, layout and imagery: Site Sourced. No logo, photograph or text was taken from any other website.";
 
@@ -166,7 +180,10 @@ test("the test record really is the delivered phase, and the bundle passes every
   const b = await delivered();
   expect(b.ctx.delivery.mode).toBe("business");
   expect(b.ctx.copy.booking.mode).toBe("business");
-  expect(b.ctx.copy.provenance.kind).toBe("public-listings");
+  // `client-supplied` is this record's honest declaration: its values are invented, but
+  // they stand in for the ones a client gives us about their own business — not for
+  // facts read off a listing that never existed.
+  expect(b.ctx.copy.provenance.kind).toBe("client-supplied");
   // Nine pages: the five named ones plus one per recorded service.
   expect(b.pages.map((p) => p.file)).toEqual([
     "index.html",
@@ -234,7 +251,7 @@ test("the delivered header slot and the CTA band's downstep are rendered, not ju
 });
 
 test("the same record as a demonstration still prints every one of those sentences", async () => {
-  const demo = await render({ ...RECORD_FOR_RENDER, form_recipient: OUR_INBOX, form_delivery: "demo", booking_url: "" });
+  const demo = await render(AS_DEMO);
   expect(demo.ctx.delivery.mode).toBe("demo");
   expect(demo.problems).toEqual([]);
   const index = page(demo, "index.html");
@@ -335,7 +352,9 @@ test("the delivered offering line says the details are recorded, not published",
   const bare = { ...RECORD_FOR_RENDER, services: [] };
   const business = await delivered();
   const deliveredCopy = composeCopy(bare, "example-business", resolveForm(bare), business.ctx.delivery);
-  const demoCopy = composeCopy(bare, "example-business", resolveForm(bare), {
+  // The demonstration's twin declares a source a demo may claim (the record itself is
+  // `client-supplied`, which a proposal is refused for declaring).
+  const demoCopy = composeCopy({ ...bare, source_kind: "public-listings" }, "example-business", resolveForm(bare), {
     ...business.ctx.delivery,
     mode: "demo",
   } as FormDelivery);
@@ -438,7 +457,7 @@ test("the delivered README's provider facts read as answers, not as a broken sen
  */
 test("the demonstration paragraph in a delivered README is refused, by name", async () => {
   const b = await delivered();
-  const demo = await render({ ...RECORD_FOR_RENDER, form_recipient: OUR_INBOX, form_delivery: "demo", booking_url: "" });
+  const demo = await render(AS_DEMO);
   // Verbatim, from the demonstration's own README: the paragraph at the top, then the
   // contact-form section further down. Both belong to that phase and to no other.
   const problems = furniture(b, `${b.readme}\n${demo.readme}\n`);
@@ -480,7 +499,7 @@ test("the demonstration-page sentence is refused on a delivered page too", async
  */
 test("the demonstration form-delivery notice is refused on a delivered page", async () => {
   const b = await delivered();
-  const demo = await render({ ...RECORD_FOR_RENDER, form_recipient: OUR_INBOX, form_delivery: "demo", booking_url: "" });
+  const demo = await render(AS_DEMO);
   const notice = demo.ctx.copy.formNotice;
   // The sentence this refusal exists for, verbatim from the demonstration's own build.
   expect(notice.startsWith("This is a demonstration site:")).toBe(true);
@@ -498,7 +517,7 @@ test("no delivered page or README says anything about a demonstration", async ()
 });
 
 test("the demonstration keeps every one of those sentences — it is a derivation, not a deletion", async () => {
-  const demo = await render({ ...RECORD_FOR_RENDER, form_recipient: OUR_INBOX, form_delivery: "demo", booking_url: "" });
+  const demo = await render(AS_DEMO);
   expect(demo.ctx.delivery.mode).toBe("demo");
   expect(demo.problems).toEqual([]);
   expect(demo.readme).toContain("DEMONSTRATION — not the business's website");
