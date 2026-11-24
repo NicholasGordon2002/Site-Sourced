@@ -266,6 +266,21 @@ export interface DemoManifest {
   /** The header's action slot and the touch controls beside it (owner, 6 Oct 2026). */
   header_action: ManifestHeaderAction;
   /**
+   * The **Northshore theme** (owner direction, 24 Nov 2026): the experimental design pass on
+   * the inquiry demo. Present only when the theme is in force; the block records what the
+   * stylesheet carries and that **no page** of the bundle moved for it.
+   */
+  theme?: {
+    enabled: true;
+    /** The treatment's name, as the stylesheet's own marker declares it. */
+    treatment: string;
+    marker: string;
+    basis: string;
+    scope: string;
+    pages_changed: string[];
+    note: string;
+  };
+  /**
    * The **ghost controls** (owner direction, 10 Oct 2026): the outlined button treatment
    * tried on the Maple Avenue review copy — the header's action drawn in the surface's own
    * colour, and the nested card CTA in ink. Recorded so a reviewer reads what the
