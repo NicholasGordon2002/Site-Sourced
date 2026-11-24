@@ -348,6 +348,10 @@ function suppliedImage(img: ImageOverride, retrievedAt: string): ManifestImage {
   const sizes = variants.length > 0 ? ` Responsive sizes supplied: ${[...variants].sort((a, b) => a.width - b.width).map((v) => `${v.width}px`).join(", ")}.` : "";
   return {
     role: img.role,
+    // Which card this picture belongs to, when it is a card picture. Written only for a
+    // `service` image, so a record with none of them produces the manifest bytes it always
+    // did: the key is not present at all on a hero or about picture.
+    ...(img.role === "service" ? { service: img.service } : {}),
     file,
     source:
       kind === "ai-generated"

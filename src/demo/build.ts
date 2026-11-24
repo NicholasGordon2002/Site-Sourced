@@ -2756,6 +2756,145 @@ export function clientPhotoProblems(vars: {
 }
 
 /**
+ * **The service card pictures** — every clause a card image has to satisfy, in one place.
+ *
+ * A record may illustrate the card for a service (`images[].role: "service"`, naming the
+ * service in `images[].service`). That is a new kind of picture with its own obligations,
+ * and each one is a clause here, because a picture on a card is a claim about the work:
+ *
+ *   1. **it names its service**, and that service is one the record actually lists — a card
+ *      picture belongs to one card, and a picture for a service nobody offers has no card;
+ *   2. **the manifest records every card picture the record declares**, so the audit trail
+ *      and the page cannot disagree about which picture is on which card;
+ *   3. **its licence is a labelled AI-generated illustration.** A card picture is a generic
+ *      illustration of the work, never a photograph of somebody's business, so CC0/PD and a
+ *      client-supplied photograph are refused by name;
+ *   4. **it travels with its variants**: every file the manifest lists for it is in the
+ *      bundle, not only the widest one the page's `src` happens to use;
+ *   5. **it is rendered on that service's card, with the label printed.** The picture is
+ *      checked inside the card whose own action points at that service's page, and the
+ *      AI-illustration sentence is checked there too — and a card may not show another
+ *      service's picture.
+ *
+ * Every clause is a refusal, and the tests mutate one condition at a time to prove each
+ * one can fail. With no card picture in the record the whole function is silent, so Maple
+ * Avenue and every client build are untouched by it.
+ */
+export function serviceCardImageProblems(vars: {
+  record: BusinessRecord;
+  /** The images as the bundle's manifest records them. */
+  images: ManifestImage[];
+  pages: RenderedPage[];
+  /** Every file the bundle really holds, bundle-relative. */
+  bundleFiles: string[];
+}): string[] {
+  const { record, images, pages, bundleFiles } = vars;
+  const problems: string[] = [];
+  const declared = (record.images ?? []).filter((image) => image.role === "service");
+  const cards = images.filter((image) => image.role === "service");
+  const byKey = new Map(normaliseServices(record).map((service) => [service.name.trim().toLowerCase(), service.name]));
+  const label = illustrationLabel(record.name);
+  const inBundle = new Set(bundleFiles);
+  const show = (image: ManifestImage) => image.file ?? "(no file)";
+
+  // 1. Naming: which service, and one this record lists.
+  for (const image of cards) {
+    const named = (image.service ?? "").trim();
+    if (named === "") {
+      problems.push(
+        `the service card image ${show(image)} names no service. A card picture belongs to one card, so the record must say which service it illustrates (images[].service); nothing here guesses it from the file name or the order of the list.`,
+      );
+    } else if (!byKey.has(named.toLowerCase())) {
+      problems.push(
+        `the service card image ${show(image)} names the service "${named}", which this record does not list. A picture for a service nobody offers has no card to sit on — record the service under "services", or drop the picture.`,
+      );
+    }
+  }
+
+  // 2. The manifest records every card picture the record declares.
+  for (const entry of declared) {
+    const named = (entry.service ?? "").trim().toLowerCase();
+    if (!cards.some((image) => (image.service ?? "").trim().toLowerCase() === named)) {
+      problems.push(
+        `the record declares a service card image for "${entry.service ?? "(no service)"}" (${(entry.file ?? (entry.variants ?? []).map((v) => v.file).join(", ")) || "no file"}) and the manifest does not record it. A picture the audit trail has lost is a picture nobody can check the licence of, so the bundle may not ship it.`,
+      );
+    }
+  }
+
+  // 3. A card picture is a labelled AI-generated illustration, and nothing else.
+  for (const image of cards) {
+    if (!isIllustrativeImage(image)) {
+      problems.push(
+        `the service card image ${show(image)} declares the licence "${image.license}". A service card picture must be a labelled AI-generated illustration (a licence starting "AI-generated"): a card shows a generic illustration of the work, never a photograph of somebody's business.`,
+      );
+    }
+  }
+
+  // 4. Every file of the set travels with it.
+  for (const image of cards) {
+    const files = (image.variants ?? []).filter((v) => v.file).map((v) => v.file);
+    if (files.length === 0 && image.file) files.push(image.file);
+    if (files.length === 0) {
+      problems.push(
+        `the service card image for "${image.service ?? "(no service)"}" has no file in the bundle, so the card would refer to a picture it does not contain.`,
+      );
+      continue;
+    }
+    for (const file of files) {
+      if (!inBundle.has(file)) {
+        problems.push(
+          `the service card image ${file} is recorded in the manifest and is not in the bundle. A card picture travels with every variant the record lists, not only the widest one the page's src uses.`,
+        );
+      }
+    }
+  }
+
+  // 5. Rendered on that service's card, with the label printed.
+  for (const page of pages) {
+    if (page.id !== "index" && page.id !== "services") continue;
+    const on = `on ${page.file}`;
+    if (cards.length === 0) {
+      if (page.id === "services" && page.html.includes(esc(label))) {
+        problems.push(`${on}: carries the AI-illustration label although no service card shows a picture`);
+      }
+      continue;
+    }
+    const blocks = page.html.split("<li>").slice(1);
+    for (const image of cards) {
+      const service = byKey.get((image.service ?? "").trim().toLowerCase());
+      if (!service) continue; // clause 1 already refused it
+      const block = blocks.find((candidate) => candidate.includes(`href="${servicePageFile(service)}#form"`));
+      if (!block) {
+        problems.push(
+          `${on}: no service card for "${service}", so the picture recorded for it has nowhere to be shown. The card for a service is the page whose action points at ${servicePageFile(service)}.`,
+        );
+        continue;
+      }
+      if (image.file && !block.includes(`src="${esc(image.file)}"`)) {
+        problems.push(
+          `${on}: the card for "${service}" does not show the picture recorded for it (${image.file}). A card picture is rendered on the card of the service it names, and nowhere else.`,
+        );
+      }
+      if (isIllustrativeImage(image) && !block.includes(esc(label))) {
+        problems.push(
+          `${on}: the card for "${service}" shows an AI-generated picture with no label saying so. Expected the card to contain: "${label}"`,
+        );
+      }
+      for (const other of cards) {
+        if (other === image || !other.file) continue;
+        if (block.includes(`src="${esc(other.file)}"`)) {
+          problems.push(
+            `${on}: the card for "${service}" shows the picture recorded for "${other.service ?? "(no service)"}". Each card shows its own service's picture and no other.`,
+          );
+        }
+      }
+    }
+  }
+
+  return problems;
+}
+
+/**
  * Everything that must be true for a bundle to be publishable at all — one list, one
  * throw — checked **on every page**, because the plan's compliance rules are per page
  * and never inherited. It covers the pages' compliance strings, the contact form, and
@@ -3645,6 +3784,7 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
     generatedAt: new Date().toISOString(),
     ...(cardAction.enabled ? { serviceCardAction: cardAction } : {}),
     ...(graphics.enabled ? { graphics: true } : {}),
+    ...(theme.enabled ? { fieldGuide: true } : {}),
   };
 
   const pages = renderPages(ctx);
@@ -3679,10 +3819,17 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
       `comparison page: ${comparisonPage.file} is in this bundle — ${comparison.basis} It is not one of the nine pages and it is not part of the proposal's design.`,
     );
   }
+  /**
+   * Whether this bundle carries a picture on a service card. The stylesheet's card-picture
+   * rules are written only when it does — a bundle ships the rules it uses, so Maple Avenue
+   * and every client build keep the stylesheet they had, byte for byte.
+   */
+  const hasServiceCardImages = images.some((image) => image.role === "service" && image.file);
   const css = renderCss(profile, slug, {
     ...(cardAction.enabled ? { serviceCardAction: cardAction.shape } : {}),
     ...(ghost.enabled ? { ghostControls: true } : {}),
     ...(graphics.enabled ? { graphics: true } : {}),
+    ...(hasServiceCardImages ? { serviceCardImages: true } : {}),
     ...(theme.enabled ? { theme: true } : {}),
   });
   const js = renderJs();
@@ -3807,6 +3954,14 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
       await write(path, bytes);
     }
   }
+
+  // The service card pictures, checked against the folder this build has just written:
+  // which card each one belongs to, that its licence is a labelled AI illustration, that
+  // every variant of it is here, and that the card showing it prints the label. Read from
+  // the written file list rather than from the record, so a variant that failed to land is
+  // a failure and not a note.
+  const cardImageProblems = serviceCardImageProblems({ record, images, pages, bundleFiles: files });
+  if (cardImageProblems.length > 0) await fail(`service card images for ${slug}:\n  - ${cardImageProblems.join("\n  - ")}`);
 
   // A bundle contains what this build put in it and nothing else. Without this, a
   // file from an earlier build survives in the folder — which is how a re-encoded hero

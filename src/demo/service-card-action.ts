@@ -89,9 +89,19 @@ import { GHOST_PAPER_FILL_ACTIVE, GHOST_PAPER_FILL_HOVER, GHOST_PAPER_INK } from
 import type { BusinessRecord, FormDeliveryMode } from "./types.ts";
 
 export function fetchedBy(card: string): string[] {
+  // A card may carry **one** picture, and only when the build put it there: the
+  // `service-figure` a record's card image renders, whose `src` is a file inside this
+  // bundle's own `images/` folder. It is exempt from the scan below for the same reason the
+  // inline SVG marks are — it fetches nothing from anyone, and the bundle ships it and
+  // licenses it. The exemption is narrow on purpose: a figure whose picture points at a
+  // remote address, a `url(`, or anything outside `images/` is left in the string and the
+  // clause refuses it exactly as before.
+  const scanned = card.replace(/<figure class="service-figure">[\s\S]*?<\/figure>/g, (figure) =>
+    /\bsrc="images\/[A-Za-z0-9._/-]+"/.test(figure) && !/https?:|\/\/|url\(/i.test(figure) ? "" : figure,
+  );
   return [
       ...new Set([
-        ...(card.match(/<\/?(img|object|embed|iframe|script|picture|source|video|audio)\b/gi) ?? []).map((tag) =>
+        ...(scanned.match(/<\/?(img|object|embed|iframe|script|picture|source|video|audio)\b/gi) ?? []).map((tag) =>
           tag.replace(/[</]/g, "").toLowerCase(),
         ),
         // An **inline** `<svg>` fetches nothing, so `svg` is out of the tag list above: the
@@ -99,13 +109,13 @@ export function fetchedBy(card: string): string[] {
         // bundle's own tokens, so there is no file to ship and none to license. What fetches
         // *inside* a drawing is named here instead, so the clause keeps exactly the teeth it
         // had — a card may not take a file from anywhere.
-        ...(/<svg[^>]*\bsrc\s*=/i.test(card) ? ["an <svg src>"] : []),
-        ...(/<image[\s>]/i.test(card) ? ["an <image>"] : []),
-        ...(/<use[^>]*href="(?!#)/i.test(card) ? ["an external <use>"] : []),
-        ...(/\bsrc\s*=/i.test(card) ? ["src="] : []),
-        ...(/\bhttps?:\/\//i.test(card) ? ["a remote address"] : []),
-        ...(/url\(/i.test(card) ? ["url(...)"] : []),
-        ...(/\son[a-z]+\s*=/i.test(card) ? ["an inline event handler"] : []),
+        ...(/<svg[^>]*\bsrc\s*=/i.test(scanned) ? ["an <svg src>"] : []),
+        ...(/<image[\s>]/i.test(scanned) ? ["an <image>"] : []),
+        ...(/<use[^>]*href="(?!#)/i.test(scanned) ? ["an external <use>"] : []),
+        ...(/\bsrc\s*=/i.test(scanned) ? ["src="] : []),
+        ...(/\bhttps?:\/\//i.test(scanned) ? ["a remote address"] : []),
+        ...(/url\(/i.test(scanned) ? ["url(...)"] : []),
+        ...(/\son[a-z]+\s*=/i.test(scanned) ? ["an inline event handler"] : []),
       ]),
   ];
 }
