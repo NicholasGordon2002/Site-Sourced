@@ -268,8 +268,12 @@ These are enforced in code, not by good intentions:
   **CC0 / public-domain** files; the licence is re-read from the file's own metadata
   and anything else is skipped. Downloads are capped at 700 KB. If nothing clean is
   found, the page uses a plain CSS/SVG treatment and the manifest says so. A
-  hand-supplied image must declare CC0/public-domain, or be labelled `AI-generated`
-  (labelled in the manifest, as in the test fixtures).
+  hand-supplied image must declare CC0/public-domain, be labelled `AI-generated`
+  (labelled in the manifest, as in the test fixtures), or — on a **delivered build
+  only** — declare `Client-supplied` with its author recorded. That third kind is the
+  client's own photograph of their own business: the page prints a credit line naming the
+  author the record gives, and the same licence kind is refused by name on a
+  demonstration, because an unsolicited proposal has no client to have supplied anything.
 - **No submissions kept by us.** The form posts straight to a relay the client owns
   (see `src/demo/forms.ts`), the page states that in plain words, and the business's
   email address and phone number are printed next to the form so an enquiry is never

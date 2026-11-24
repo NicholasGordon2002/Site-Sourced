@@ -52,7 +52,10 @@ export interface ImageVariant {
   width: number;
 }
 
-/** An image supplied by hand (CC0/PD file we already hold, or a labelled AI fallback). */
+/**
+ * An image supplied by hand: a CC0/PD file we already hold, a labelled AI fallback, or —
+ * on a delivered build only — a photograph the client supplied of their own business.
+ */
 export interface ImageOverride {
   role: "hero" | "about";
   /**
@@ -62,9 +65,23 @@ export interface ImageOverride {
    * One of the two must be present.
    */
   file?: string;
-  /** Exact licence wording. Must be CC0/public domain, or start with "AI-generated". */
+  /**
+   * Exact licence wording. One of three kinds and nothing else:
+   *
+   *   - CC0 / public domain — a free-to-use file we already hold;
+   *   - starts with "AI-generated" — a labelled placeholder illustration;
+   *   - starts with "Client-supplied" — the client's own photograph of their own business.
+   *     **A delivered build only**: an unsolicited proposal has no client to have supplied
+   *     anything, so a demonstration that declares one is refused by name
+   *     (`clientPhotoProblems` in build.ts).
+   */
   license: string;
   source_url: string;
+  /**
+   * Who took the picture. Required for a client-supplied photograph: the credit line the
+   * page prints is built from it, so an unattributed picture cannot be credited truthfully
+   * and the build refuses it.
+   */
   author: string;
   /**
    * The same picture at several widths, prepared with `tools/prepare-images.py`.

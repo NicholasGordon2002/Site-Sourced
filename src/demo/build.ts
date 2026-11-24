@@ -30,6 +30,7 @@ import {
   type ComparisonDecision,
 } from "./booking-comparison.ts";
 import {
+  clientPhotoCredit,
   collectionProblems,
   composeCopy,
   composePrivacy,
@@ -37,6 +38,7 @@ import {
   fictionalNarrativeProblems,
   guardCopy,
   illustrationLabel,
+  isClientSuppliedImage,
   isIllustrativeImage,
   narrativeParagraphs,
   normaliseServices,
@@ -2688,6 +2690,72 @@ export function refusalCoverageChecks(): string[] {
 }
 
 /**
+ * The clauses for a photograph the client supplied (`license` starting "Client-supplied").
+ *
+ * A client's own photograph is the one image kind a **delivered** build may carry and a
+ * demonstration may not. An unsolicited proposal has no client to have supplied anything,
+ * and a real business's photograph is exactly what "no business's own logo, photos or copy
+ * in a demo — ever" forbids; the licence kind is refused here by name, so a demonstration
+ * that declares one cannot build.
+ *
+ * The credit is checked on the rendered pages, never asserted: every page that shows the
+ * picture must print the sentence `clientPhotoCredit` composes from the recorded author,
+ * and a page that shows no such picture must not print it. A picture with no author
+ * recorded fails first — a credit line built from an empty author names nobody.
+ */
+export function clientPhotoProblems(vars: {
+  pages: RenderedPage[];
+  record: BusinessRecord;
+  images: ManifestImage[];
+  /** The phase this bundle is built for, from `delivery.mode` — never inferred here. */
+  phase: "demo" | "business";
+}): string[] {
+  const { pages, record, images, phase } = vars;
+  const problems: string[] = [];
+  const photos = images.filter(isClientSuppliedImage);
+  if (photos.length === 0) return problems;
+
+  for (const image of photos) {
+    if (phase !== "business") {
+      problems.push(
+        `image ${image.file} declares the licence "client-supplied" (${JSON.stringify(image.license)}) on a demonstration bundle. A client-supplied photograph is the client's own picture of their own business, so only a delivered build may carry one: an unsolicited proposal has no client to have supplied anything. Declare CC0/public domain or a labelled AI-generated fallback, or build this record in the delivered phase.`,
+      );
+    }
+    const author = (image.author ?? "").trim();
+    if (author === "" || /^(unknown|n\/a|unattributed)$/i.test(author)) {
+      problems.push(
+        `image ${image.file} is recorded as client-supplied but names no author (author: ${JSON.stringify(image.author ?? "")}). The credit line the page prints is built from the recorded author, so a photograph nobody is credited for cannot be published honestly — record who took it.`,
+      );
+    }
+  }
+
+  // One credit per photograph, from the one function the page's caption uses, so the page
+  // and the check cannot disagree about the sentence a client's picture carries.
+  const credits = photos.map((image) => ({ image, credit: clientPhotoCredit(record.name, image.author) }));
+  for (const page of pages) {
+    const spec = PAGE_SPECS[page.id];
+    const on = `on ${page.file}`;
+    const shown = credits.filter(({ image }) => spec.slots.includes(image.role));
+    for (const { image, credit } of shown) {
+      if (!page.html.includes(esc(credit))) {
+        problems.push(
+          `${on}: shows the client-supplied ${image.role} photograph (${image.file}) with no credit line under it. A client's own photograph is not a stock picture, so the page must say whose it is; expected the page to contain: "${credit}"`,
+        );
+      }
+    }
+    if (shown.length === 0) {
+      const stray = credits.find(({ credit }) => page.html.includes(esc(credit)));
+      if (stray) {
+        problems.push(
+          `${on}: carries the client-photograph credit "${stray.credit}" although this page shows no client-supplied photograph — a credit on a page with no such picture names an author for a picture the visitor cannot see.`,
+        );
+      }
+    }
+  }
+  return problems;
+}
+
+/**
  * Everything that must be true for a bundle to be publishable at all — one list, one
  * throw — checked **on every page**, because the plan's compliance rules are per page
  * and never inherited. It covers the pages' compliance strings, the contact form, and
@@ -2874,6 +2942,9 @@ export function complianceChecks(vars: {
   //     record's declared source, and a page carrying a credit the record does not
   //     support fails here (provenance.ts).
   problems.push(...undeliverableAddressProblems({ record, form, pages }));
+  // A photograph the client supplied: refused by name on a demonstration, required to name
+  // its author, and credited on every page that shows it — and on no page that does not.
+  problems.push(...clientPhotoProblems({ pages, record, images, phase: delivery.mode }));
   // Every number a page prints or dials, against the owner's three-version phone model
   // (WORKFLOW.md rule 9): the client's own number, the business's own published number on
   // a demonstration, or a reserved "example" number — and never anything else.
