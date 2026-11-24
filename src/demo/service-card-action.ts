@@ -119,6 +119,17 @@ export const SERVICE_CARD_ACTION_PAGE = "services.html";
  * comparison was scoped to. Any other record refuses the variant, and says why.
  */
 export const SERVICE_CARD_ACTION_SLUG = "maple-avenue-barber-shop";
+/**
+ * **The review copies the nested-CTA shape is painted on** (owner discretion on the
+ * Northshore demo, 24 Nov 2026). The nested CTA is the owner's direction of 10 Oct for a
+ * review copy's service cards; it was built on the appointment demo alone, and the
+ * Northshore inquiry demo is the second review copy the owner is looking at. The same
+ * shape, the same module, the same family-derived label — the card's button reads
+ * "Ask about <service>" there because that is what the inquiry family composes. A record
+ * outside this set still refuses the variant by name.
+ */
+export const SERVICE_CARD_ACTION_SLUGS: ReadonlySet<string> = new Set([SERVICE_CARD_ACTION_SLUG, "northshore-garden-works"]);
+const SERVICE_CARD_ACTION_SLUG_LIST = [...SERVICE_CARD_ACTION_SLUGS].join(" and ");
 /** The card's modifier class, added to `card service-tile`. */
 export const SERVICE_CARD_ACTION_CARD_CLASS = "service-tile--bar";
 /** The block holding the heading and the note, so the bar can sit at the foot. */
@@ -262,11 +273,11 @@ export function serviceCardActionDecision(vars: {
       basis: `refused: this bundle is in the delivered phase. The card variant is a review treatment for the owner — it is not part of the design a client has agreed to, and ${SERVICE_CARD_ACTION_VAR} carries no weight in a client build (${SERVICE_CARD_ACTION_BASIS}).`,
     };
   }
-  if (vars.slug !== SERVICE_CARD_ACTION_SLUG) {
+  if (!SERVICE_CARD_ACTION_SLUGS.has(vars.slug)) {
     return {
       ...off,
       shape,
-      basis: `refused: the card variant is scoped to the ${SERVICE_CARD_ACTION_SLUG} appointment demonstration. ${SERVICE_CARD_ACTION_VAR} is set but this record is "${vars.slug}", so no page changes (${SERVICE_CARD_ACTION_BASIS}).`,
+      basis: `refused: the card variant is scoped to the ${SERVICE_CARD_ACTION_SLUG_LIST} review demonstrations. ${SERVICE_CARD_ACTION_VAR} is set but this record is "${vars.slug}", so no page changes (${SERVICE_CARD_ACTION_BASIS}).`,
     };
   }
   return {
@@ -275,7 +286,7 @@ export function serviceCardActionDecision(vars: {
     raw,
     unrecognised: null,
     page,
-    basis: `${SERVICE_CARD_ACTION_VAR} is set to "${raw.trim()}" and this record is the ${SERVICE_CARD_ACTION_SLUG} demonstration, so its service cards render the ${shape} shape. ${
+    basis: `${SERVICE_CARD_ACTION_VAR} is set to "${raw.trim()}" and this record is one of the ${SERVICE_CARD_ACTION_SLUG_LIST} demonstrations, so its service cards render the ${shape} shape. ${
       shape === "whole-card"
         ? `The recorded name, the recorded note, the bundle's own hairline, and a full-width action bar at the card's foot carrying the family's derived label and a text chevron - the card is still one link to contact-<service>.html#form with no nested control, and only ${page} changes.`
         : `The card is a container: the recorded name and note stay on it as text, and its single action is a real anchor at the card's foot, styled as a button, carrying the family's derived label ("Request <service>") and pointing at contact-<service>.html#form. No card is a link in this shape, so each card has exactly one thing a thumb or a keyboard can act on.`

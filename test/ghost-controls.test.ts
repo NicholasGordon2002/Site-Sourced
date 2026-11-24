@@ -65,6 +65,7 @@ import {
   GHOST_BUTTON_SELECTORS,
   GHOST_CONTROLS_MARKER,
   GHOST_CONTROLS_SLUG,
+  GHOST_CONTROLS_SLUGS,
   GHOST_CONTROLS_SURFACES,
   GHOST_CONTROLS_VAR,
   GHOST_SURFACE_INK,
@@ -86,12 +87,12 @@ const FIXTURES = join(import.meta.dir, "fixtures");
 const record = (slug: string): BusinessRecord =>
   JSON.parse(readFileSync(join(FIXTURES, `${slug}.json`), "utf8")) as BusinessRecord;
 
-/** The one record the treatment is scoped to, plus the other three demonstration fixtures. */
+/** The review copies the treatment is scoped to, and the demonstration fixtures outside it. */
 const MAPLE = record(GHOST_CONTROLS_SLUG);
 const OTHER_SLUGS = readdirSync(FIXTURES)
   .filter((file) => file.endsWith(".json"))
   .map((file) => file.replace(/\.json$/, ""))
-  .filter((slug) => slug !== GHOST_CONTROLS_SLUG)
+  .filter((slug) => !GHOST_CONTROLS_SLUGS.has(slug))
   .sort();
 
 /**
@@ -348,7 +349,7 @@ test("the delivered phase refuses the treatment outright, whatever the switch sa
   );
 });
 
-test("every record except the one the treatment is scoped to refuses it", () => {
+test("every record except the review copies the treatment is scoped to refuses it", () => {
   expect(OTHER_SLUGS.length).toBeGreaterThan(0);
   for (const slug of OTHER_SLUGS) {
     const source = record(slug);
@@ -357,7 +358,8 @@ test("every record except the one the treatment is scoped to refuses it", () => 
       expect(decision.enabled).toBe(false);
       expect(decision.unrecognised).toBeNull();
       expect(decision.basis).toContain(`${GHOST_CONTROLS_VAR} is set but this record is "${slug}"`);
-      expect(decision.basis).toContain(`scoped to the ${GHOST_CONTROLS_SLUG} appointment demonstration`);
+      expect(decision.basis).toContain("scoped to the");
+      expect(decision.basis).toContain("review demonstrations");
       expect(decision.basis).toContain("so the stylesheet this bundle ships is unchanged");
     }
     // The decision is not merely a report: the build on that record writes no block, and if one
@@ -369,9 +371,11 @@ test("every record except the one the treatment is scoped to refuses it", () => 
       `while ${GHOST_CONTROLS_VAR} is not in force for this build`,
     );
   }
-  // The scoped record is the only one that keeps it, so "every record except" is a claim about
-  // the whole fixture set rather than about the three slugs written above.
-  expect(build({ value: "1" }).decision.enabled).toBe(true);
+  // The scoped records are the only ones that keep it, so "every record except" is a claim
+  // about the whole fixture set rather than about the slugs written above.
+  for (const slug of GHOST_CONTROLS_SLUGS) {
+    expect(build({ value: "1", slug, record: record(slug) }).decision.enabled).toBe(true);
+  }
 });
 
 /* --------------------------------------------------------------- 5. the two surfaces */

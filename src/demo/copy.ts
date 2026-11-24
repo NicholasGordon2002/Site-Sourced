@@ -305,6 +305,47 @@ function capitalise(text: string): string {
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
 }
 
+/**
+ * **The one demonstration this compact offering line is written for** (owner discretion on
+ * the Northshore Garden Works demo, 24 Nov 2026: "generous whitespace", a hero that is not
+ * dense at phone size).
+ *
+ * The hero's offering line names the recorded services. On a record with five of them that
+ * is a run-on of every name — four lines of lead type at 360px, competing with the headline
+ * and pushing the actions down the screen. On this demo alone the same **facts** are said
+ * once, in one line, and the full list is left to the Services section that already carries
+ * every name, its note and its own CTA. Nothing is added to the record: the count, the first
+ * name and the last name are the record's own, in its own spelling, and "recorded" keeps the
+ * line honest about where they came from (the list may be incomplete, as Services says).
+ *
+ * Every other record — Maple Avenue, the other fixtures, a client build — keeps the line it
+ * has, byte for byte.
+ */
+const COMPACT_OFFERING_SLUG = "northshore-garden-works";
+
+/** `"Five services recorded, from X to Y."` — one line, from the record's own list. */
+function compactOfferingLine(serviceNames: readonly string[], offeringPlural: string): string {
+  if (serviceNames.length < 3) return "";
+  const counts = ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"];
+  const count = counts[serviceNames.length] ?? String(serviceNames.length);
+  return `${count} ${offeringPlural} recorded, from ${serviceNames[0]!} to ${serviceNames[serviceNames.length - 1]!}.`;
+}
+
+/**
+ * **A category that is not a countable noun needs a noun behind it.** The identity sentence
+ * is "X is a {category} in {place}", which reads correctly for "a barber shop" and "a dental
+ * clinic" and reads wrong for a trade named by its activity: "Northshore Garden Works is a
+ * landscaping in Stoney Creek". The category is still the record's own word — nothing is
+ * added to the fact, only the noun an English sentence needs — and only the identity
+ * sentence uses it, so every other line that names the category keeps the recorded word.
+ */
+const ACTIVITY_CATEGORIES: ReadonlySet<string> = new Set(["landscaping", "landscape gardening", "gardening"]);
+
+/** The identity sentence's noun phrase: the category, with "business" where it needs one. */
+function identityNoun(cat: string): string {
+  return ACTIVITY_CATEGORIES.has(cat) ? `${cat} business` : cat;
+}
+
 const DAY_NAMES: Record<string, string> = {
   Mo: "Mon",
   Tu: "Tue",
@@ -919,11 +960,14 @@ export function composeCopy(
     : provenance.published
       ? `as published for this ${cat}`
       : `invented for this example ${cat}`;
-  const heroLead = serviceNames.length > 0
-    ? serviceNames.join(" · ")
-    : carried.length === 0
-      ? ""
-      : `${capitalise(sentenceList(carried))} ${heroStanding}.`;
+  const heroLead = record.slug === COMPACT_OFFERING_SLUG
+    ? compactOfferingLine(serviceNames, profile.offeringPlural) ||
+      (carried.length === 0 ? "" : `${capitalise(sentenceList(carried))} ${heroStanding}.`)
+    : serviceNames.length > 0
+      ? serviceNames.join(" · ")
+      : carried.length === 0
+        ? ""
+        : `${capitalise(sentenceList(carried))} ${heroStanding}.`;
 
   // The record's own narrative, spliced between the identity line and the services
   // sentence. Built as an array rather than indexed: the narrative moves the positions
@@ -932,7 +976,7 @@ export function composeCopy(
   const narrative = narrativeParagraphs(record);
   const offeringTitle = profile.offeringPlural.charAt(0).toUpperCase() + profile.offeringPlural.slice(1);
   const about: string[] = [
-    `${record.name} is a ${cat}${city ? ` in ${place}` : ""}.`,
+    `${record.name} is a ${identityNoun(cat)}${city ? ` in ${place}` : ""}.`,
     ...narrative,
     serviceSentence
       ? `The ${profile.offeringPlural} recorded for ${record.name} are on the ${offeringTitle} page: ${serviceSentence}.`

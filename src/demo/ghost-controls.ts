@@ -90,6 +90,17 @@ export const GHOST_CONTROLS_VAR = "DEMO_GHOST_CONTROLS";
  * booking comparison and nested-CTA direction are scoped to. Any other record refuses it.
  */
 export const GHOST_CONTROLS_SLUG = "maple-avenue-barber-shop";
+/**
+ * **The review copies the treatment is painted on** (owner discretion on the Northshore
+ * demo, 24 Nov 2026). The treatment was written for the appointment demo alone; the owner's
+ * 16 Oct ruling is that **every** button on a review copy wears the outline, and the
+ * Northshore inquiry demo is the second review copy the owner is looking at — so the same
+ * stylesheet treatment is painted there too, from the same block, with no second treatment.
+ * The scope is a set, not a rule: a record outside it still refuses by name, and a client
+ * build refuses it whatever its slug says.
+ */
+export const GHOST_CONTROLS_SLUGS: ReadonlySet<string> = new Set([GHOST_CONTROLS_SLUG, "northshore-garden-works"]);
+const GHOST_CONTROLS_SLUG_LIST = [...GHOST_CONTROLS_SLUGS].join(" and ");
 
 /**
  * **The marker the treatment declares in the stylesheet**: a custom property only this
@@ -293,11 +304,11 @@ export function ghostControlsDecision(vars: {
       basis: `refused: this bundle is in the delivered phase. The ghost treatment is a review treatment for the owner, tried on the demonstration's review copy — it is not part of the design a client has agreed to, and ${GHOST_CONTROLS_VAR} carries no weight in a client build (${GHOST_CONTROLS_BASIS}).`,
     };
   }
-  if (vars.slug !== GHOST_CONTROLS_SLUG) {
+  if (!GHOST_CONTROLS_SLUGS.has(vars.slug)) {
     return {
       ...off,
       surface,
-      basis: `refused: the ghost treatment is scoped to the ${GHOST_CONTROLS_SLUG} appointment demonstration. ${GHOST_CONTROLS_VAR} is set but this record is "${vars.slug}", so the stylesheet this bundle ships is unchanged (${GHOST_CONTROLS_BASIS}).`,
+      basis: `refused: the ghost treatment is scoped to the ${GHOST_CONTROLS_SLUG_LIST} review demonstrations. ${GHOST_CONTROLS_VAR} is set but this record is "${vars.slug}", so the stylesheet this bundle ships is unchanged (${GHOST_CONTROLS_BASIS}).`,
     };
   }
   return {
@@ -305,7 +316,7 @@ export function ghostControlsDecision(vars: {
     surface,
     raw,
     unrecognised: null,
-    basis: `${GHOST_CONTROLS_VAR} is set to "${raw.trim()}" and this record is the ${GHOST_CONTROLS_SLUG} demonstration, so the stylesheet carries the ghost controls: the header action is transparent with an outline in the surface's own colour (white over the home page's photograph, ink on the paper-surfaced headers), the nested service-card CTA is the same treatment in ink on the card, and so is every other button of the family — the CTA band's action, the form's submit and Get directions in ink on the paper surfaces, and the home hero's two actions in white over the photograph. No page changes at all — the treatment is written in styles.css alone (${GHOST_CONTROLS_BASIS}).`,
+    basis: `${GHOST_CONTROLS_VAR} is set to "${raw.trim()}" and this record is one of the ${GHOST_CONTROLS_SLUG_LIST} demonstrations, so the stylesheet carries the ghost controls: the header action is transparent with an outline in the surface's own colour (white over the home page's photograph, ink on the paper-surfaced headers), the nested service-card CTA is the same treatment in ink on the card, and so is every other button of the family — the CTA band's action, the form's submit and Get directions in ink on the paper surfaces, and the home hero's two actions in white over the photograph. No page changes at all — the treatment is written in styles.css alone (${GHOST_CONTROLS_BASIS}).`,
   };
 }
 

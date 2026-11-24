@@ -144,7 +144,7 @@ const swap = (built: Built, file: string, from: string, to: string, once = true)
 
 /* ------------------------------------------------------------------ 1. the opt-in */
 
-test("the action-bar card is off unless the build opts in, and then only for one demonstration", () => {
+test("the action-bar card is off unless the build opts in, and then only for the review copies", () => {
   const off = serviceCardActionDecision({ slug: SERVICE_CARD_ACTION_SLUG, phase: "demo", env: {} });
   expect(off.enabled).toBe(false);
   expect(off.basis).toContain(`${SERVICE_CARD_ACTION_VAR} is not set`);
@@ -153,8 +153,13 @@ test("the action-bar card is off unless the build opts in, and then only for one
   expect(on.enabled).toBe(true);
   expect(on.page).toBe(SERVICE_CARD_ACTION_PAGE);
 
+  // The second review copy carries it too (owner discretion on that demo, 24 Nov 2026).
+  const northshore = serviceCardActionDecision({ slug: "northshore-garden-works", phase: "demo", env: { [SERVICE_CARD_ACTION_VAR]: "1" } });
+  expect(northshore.enabled).toBe(true);
+  expect(northshore.page).toBe(SERVICE_CARD_ACTION_PAGE);
+
   // Every other record refuses it, and says why.
-  const other = serviceCardActionDecision({ slug: "northshore-garden-works", phase: "demo", env: { [SERVICE_CARD_ACTION_VAR]: "1" } });
+  const other = serviceCardActionDecision({ slug: "king-west-dental", phase: "demo", env: { [SERVICE_CARD_ACTION_VAR]: "1" } });
   expect(other.enabled).toBe(false);
   expect(other.basis).toContain("scoped to the");
 
