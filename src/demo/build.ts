@@ -217,6 +217,27 @@ export const GENERATOR = "sitesourced-demo-generator/0.1";
 const FONT_ASSETS = ["fraunces-latin-600.woff2", "source-sans-3-latin.woff2", "OFL.txt"] as const;
 const FONT_SOURCE_DIR = join(import.meta.dir, "assets", "fonts");
 
+/**
+ * **Which licence text travels with which font file** — the SIL Open Font License, which every
+ * face in `assets/fonts/` is under and which has to travel inside the folder the client is
+ * handed.
+ *
+ * The shared faces are both under `OFL.txt`; the Northshore theme's Source Serif 4 ships its own
+ * copy (`OFL-source-serif-4.txt`), because a face the theme brought in brings its own licence
+ * rather than borrowing the shared one. `fontAssetProblems` holds a bundle to this table in both
+ * directions: a font with no licence named here fails the build, and so does a licence text in
+ * `fonts/` that no shipped font belongs to.
+ */
+export const FONT_LICENCE_FILES: Readonly<Record<string, string>> = {
+  "fraunces-latin-600.woff2": "OFL.txt",
+  "source-sans-3-latin.woff2": "OFL.txt",
+  "source-serif-4-latin-600.woff2": "OFL-source-serif-4.txt",
+};
+
+/** A font binary, and a licence text, as each is named inside a bundle's `fonts/`. */
+const FONT_FILE = /\.(?:woff2?|ttf|otf)$/i;
+const FONT_LICENCE_FILE = /\.txt$/i;
+
 export interface BuildOptions {
   outRoot: string;
   /** HTTP/image cache directory (gitignored). */
@@ -2534,6 +2555,117 @@ export function internalRecordProblems(vars: {
 }
 
 /**
+ * **A bundle ships exactly the fonts its stylesheet declares — and each one's licence.**
+ *
+ * The fonts are the one part of a page a browser fetches by a name written in the *stylesheet*
+ * rather than in the HTML, so nothing else in this build compares the two sets: the
+ * reference-exists check sees a `url()` and a file and cannot tell whether the *set* is right.
+ * The Northshore theme made that a live risk — it declares Source Serif 4 and leaves Fraunces
+ * out, so its bundle must carry one face and not the other — and a copy loop that fell back to
+ * the shared list, or a renderer that wrote the shared block into the theme's stylesheet, would
+ * publish a page whose type is not the type the owner approved, with every other check green.
+ *
+ * Three rules, each read in both directions:
+ *
+ *   declared → shipped   every `url("fonts/…")` of an `@font-face` is a file the bundle carries,
+ *                        or the browser asks for a font that is not there;
+ *   shipped → declared   every font file in `fonts/` is declared by some `@font-face`, or the
+ *                        bundle carries weight no page can load — and, in the theme's case, the
+ *                        face it replaced quietly travelled along;
+ *   licence travels     every shipped font file has its licence text named in
+ *                        `FONT_LICENCE_FILES` and that text is in `fonts/` too, and no licence
+ *                        text rides in a bundle carrying no font it belongs to.
+ *
+ * It reads the **folder the build has just written** (the names in `fonts/`), not the list the
+ * copy loop meant to write, which is why it is not a clause inside `complianceChecks`: the fonts
+ * do not exist until the bundle is written. That is also what makes it provable — dropping the
+ * theme's face from `NORTHSHORE_THEME_FONT_FILES`, or its licence from `FONT_LICENCE_FILES`,
+ * fails the build by name (the doctor and the mutation sweep are in `test/font-assets.test.ts`).
+ */
+export function fontAssetProblems(vars: {
+  /** The stylesheet this bundle ships, as rendered. */
+  css: string;
+  /** The names in the bundle's `fonts/` folder, read back after the build copied them in. */
+  fontsInBundle: readonly string[];
+  /** font file → the licence text that must travel with it. Absent means the real table. */
+  licences?: Readonly<Record<string, string>>;
+}): string[] {
+  const licences = vars.licences ?? FONT_LICENCE_FILES;
+  const problems: string[] = [];
+
+  // What the stylesheet declares, and from where.
+  const declared: { family: string; file: string }[] = [];
+  for (const block of vars.css.matchAll(/@font-face\s*\{([^}]*)\}/g)) {
+    const body = block[1] ?? "";
+    const family = /font-family\s*:\s*["']?([^;"'\n}]+?)["']?\s*;/.exec(body)?.[1]?.trim() ?? "";
+    const sources = [...body.matchAll(/url\(\s*["']?([^"')]+?)["']?\s*\)/g)].map((m) => (m[1] ?? "").trim());
+    const named = family ? `"${family}"` : "an unnamed family";
+    if (sources.length === 0) {
+      problems.push(
+        `the stylesheet has an @font-face for ${named} with no url() source: a face declared from nowhere is a face the browser cannot load, and this bundle has no file in fonts/ behind it.`,
+      );
+      continue;
+    }
+    for (const source of sources) {
+      const match = /^fonts\/([^/]+)$/.exec(source);
+      if (!match) {
+        problems.push(
+          `the stylesheet declares ${named} from ${JSON.stringify(source)}: a bundle's fonts are files in fonts/ beside the stylesheet, loaded by a relative url(), so this face points at a file this bundle does not carry.`,
+        );
+        continue;
+      }
+      declared.push({ family, file: match[1]! });
+    }
+  }
+
+  const declaredFiles = new Set(declared.map((face) => face.file));
+  const shippedFonts = vars.fontsInBundle.filter((name) => FONT_FILE.test(name)).sort();
+  const shippedLicences = vars.fontsInBundle.filter((name) => FONT_LICENCE_FILE.test(name)).sort();
+
+  if (shippedFonts.length === 0) {
+    problems.push(
+      `the bundle's fonts/ folder holds no font file at all (${vars.fontsInBundle.length} name(s) in it): every page declares its faces in styles.css and loads them from fonts/, so a bundle without one has lost the type it was designed in.`,
+    );
+  }
+
+  for (const face of declared) {
+    if (!shippedFonts.includes(face.file)) {
+      problems.push(
+        `the stylesheet declares ${face.family ? `"${face.family}"` : "a face"} from fonts/${face.file}, but the bundle does not ship that file — the browser would ask for a font that is not there and fall back to Georgia.`,
+      );
+    }
+  }
+  for (const file of shippedFonts) {
+    if (!declaredFiles.has(file)) {
+      problems.push(
+        `the bundle ships fonts/${file}, but no @font-face in its stylesheet declares it — a bundle ships the fonts it uses, so this one carries a face no page can load (the shared display face left behind after the theme replaced it, or a copy loop that wrote more than the stylesheet asks for).`,
+      );
+    }
+    const licence = licences[file];
+    if (!licence) {
+      problems.push(
+        `fonts/${file} ships with no licence text named for it in FONT_LICENCE_FILES: an OFL font travels with its licence, so a face whose licence this build cannot name is a face we may not redistribute.`,
+      );
+      continue;
+    }
+    if (!shippedLicences.includes(licence)) {
+      problems.push(
+        `fonts/${file} ships without its licence: FONT_LICENCE_FILES names ${licence} for it and fonts/${licence} is not in the bundle. The licence travels with the font, inside the folder the client is handed.`,
+      );
+    }
+  }
+  for (const licence of shippedLicences) {
+    if (!shippedFonts.some((file) => licences[file] === licence)) {
+      problems.push(
+        `the bundle ships fonts/${licence}, a licence text no font in it belongs to — a stray licence is a file the client is handed with no font it licenses.`,
+      );
+    }
+  }
+
+  return problems;
+}
+
+/**
  * The refusals themselves, checked as a **class** rather than one at a time.
  *
  * Every refusal in this generator is a named pattern in a list, and a pattern can stop
@@ -3579,6 +3711,14 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
       await fail(`bundle ${slug} cannot include its font assets — ${name}: ${(err as Error).message}`);
     }
   }
+
+  // What the folder now holds, against what the stylesheet asks for: a bundle ships exactly
+  // the fonts its stylesheet declares, and every one of them travels with its licence. Read back
+  // from the written folder rather than from the list above, so a copy that landed under another
+  // name — or a theme that left the face it replaced behind — is a failure and not a note.
+  const fontsInBundle = await readdir(join(dir, "fonts")).catch(() => [] as string[]);
+  const fontProblems = fontAssetProblems({ css, fontsInBundle });
+  if (fontProblems.length > 0) await fail(`bundle ${slug}'s fonts do not match its stylesheet:\n  - ${fontProblems.join("\n  - ")}`);
 
   // Images: either the bytes we downloaded, or a supplied file in the record — both
   // are in `bytesByPath` by now, already measured, so the page and the manifest
