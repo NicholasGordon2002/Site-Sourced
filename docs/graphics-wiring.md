@@ -44,7 +44,7 @@ The wiring sites, as they stand in the code:
 
 | where | mark | code |
 | --- | --- | --- |
-| each inner page's eyebrow, and one arc divider under its band | the page's own mark (Services, About, Contact, Privacy) | `render.ts:701-702` |
+| each inner page's eyebrow (no divider under the band — the arc was removed on the owner's word, 24 Nov 2026) | the page's own mark (Services, About, Contact, Privacy) | `render.ts` `pageHead` |
 | each recorded service card, inside the name block both card shapes share | `services` | `render.ts:321` |
 | the `Opening hours` heading / the location heading | `hours` / `pin` | `render.ts:777,782` |
 | the printed email and phone lines in the contact block | `email` / `phone` | `render.ts:638-639` |
@@ -62,10 +62,10 @@ its inner markup against `icon(name)` for the 14 names in `ICON_NAMES` (§6 has 
 | page | marks |
 | --- | --- |
 | `index.html` | **10** — services×4 (one per service card), hours, pin, phone, privacy, message, arrow-right |
-| `services.html` | **10** — services×5 (the page's own eyebrow + one per card), hours, pin, phone, privacy, message; one arc divider |
-| `about.html` | **7** — info×2, hours, pin, phone, privacy, message; one arc divider |
-| `contact.html` | **6** — privacy×2 (the form's and the footer's), hours, pin, phone, message; the schematic map with its caption; one arc divider |
-| `privacy.html` | **2** — privacy×2 (its own eyebrow + the footer's link); one arc divider |
+| `services.html` | **10** — services×5 (the page's own eyebrow + one per card), hours, pin, phone, privacy, message |
+| `about.html` | **7** — info×2, hours, pin, phone, privacy, message |
+| `contact.html` | **6** — privacy×2 (the form's and the footer's), hours, pin, phone, message; the schematic map with its caption |
+| `privacy.html` | **2** — privacy×2 (its own eyebrow + the footer's link) |
 | `contact-<service>.html` (×4) | identical to `contact.html`: **6** marks, the map, the caption, the divider |
 | `booking-comparison.html` | **1** — the footer's privacy mark (it carries no page band) |
 

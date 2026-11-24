@@ -52,7 +52,6 @@ import { serviceActionLabel } from "./family.ts";
 import { ghostControlsCss } from "./ghost-controls.ts";
 import {
   MAP_CAPTION,
-  divider,
   graphicsCss,
   ground,
   icon,
@@ -101,7 +100,7 @@ export interface RenderContext {
    * `DEMO_GRAPHICS` opts in and names a treatment this build paints
    * (`graphics-wiring.ts`). Absent — the repository's state, and every published build —
    * means every renderer writes the markup the owner signed off on 7 Oct 2026, byte for
-   * byte: no mark, no divider, no map, no ground.
+   * byte: no mark, no map, no ground.
    *
    * A flag rather than a decision, because nothing on a page depends on *which* treatment
    * was named: either the layer is on and the marks are written, or it is off and the page
@@ -696,15 +695,15 @@ function pageHead(ctx: RenderContext, id: PageId): string {
   const city = record.address?.city;
   const eyebrow = [record.category, city ? `${city}, ${record.address?.province ?? "ON"}` : ""].filter(Boolean).join(" · ");
   const lead = copy.pages[id].lead;
-  // The layer's mark for this page's own vocabulary, and the shallow arc that breaks the
-  // band. Both are inside the `wrap`, and both are absent without the opt-in.
+  // The layer's mark for this page's own vocabulary, inside the `wrap`, and absent without
+  // the opt-in. The shallow arc that used to break the band is gone: the owner asked for it
+  // removed from both review demos on 24 Nov 2026, and the marks stay.
   const pageMark = mark(ctx, PAGE_MARKS[id]);
-  const rule = ctx.graphics ? `        ${divider("arc")}\n` : "";
   return `    <header class="page-head">
       <div class="wrap">
         <p class="eyebrow">${pageMark}${esc(eyebrow)}</p>
         <h1>${esc(copy.pages[id].title)}</h1>
-${lead ? `        <p class="lead">${esc(lead)}</p>\n` : ""}${rule}      </div>
+${lead ? `        <p class="lead">${esc(lead)}</p>\n` : ""}      </div>
     </header>`;
 }
 

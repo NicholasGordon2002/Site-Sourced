@@ -3716,7 +3716,7 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
         version_marker: css.includes(GRAPHICS_MARKER),
         switched_off_leaves: `${GRAPHICS_VAR} unset writes every page and stylesheet of this bundle exactly as master builds it; the four fixtures are compared with diff -r on a build with the switch off (docs/graphics-wiring.md)`,
         marks: [
-              "the page's own mark in each inner page's eyebrow (Services, About, Contact, Privacy) and one arc divider under the band",
+              "the page's own mark in each inner page's eyebrow (Services, About, Contact, Privacy) — no arc divider under the band (removed on the owner's word, 24 Nov 2026)",
               "the services mark beside each recorded service name, inside the name block both card shapes share",
               "the hours mark on the Opening hours heading and the pin on the location heading",
               "the email and phone marks beside the printed details in the contact block",
@@ -3727,7 +3727,7 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
               "the no-photograph ground on the hero of a record that carries no picture",
         ],
         mark_sites: {
-          page_head: "pageHead — PAGE_MARKS[id] in the eyebrow, divider('arc') under the band",
+          page_head: "pageHead — PAGE_MARKS[id] in the eyebrow, no divider under the band",
           service_card: "servicesBlock — icon('services') inside the heading both shapes share",
           hours_and_location: "hoursAddressSection — icon('hours'), icon('pin'), and the map on the contact page",
           printed_details: "fallbackBlock — icon('email'), icon('phone')",
