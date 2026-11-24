@@ -220,10 +220,18 @@ p { line-height: 1.62; }
 .site-menu-summary {
   border: 1px solid var(--ink);
   border-radius: var(--r-md);
-  background: var(--paper);
+  /* Transparent, never filled (owner, 24 Nov 2026): the trigger is an outline and nothing
+     else, so it reads the same as every other control on the page and lets the surface it
+     sits on show through. The outline follows that surface — ink on bone paper, white over
+     the home photograph — which is the rule the buttons already keep. */
+  background: transparent;
   color: var(--ink);
 }
-.site-menu[open] .site-menu-summary { background: var(--paper); border-color: var(--ink); }
+.site-menu[open] .site-menu-summary { background: transparent; border-color: var(--ink); }
+/* The home header sits on the photograph, so the trigger's outline and its three bars are
+   white there — the same white the header's own links and call button wear over the hero. */
+.page--index .site-menu-summary,
+.page--index .site-menu[open] .site-menu-summary { border-color: #fff; color: #fff; }
 /* The same element in its open state: two bars crossed. The closed state's three bars are one
    element and two shadows; the open state is the same element, undrawn, plus two rotated bars. */
 .site-menu-icon { position: relative; }

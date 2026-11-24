@@ -38,6 +38,7 @@ import {
   fictionalNarrativeProblems,
   guardCopy,
   illustrationLabel,
+  serviceCardIllustrationLabel,
   isClientSuppliedImage,
   isIllustrativeImage,
   narrativeParagraphs,
@@ -2793,7 +2794,7 @@ export function serviceCardImageProblems(vars: {
   const declared = (record.images ?? []).filter((image) => image.role === "service");
   const cards = images.filter((image) => image.role === "service");
   const byKey = new Map(normaliseServices(record).map((service) => [service.name.trim().toLowerCase(), service.name]));
-  const label = illustrationLabel(record.name);
+  const label = serviceCardIllustrationLabel();
   const inBundle = new Set(bundleFiles);
   const show = (image: ManifestImage) => image.file ?? "(no file)";
 
@@ -3050,10 +3051,14 @@ export function complianceChecks(vars: {
     // `illustrationLabel`, so the page and the manifest cannot disagree.
     for (const role of spec.slots) {
       const image = illustrative.find((i) => i.role === role);
-      if (image && !html.includes(esc(label))) {
+      // A card picture carries the short card label (`serviceCardIllustrationLabel`), the hero
+      // and the about photograph the full sentence — the same pair `render.ts` writes, so the
+      // page and this check cannot disagree about which sentence belongs to which slot.
+      const expected = role === "service" ? serviceCardIllustrationLabel() : label;
+      if (image && !html.includes(esc(expected))) {
         problems.push(
           `${on}: shows the AI-generated ${role} image (${image.file}) with no label saying so. ` +
-            `An AI-generated placeholder must be labelled as an illustration, not left looking like a photograph of ${record.name}; expected the page to contain: "${label}"`,
+            `An AI-generated placeholder must be labelled as an illustration, not left looking like a photograph of ${record.name}; expected the page to contain: "${expected}"`,
         );
       }
     }
@@ -4431,7 +4436,7 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
         loads_site_js: page.html.includes("site.js"),
         illustration_labels: PAGE_SPECS[page.id].slots
           .flatMap((role) => images.filter((i) => i.role === role && isIllustrativeImage(i)))
-          .map((i) => illustrationLabel(record.name)),
+          .map((i) => (i.role === "service" ? serviceCardIllustrationLabel() : illustrationLabel(record.name))),
       })),
     },
     privacy: {

@@ -44,7 +44,7 @@ import type { CategoryProfile } from "./copy.ts";
 import { addressLine } from "./addresses.ts";
 import { familyFields, normaliseHours, normaliseServices, slugify } from "./copy.ts";
 import { BOOKING_ANCHOR_CLASS, BOOKING_ARROW, type BookingMode } from "./booking.ts";
-import { clientPhotoCredit, illustrationLabel, isClientSuppliedImage, isIllustrativeImage } from "./copy.ts";
+import { clientPhotoCredit, illustrationLabel, isClientSuppliedImage, isIllustrativeImage, serviceCardIllustrationLabel } from "./copy.ts";
 import type { FormDelivery } from "./delivery.ts";
 import type { FieldGroup, FieldSpec } from "./fields.ts";
 import { SECTION_ORDER, extrasLines, type SectionId, type ServiceCardShape } from "./family-render.ts";
@@ -342,7 +342,7 @@ function servicesBlock(
       // The card's picture, when the record gave this service one: inside the same body
       // block as the name, so both card shapes carry it and neither shape moves.
       const cardImage = serviceCardImage(images, s.name);
-      const figure = cardImage ? serviceCardFigure(cardImage, record.name) : "";
+      const figure = cardImage ? serviceCardFigure(cardImage) : "";
       const head = `<${heading}>${markHere}${esc(s.name)}</${heading}>${s.note ? `<p>${esc(s.note)}</p>` : ""}`;
       // Treatment 1 (`service-card-action.ts`): the recorded name and note in a body block,
       // then a full-width action bar at the card's foot — still inside the card's one link,
@@ -448,9 +448,9 @@ function serviceCardImage(images: ManifestImage[], service: string): ManifestIma
  * build's own check read too, so a card cannot show a placeholder the page does not admit
  * to (`serviceCardImageProblems` in build.ts).
  */
-function serviceCardFigure(image: ManifestImage, businessName: string): string {
+function serviceCardFigure(image: ManifestImage): string {
   const srcset = imageSrcset(image);
-  const label = isIllustrativeImage(image) ? illustrationLabel(businessName) : "";
+  const label = isIllustrativeImage(image) ? serviceCardIllustrationLabel() : "";
   return (
     `<figure class="service-figure">` +
     `<img class="service-img" src="${esc(image.file!)}"` +
