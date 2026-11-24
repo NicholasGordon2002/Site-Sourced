@@ -207,11 +207,16 @@ untouched: the branch changes no page, no stylesheet and no README.
 
 ## 5. Open, and flagged rather than guessed
 
-1. **Where our own record of a delivered build should live.** The build still *constructs* the
-   record — it is what makes the phase decision legible — but a delivered folder no longer
-   carries it, so the delivered phase has no on-disk audit trail (the CLI's `--summary` JSON
-   carries slug, dir, file list, bytes and warnings, not the bases). If the lead wants one, the
-   natural home is beside the bundle rather than in it, and it is a lead call, not ours.
+1. **Where our own record of a delivered build lives — settled 17 Oct 2026 (lead).** Beside the
+   bundle, never in it: `<slug>.build-record.json` in the output root, written last, after every
+   gate passes, so it can only describe a bundle that is on disk. It carries slug, phase, dir,
+   file list, bytes summed from disk, warnings, and the `bases` block the CLI `--summary` omits
+   (phase decision, delivery derivation, family/form, booking mode, phone version, provenance,
+   privacy retention, form account, per-page compliance rows, image licences, hand-off claims),
+   each copied from the manifest the build composes so the two cannot disagree. Only a delivered
+   build writes one; a demonstration keeps `manifest.json` inside its folder and clears a stale
+   sibling, naming the removal; a failed build leaves neither folder nor record. The delivered
+   folder is still eighteen files and carries nothing of ours.
 2. **`README.txt` is still in the folder the README tells the client to upload.** That is the
    one remaining internal-ish file in a client's web root, and it is a defender of the site's
    honesty rather than a leak — but the corrected README in `research/handover-pack.md` §1
