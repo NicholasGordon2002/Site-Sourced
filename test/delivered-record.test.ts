@@ -60,7 +60,17 @@ const OUR_INBOX = "site-sourced-311e0184@ctomail.io";
 
 /** The test's own form id: a test must not need a secret, and the id is a per-client value. */
 const DELIVERED: BusinessRecord = { ...RECORD, form_access_key: "test-form-id" };
-const DEMONSTRATION: BusinessRecord = { ...DELIVERED, form_recipient: OUR_INBOX, form_delivery: "demo", booking_url: "" };
+// The twin also declares a source a **demonstration** may claim: the record declares
+// `client-supplied`, which is a delivered site's claim and is refused by name on a
+// proposal (provenance.ts, test/provenance.test.ts), so the demo declares published
+// details instead and the phase machinery below is what these tests measure.
+const DEMONSTRATION: BusinessRecord = {
+  ...DELIVERED,
+  source_kind: "public-listings",
+  form_recipient: OUR_INBOX,
+  form_delivery: "demo",
+  booking_url: "",
+};
 
 /** Every text file of the delivered fixture, as `readBundleTexts` reads them back. */
 const DELIVERED_TEXT_FILES = [
@@ -285,7 +295,9 @@ test("the record carries the bases the CLI's --summary omits — the build's own
     expect(bases.phone.mode).toBe("client");
     // Where the details came from — and the line proved against the page this build wrote,
     // so the record is a description of THIS bundle rather than a shape that could describe any.
-    expect(bases.provenance.source_kind).toBe("public-listings");
+    // The record declares the details as supplied by the client themselves — the kind a
+    // delivered site may claim, and which a demonstration is refused for declaring.
+    expect(bases.provenance.source_kind).toBe("client-supplied");
     expect((await Bun.file(join(b.dir, "index.html")).text()).includes(bases.provenance.provenance_line)).toBe(true);
     // What the privacy notice's retention half was composed from.
     expect(bases.privacy.mode).toBe("business");
@@ -327,7 +339,12 @@ test("a build that fails leaves no record beside a folder it did not create", as
   await temp(async (tmp) => {
     // The demonstration twin of the delivered record, still carrying the business's own booking
     // link: refused by name (gbp §5.3 rule 1), so no folder — and no record of one.
-    const refused: BusinessRecord = { ...DELIVERED, form_recipient: OUR_INBOX, form_delivery: "demo" };
+    const refused: BusinessRecord = {
+      ...DELIVERED,
+      source_kind: "public-listings",
+      form_recipient: OUR_INBOX,
+      form_delivery: "demo",
+    };
     await expect(build(refused, tmp)).rejects.toThrow(/booking link points at a business's own booking page/);
     expect(existsSync(join(tmp, RECORD_FILE))).toBe(false);
     expect(existsSync(join(tmp, "business-phase-fixture"))).toBe(false);

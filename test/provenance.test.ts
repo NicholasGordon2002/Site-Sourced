@@ -154,6 +154,74 @@ test("a fictional example business cannot be presented as anyone's own site", ()
   expect(checked(rec).join(" ")).toContain("fictional example business");
 });
 
+/* ------------------------------------- the client's own facts (client-supplied) */
+
+/** A delivered site whose details the business themselves gave us. */
+const DELIVERED: BusinessRecord = record({
+  source_kind: "client-supplied",
+  form_recipient: BASE.email!,
+  form_delivery: "business",
+});
+
+test("a client-supplied record built as a delivered site carries no listing claim and no caveat", () => {
+  const rec = DELIVERED;
+  const { ctx, copy } = pages(rec);
+  expect(ctx.delivery.mode).toBe("business");
+  expect(copy.provenance.kind).toBe("client-supplied");
+  // The caveat qualifies details we had to find. These are the client's own, so it is
+  // absent — not replaced by another sentence, simply not printed.
+  expect(copy.contactCaveat).toBe("");
+  const html = HOME(rec);
+  expect(html).not.toContain("as published in public listings");
+  expect(html).not.toContain("came from public listings");
+  for (const fragment of OSM_ONLY_FRAGMENTS) expect(html).not.toContain(fragment);
+  // What the page does say: the authorship line, and nothing about a source.
+  expect(pageText(html)).toContain(copy.footer.provenance);
+  expect(copy.footer.provenance).toContain("Copy, layout and imagery: Site Sourced.");
+  // The record is not refused: no problem names its source at all.
+  const problems = checked(rec).join(" ");
+  expect(problems).not.toContain("client-supplied");
+  expect(problems).not.toContain("public listings");
+});
+
+test("a demonstration may not declare the client supplied the details, and is refused by name", () => {
+  // The same record with our own inbox as the recipient: a demonstration, and the claim
+  // that a client gave us these details is false of one.
+  const rec = record({ source_kind: "client-supplied" });
+  expect(pages(rec).ctx.delivery.mode).toBe("demo");
+  const problems = checked(rec).join(" ");
+  expect(problems).toContain('source_kind "client-supplied"');
+  expect(problems).toContain("only a delivered site may claim");
+  expect(problems).toContain("demonstration");
+  // The refusal is what stops it: the page it would have printed carries no listing claim
+  // either, so nothing else on the page could catch this record.
+  expect(HOME(rec)).not.toContain("as published in public listings");
+});
+
+test("the public-listings caveat printed on a client-supplied record fails the build", () => {
+  const rec = DELIVERED;
+  const { ctx, rendered } = pages(rec);
+  const caveat = listingsCaveat(rec.name, printedDetails(rec));
+  expect(caveat.length).toBeGreaterThan(0);
+  // Doctored where a caveat would print: beside the details, on the contact page.
+  const tampered = rendered.map((p) =>
+    p.file === "contact.html" ? { ...p, html: p.html.replace("</footer>", `<p>${esc(caveat)}</p></footer>`) } : p,
+  );
+  const problems = complianceChecks({
+    pages: tampered,
+    record: rec,
+    copy: ctx.copy,
+    form: ctx.form,
+    delivery: ctx.delivery,
+    images: [],
+    privacy: ctx.privacy,
+  }).join(" ");
+  expect(problems).toContain(
+    'prints the "as published in public listings" caveat although the record\'s details were supplied by the client themselves',
+  );
+  expect(problems).toContain("must never print for them");
+});
+
 /* ------------------------------------------------- the contradiction direction */
 
 test("a page keeping the OpenStreetMap credit for a non-OSM record fails the build", () => {

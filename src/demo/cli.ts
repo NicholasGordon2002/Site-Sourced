@@ -74,7 +74,8 @@ Record format (one JSON object, or an array, or {"records": [...]}):
                                                     // gitignored .env.local, never here
     "source_kind": "openstreetmap"                  // REQUIRED before a page prints any
                                                     // detail: openstreetmap | public-listings
-                                                    // | fictional. The footer's provenance
+                                                    // | fictional | client-supplied (a
+                                                    // delivered site only). The footer's provenance
                                                     // line and the caveat on the printed
                                                     // contact details are derived from it,
                                                     // and a page may not credit a source the
