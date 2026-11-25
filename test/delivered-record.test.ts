@@ -49,7 +49,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { BUILD_RECORD_SUFFIX, buildBundle, internalRecordProblems, readBundleTexts } from "../src/demo/build.ts";
+import { GHOST_CONTROLS_VAR } from "../src/demo/ghost-controls.ts";
+import { GRAPHICS_VAR } from "../src/demo/graphics-wiring.ts";
 import { INTERNAL_RECORD_MARKERS, REFUSAL_SAMPLES } from "../src/demo/refusal-registry.ts";
+import { SERVICE_CARD_ACTION_VAR } from "../src/demo/service-card-action.ts";
 import type { BusinessRecord, DeliveredBuildRecord } from "../src/demo/types.ts";
 
 /** The test-only delivered-phase record (`test/records/business-phase.json`). */
@@ -97,17 +100,38 @@ interface Built {
   bytes: number;
 }
 
+/**
+ * The three review switches, by the name the build reads.
+ *
+ * The manifest records what this build did with each of them, and the samples the registry
+ * holds for "a configuration variable of our own" are lines of a build with all three left
+ * unset. Our normal build shell exports them, so a build here would otherwise write a
+ * different record depending on the shell it was started from. This file therefore controls
+ * its own environment: each build pins the three off, and the shell is put back exactly as it
+ * was found, so the file's manifest is the same one whatever is exported around it.
+ */
+const REVIEW_SWITCHES = [SERVICE_CARD_ACTION_VAR, GHOST_CONTROLS_VAR, GRAPHICS_VAR] as const;
+
 /** Build a record the way the CLI does, into a folder the test owns. */
 async function build(record: BusinessRecord, into: string): Promise<Built> {
-  const result = await buildBundle(record, {
-    outRoot: into,
-    cacheDir: join(into, "cache"),
-    recordDir: join(import.meta.dir, "records"),
-    noImages: false,
-    refresh: false,
-    onNote: () => {},
-  });
-  return { slug: result.slug, dir: result.dir, files: result.files, warnings: result.warnings, bytes: result.bytes };
+  const shell = new Map(REVIEW_SWITCHES.map((name) => [name, process.env[name]]));
+  for (const name of REVIEW_SWITCHES) delete process.env[name];
+  try {
+    const result = await buildBundle(record, {
+      outRoot: into,
+      cacheDir: join(into, "cache"),
+      recordDir: join(import.meta.dir, "records"),
+      noImages: false,
+      refresh: false,
+      onNote: () => {},
+    });
+    return { slug: result.slug, dir: result.dir, files: result.files, warnings: result.warnings, bytes: result.bytes };
+  } finally {
+    for (const [name, value] of shell) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
 }
 
 /** A folder the test owns, removed whatever the test does. */
