@@ -209,13 +209,13 @@ p { line-height: 1.62; }
    button that opened it. Four things make a panel read as a second, separate control — its
    own shape, its own shadow, a different fill from its trigger, and a gap of page between
    them. All four go:
-     - the trigger and the panel are the same paper with the same 1px ink outline;
+     - the trigger and the panel are the same surface with the same 1px outline;
      - the panel loses its shadow, so nothing floats;
      - the trigger's open state is drawn on the trigger itself — the three bars become an X;
      - where the browser supports anchor positioning, the panel hangs from the trigger's own
        bottom-left corner, its top-left corner squared off into the tab above it, so the two
        boxes share one outline. Every other browser keeps the panel under the header (the
-       shared sheet's own position), now in the same paper and ink.
+       shared sheet's own position), now in the same surface and outline.
    Nothing here changes what the control does: a native <details>, keyboard-operable, no script. */
 .site-menu-summary {
   border: 1px solid var(--ink);
@@ -228,23 +228,47 @@ p { line-height: 1.62; }
   color: var(--ink);
 }
 .site-menu[open] .site-menu-summary { background: transparent; border-color: var(--ink); }
-/* The home header sits on the photograph, so the trigger's outline and its three bars are
-   white there — the same white the header's own links and call button wear over the hero. */
-.page--index .site-menu-summary,
-.page--index .site-menu[open] .site-menu-summary { border-color: #fff; color: #fff; }
-/* The same element in its open state: two bars crossed. The closed state's three bars are one
-   element and two shadows; the open state is the same element, undrawn, plus two rotated bars. */
-.site-menu-icon { position: relative; }
-.site-menu[open] .site-menu-icon { background: none; box-shadow: none; }
-.site-menu[open] .site-menu-icon::before,
+/* **The icon is one 18x18 footprint in both states** (owner, 25 Nov 2026: the bars and the X
+   integrated with the trigger, and white in every state). The shared sheet draws the three
+   bars as one 18x2 element plus two shadows, and the open state crossed that same 2px
+   element — so the X spanned about 13px where the bars spanned 18 and read as a smaller,
+   weaker mark floating inside the same box. Here both states are drawn in the same 18x18
+   square at the same 2px weight: three bars at rest, two full diagonals when open. The markup
+   is untouched — one span, no icon file, no second element. */
+.site-menu-icon { position: relative; width: 1.125rem; height: 1.125rem; background: none; box-shadow: none; }
+.site-menu-icon::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0.5rem;
+  height: 2px;
+  background: currentColor;
+  box-shadow: 0 -0.4375rem 0 currentColor, 0 0.4375rem 0 currentColor;
+}
+.site-menu[open] .site-menu-icon::before { box-shadow: none; transform: rotate(45deg); }
 .site-menu[open] .site-menu-icon::after {
   content: "";
   position: absolute;
-  inset: 0;
+  left: 0;
+  right: 0;
+  top: 0.5rem;
+  height: 2px;
   background: currentColor;
+  transform: rotate(-45deg);
 }
-.site-menu[open] .site-menu-icon::before { transform: rotate(45deg); }
-.site-menu[open] .site-menu-icon::after { transform: rotate(-45deg); }
+/* The home header sits on the photograph, so the trigger is white there — outline and icon
+   alike, in the closed, open, focus and active states — and the panel it opens is that same
+   ink surface, so the tab and the panel are one white-outlined shape instead of a white tab
+   sitting on top of a bone card. Every other page keeps the ink its paper header calls for:
+   white on bone paper is 1.07:1, and the outline follows the surface, as the buttons do. */
+.page--index .site-menu-summary,
+.page--index .site-menu[open] .site-menu-summary { border-color: #fff; color: #fff; }
+.page--index .site-menu[open] .site-menu-summary { background: var(--ink); }
+.page--index .site-nav { background: var(--ink); border-color: #fff; }
+.page--index .site-nav a { color: #fff; }
+.page--index .site-nav a:hover { background: none; color: #fff; }
+.page--index .site-nav a[aria-current="page"] { background: none; color: #A9C0A4; }
 
 /* The phone's panel: a ruled card of small-caps links rather than a stack of grey chips. */
 .site-nav {
@@ -298,6 +322,8 @@ p { line-height: 1.62; }
     height: 1px;
     background: var(--ink);
   }
+  /* Over the photograph the panel is ink, so the line that squares the tab into it is white. */
+  .page--index .site-nav::before { background: #fff; }
   .site-menu[open] .site-menu-summary {
     border-bottom: 0;
     border-radius: var(--r-lg) var(--r-lg) 0 0;
@@ -365,6 +391,16 @@ p { line-height: 1.62; }
   margin-bottom: var(--s-4);
 }
 .section--alt { background: var(--paper-2); border-block: 1px solid var(--line); }
+/* **The home page's services heading has to out-rank the five card headings under it**
+   (owner, 25 Nov 2026). The field guide's own devices do it — scale, the ink rule that marks
+   a change of subject, and air: the section's h2 goes to a display size and takes the ink
+   rule where every other section keeps the hairline, the card headings step down a little,
+   and the list starts a step further below the heading than it did. No badge, box, shadow,
+   icon or mark is added, and nothing here reaches the services page, whose cards are the
+   page's own h2s. */
+.section--alt#services h2 { font-size: clamp(2rem, 8.5vw, 2.5rem); letter-spacing: -0.015em; margin-bottom: var(--s-2); }
+.section--alt#services h2::before { height: 2px; background: var(--ink); margin-bottom: var(--s-3); }
+.section--alt#services .services { margin-top: var(--s-6); }
 .lead { max-width: 32em; }
 
 /* The services list, as a ruled menu: one line per service, its note under it, its action at
@@ -379,7 +415,7 @@ p { line-height: 1.62; }
   box-shadow: none;
 }
 .services .service-tile--cta .service-tile-body { padding: var(--s-5) 0 var(--s-3); }
-.services h3 { font-size: 1.3rem; letter-spacing: -0.005em; }
+.services h3 { font-size: 1.1875rem; letter-spacing: 0; }
 .services p { font-size: 0.9375rem; }
 /* The card's action, sized to sit with its card rather than on top of it (the owner's second
    fix of this pass). The first pass set it in 0.75rem caps at 700 with wide tracking, which
