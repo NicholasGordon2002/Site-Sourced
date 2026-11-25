@@ -72,6 +72,19 @@ Record format (one JSON object, or an array, or {"records": [...]}):
                                             // build refuses any other shape, and refuses a
                                             // page that presents it as a booking or contact
                                             // action.
+    "reviews_url": "https://www.google.com/maps/place/…",
+                                            // optional; the business's OWN Google page
+                                            // (intake question 19). Stored and NEVER printed:
+                                            // one absolute https URL, or blank for none. The
+                                            // build refuses any other shape, and refuses a page
+                                            // that presents it as a link or a booking action.
+    "socials": [ { "network": "Facebook",   // optional; the accounts the client actually keeps
+                   "url": "https://www.facebook.com/example" } ],
+                                            // up to date (intake question 20). Stored and
+                                            // NEVER printed: each entry is a network name and
+                                            // one absolute https URL. The build refuses any
+                                            // other shape, and refuses a page that presents one
+                                            // as a link or a booking action.
     "hours": [ { "days": "Mon–Fri", "hours": "9:00 am – 6:00 pm" } ],
     "services": [ { "name": "Haircut", "note": "optional client wording" } ],
     "form_recipient": "the-business@example.com",   // required for a working form
