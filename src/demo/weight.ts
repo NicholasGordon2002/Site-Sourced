@@ -7,9 +7,11 @@
  * whoever last looked at the page.
  *
  * The measurement is deliberately literal: it sums the files a page **actually
- * loads**. The hero contributes one file — the variant a 360px-wide screen asks for —
+ * loads**. The hero contributes one file — the variant a 360px-wide screen asks for **in
+ * device pixels**, so the 900w file on a DPR 2 phone and the 600w one on a DPR 1 screen —
  * not every variant that sits in the folder, because a folder full of well-cut
- * variants is not a heavy page. Everything on the page is a relative file in the same
+ * variants is not a heavy page. Both figures are reported (`pageWeights`), and the budget
+ * answers to the DPR 2 one. Everything on the page is a relative file in the same
  * bundle, so there is nothing here that a third-party request could hide.
  */
 
@@ -41,6 +43,36 @@ export const BUDGET = {
 
 /** The viewport whose hero file the budget is written against. */
 export const PHONE_WIDTH = 360;
+
+/**
+ * The device pixel ratio a real phone runs at.
+ *
+ * A 360 CSS px phone with a DPR 2 screen has 720 device pixels across, so a browser
+ * there picks the 900w file — not the 600w one. Measuring at DPR 1 charged such a phone
+ * for a file it never downloads: Northshore's home page read 327 KB that way and is
+ * ~542 KB on the phone the owner judges it on. The budget is reported against this
+ * figure, and the DPR 1 figure is reported beside it so the difference is visible.
+ */
+export const PHONE_DPR = 2;
+
+/**
+ * The two cases every page is measured in, labelled, so a figure in a report can never
+ * be read as the wrong one: the same 360 px viewport at DPR 1 and at DPR 2. The DPR 2
+ * case is the phone case — the one the budget answers to.
+ */
+export interface PhoneCase {
+  label: string;
+  width: number;
+  dpr: number;
+}
+
+export const PHONE_CASES: readonly PhoneCase[] = [
+  { label: "360px at DPR 1", width: PHONE_WIDTH, dpr: 1 },
+  { label: "360px at DPR 2", width: PHONE_WIDTH, dpr: PHONE_DPR },
+];
+
+/** The case the budget is judged against: the phone a person actually holds. */
+export const PHONE_CASE: PhoneCase = PHONE_CASES[PHONE_CASES.length - 1]!;
 
 /** `184 KB`, or `2.6 MB` once the number is big enough to read that way. */
 export function kb(bytes: number): string {
@@ -77,15 +109,17 @@ export interface LoadedFile {
 /**
  * The image file a 360px-wide screen downloads.
  *
- * With variants, that is the narrowest file that is at least as wide as the screen —
- * the browser's own choice, given `sizes="100vw"`. With a single file, it is that
- * file, however heavy it is: which is exactly how an un-prepared image ends up
- * costing a phone 2.6 MB, and why `weightProblems` reports it.
+ * With variants, that is the narrowest file that is at least as wide as the screen **in
+ * device pixels** — the browser's own choice, given `sizes="100vw"`: at DPR 2 a 360 CSS px
+ * phone needs 720 device pixels, so it takes the 900w file and never the 600w one. With a
+ * single file, it is that file, however heavy it is: which is exactly how an un-prepared
+ * image ends up costing a phone 2.6 MB, and why `weightProblems` reports it.
  */
-export function phoneImageVariant(image: ManifestImage, screenWidth = PHONE_WIDTH): string | null {
+export function phoneImageVariant(image: ManifestImage, screenWidth = PHONE_WIDTH, dpr = 1): string | null {
   const variants = (image.variants ?? []).filter((v) => v.file && v.width > 0).sort((a, b) => a.width - b.width);
   if (variants.length === 0) return image.file;
-  return (variants.find((v) => v.width >= screenWidth) ?? variants[variants.length - 1]!).file;
+  const devicePixels = screenWidth * dpr;
+  return (variants.find((v) => v.width >= devicePixels) ?? variants[variants.length - 1]!).file;
 }
 
 /**
@@ -99,14 +133,16 @@ export function pageLoadout(input: {
   sizes: Map<string, number>;
   images?: ManifestImage[];
   screenWidth?: number;
+  /** The screen's device pixel ratio: 2 on the phone this budget is written for. */
+  dpr?: number;
 }): LoadedFile[] {
-  const { page, html, css = "", sizes, images = [], screenWidth = PHONE_WIDTH } = input;
+  const { page, html, css = "", sizes, images = [], screenWidth = PHONE_WIDTH, dpr = 1 } = input;
   // The page itself is a load, even when nothing refers to it.
   const load: LoadedFile[] = sizes.has(page) ? [{ file: page, bytes: sizes.get(page)! }] : [];
   // One file per image slot: the rest of a variant set stays on disk.
   const imageFiles = new Set<string>();
   for (const image of images) {
-    const chosen = phoneImageVariant(image, screenWidth);
+    const chosen = phoneImageVariant(image, screenWidth, dpr);
     if (chosen) imageFiles.add(chosen);
   }
   const candidates = new Set<string>();
@@ -122,8 +158,36 @@ export function pageLoadout(input: {
   return load;
 }
 
+/** One page's figure in one of the two phone cases. */
+export interface CaseWeight extends PhoneCase {
+  bytes: number;
+  files: LoadedFile[];
+}
+
+/**
+ * A page's weight in **both** phone cases — the 360 px viewport at DPR 1 and at DPR 2 —
+ * so a report can print two labelled numbers instead of one unlabelled one. The DPR 2
+ * case is the phone case, and the only figure the budget may be read against.
+ */
+export function pageWeights(input: {
+  page: string;
+  html: string;
+  css?: string;
+  sizes: Map<string, number>;
+  images?: ManifestImage[];
+}): CaseWeight[] {
+  return PHONE_CASES.map((c) => {
+    const files = pageLoadout({ ...input, screenWidth: c.width, dpr: c.dpr });
+    return { ...c, files, bytes: files.reduce((sum, f) => sum + f.bytes, 0) };
+  });
+}
+
 /**
  * Everything wrong with a page's weight, in the words a failure message uses.
+ *
+ * Measured at **DPR 2**, the phone case: a 360 CSS px phone has 720 device pixels across,
+ * so it downloads the 900w file, not the 600w one. The DPR 1 figure is named in the same
+ * sentence, so nobody reads one number as the other.
  *
  * The ceiling is a refusal; the target is not. A page between the two is a page to
  * look at, not a build to stop — the manifest carries the number either way.
@@ -136,13 +200,15 @@ export function weightProblems(input: {
   images?: ManifestImage[];
   screenWidth?: number;
 }): string[] {
-  const load = pageLoadout(input);
+  const { screenWidth = PHONE_WIDTH } = input;
+  const load = pageLoadout({ ...input, screenWidth, dpr: PHONE_DPR });
   const total = load.reduce((sum, f) => sum + f.bytes, 0);
+  const atDpr1 = pageLoadout({ ...input, screenWidth, dpr: 1 }).reduce((sum, f) => sum + f.bytes, 0);
   const problems: string[] = [];
   if (total > BUDGET.pageCeiling) {
     const heaviest = [...load].sort((a, b) => b.bytes - a.bytes)[0]!;
     problems.push(
-      `page ${input.page} weighs ${kb(total)} cold, over the ${kb(BUDGET.pageCeiling)} ceiling in docs/design-system.md §8. ` +
+      `page ${input.page} weighs ${kb(total)} cold at ${screenWidth}px and DPR 2 (the phone case; ${kb(atDpr1)} at DPR 1), over the ${kb(BUDGET.pageCeiling)} ceiling in docs/design-system.md §8. ` +
         `The single heaviest file it loads is ${heaviest.file} at ${kb(heaviest.bytes)}${heaviest.file.includes("images/") ? " — run tools/prepare-images.py on it" : ""}.`,
     );
   }

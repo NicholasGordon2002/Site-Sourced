@@ -329,8 +329,9 @@ const SERVICE_CARD_ACTION_NESTED_CSS = `
    container — its body is inert text — and the one control on it is a real anchor at the
    foot, drawn as a ghost button: transparent, ink text, ink outline (the owner's second
    instruction the same day: "the same transparent/outlined treatment with black text and a
-   black outline"). DEMO_SERVICE_CARD_ACTION_BAR is unset in the repository, so this block is
-   absent from the published stylesheet: it is written only for a build that opts in
+   black outline"). This block is in this stylesheet because this build opted in:
+   DEMO_SERVICE_CARD_ACTION_BAR=nested-cta. A build that does not set the switch writes
+   none of it, and its stylesheet is the published one byte for byte
    (src/demo/service-card-action.ts). */
 .services .service-tile--cta { padding: 0; }
 .services .service-tile--cta .${SERVICE_CARD_ACTION_BODY_CLASS} {
@@ -415,9 +416,10 @@ export function serviceCardActionCss(shape: ServiceCardShape = "whole-card"): st
    Treatment 1, from the owner's direction of 9 Oct 2026: the service card keeps its
    recorded name and note, and gains a full-width action bar at its foot — the "button"
    the owner asked for, drawn inside the card's single link (owner text, 6 Oct 2026: no
-   nested interactive elements). DEMO_SERVICE_CARD_ACTION_BAR is unset in the repository,
-   so this block is absent from the published stylesheet: it is written only for a build
-   that opts in (src/demo/service-card-action.ts). */
+   nested interactive elements). This block is in this stylesheet because this build
+   opted in: DEMO_SERVICE_CARD_ACTION_BAR=bar. A build that does not set the switch writes
+   none of it, and its stylesheet is the published one byte for byte
+   (src/demo/service-card-action.ts). */
 .services .service-tile--bar { padding: 0; min-height: 2.75rem; overflow: hidden; }
 .services .service-tile--bar .${SERVICE_CARD_ACTION_BODY_CLASS} {
   display: flex; flex-direction: column; flex: 1;

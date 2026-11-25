@@ -232,12 +232,13 @@ the phone menu panel. Depth is not used for decoration.
   photograph starts directly under it, so the home page reads as one surface. Inner pages keep
   the header's own surface and hairline, which is what gives `.page-head` a top edge. The page
   id is carried on `<html class="page page--{id}">`.
-- Tap targets are at least 44×44px. The **header's action slot**, the hero's own **Call** button
-  and the form's submit button are the ones that matter most and all three are taller than that;
-  the phone menu's summary and the service cards carry a 44px floor of their own, and
-  `headerActionProblems` / `serviceCardProblems` fail a build whose stylesheet cannot show it.
-  *(Corrected 9 Oct 2026: this read "the call button in the header" — the header's third item is
-  the page's primary action, not a call button; see §5.)*
+- **Every button is at least 44px tall.** The **header's action slot**, the hero's own **Call** button
+  and the card CTA, the form's submit, the booking anchor, the comparison page's three controls, the phone
+  menu's summary and the service cards carry a 44px floor of their own.
+  *(Corrected 25 Nov 2026: this paragraph said "tap targets are at least 44×44px", which the pages do not
+  support. Measured on the built pages (`design/tap-targets-measured-2026-10-11.md`), the footer's `tel:`
+  link and its "Privacy notice" link are **inline 14px text by design** and measure **20–24px** tall: they
+  are links inside a paragraph, not buttons, and the claim is every button, not every control.)*
 
 ---
 
@@ -551,7 +552,7 @@ Held to WCAG 2.1 AA, and where the two disagree, the stricter one wins.
   load-bearing for motion in the first place.
 - **Zoom and text size**: layouts hold at 200% zoom and 320px width; no text is clipped, nothing
   scrolls horizontally, and `-webkit-text-size-adjust: 100%` is set so iOS does not inflate type.
-- **Touch**: 44×44px minimum targets, and 8px of space between adjacent ones.
+- **Touch**: every button is at least 44×44px, and 8px of space between adjacent ones. Inline links in a paragraph — the footer's `tel:` and "Privacy notice" — are text by design and measure 20–24px (25 Nov 2026).
 
 ---
 

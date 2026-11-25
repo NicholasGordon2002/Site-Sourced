@@ -92,14 +92,26 @@ test("a third fixture without a booking_url is refused the same way", () => {
 
 test("the page is scoped: it exists for the named demonstration only, and never in the delivered phase", () => {
   const url = "https://example.invalid/demonstration";
-  expect(comparisonDecision({ record: FIXTURE, slug: BOOKING_COMPARISON_SLUG, url, phase: "demo" }).enabled).toBe(true);
-  // Another record, the delivered phase, and an unset address each refuse it.
+  expect(comparisonDecision({ record: FIXTURE, slug: BOOKING_COMPARISON_SLUG, url, phase: "demo", switchOn: true }).enabled).toBe(true);
+  // Another record, the delivered phase, an unset address and an unset switch each refuse it.
   expect(
-    comparisonDecision({ record: dental as unknown as BusinessRecord, slug: "king-west-dental", url, phase: "demo" })
+    comparisonDecision({ record: dental as unknown as BusinessRecord, slug: "king-west-dental", url, phase: "demo", switchOn: true })
       .enabled,
   ).toBe(false);
-  expect(comparisonDecision({ record: FIXTURE, slug: BOOKING_COMPARISON_SLUG, url, phase: "business" }).enabled).toBe(false);
-  expect(comparisonDecision({ record: FIXTURE, slug: BOOKING_COMPARISON_SLUG, url: "", phase: "demo" }).enabled).toBe(false);
+  expect(comparisonDecision({ record: FIXTURE, slug: BOOKING_COMPARISON_SLUG, url, phase: "business", switchOn: true }).enabled).toBe(false);
+  expect(comparisonDecision({ record: FIXTURE, slug: BOOKING_COMPARISON_SLUG, url: "", phase: "demo", switchOn: true }).enabled).toBe(false);
+});
+
+test("an address alone does not write the page: the switch has to be set to 1", () => {
+  // The defect of 25 Nov 2026: the repository's own .env.local carried the address, so every
+  // build shipped Google's script and Google's frame into the Maple Avenue bundle and the
+  // published demo served the page unlinked. The address is not the instruction; the switch is.
+  const url = "https://example.invalid/demonstration";
+  const off = comparisonDecision({ record: FIXTURE, slug: BOOKING_COMPARISON_SLUG, url, phase: "demo", switchOn: false });
+  expect(off.enabled).toBe(false);
+  expect(off.basis).toContain("DEMO_BOOKING_COMPARISON is not set to 1");
+  expect(off.basis).toContain("does not write it");
+  expect(comparisonDecision({ record: FIXTURE, slug: BOOKING_COMPARISON_SLUG, url, phase: "demo", switchOn: true }).enabled).toBe(true);
 });
 
 test("the frame's accessible name is a real sentence, not a filename", () => {

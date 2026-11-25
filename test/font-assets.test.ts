@@ -43,8 +43,10 @@
  */
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { FONT_LICENCE_FILES, fontAssetProblems } from "../src/demo/build.ts";
+import { readFile, readdir, rm } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import { buildBundle, FONT_LICENCE_FILES, fontAssetProblems } from "../src/demo/build.ts";
+import { fontsNamedIn, licenceText, licenceTextProblems } from "../src/demo/font-licences.ts";
 import { profileFor } from "../src/demo/copy.ts";
 import { renderCss } from "../src/demo/render.ts";
 import type { BusinessRecord } from "../src/demo/types.ts";
@@ -164,4 +166,99 @@ describe("the licence that travels with each font", () => {
     const problems = list({ css: mapleCss, fontsInBundle: [...SHARED_FONTS, "OFL-source-serif-4.txt"] });
     expect(problems).toContain("fonts/OFL-source-serif-4.txt, a licence text no font in it belongs to");
   });
+});
+
+describe("the licence file names the fonts the bundle ships, and no others", () => {
+  const shipped = ["fraunces-latin-600.woff2", "source-sans-3-latin.woff2"];
+
+  test("the shared licence names the shared faces, and the theme's licence names the theme's face", () => {
+    const shared = licenceText("OFL.txt", shipped, FONT_LICENCE_FILES);
+    expect(fontsNamedIn(shared)).toEqual(["fraunces-latin-600.woff2", "source-sans-3-latin.woff2"]);
+    const themeLicence = licenceText("OFL-source-serif-4.txt", ["source-sans-3-latin.woff2", "source-serif-4-latin-600.woff2"], FONT_LICENCE_FILES);
+    expect(fontsNamedIn(themeLicence)).toEqual(["source-serif-4-latin-600.woff2"]);
+    // The defect of 25 Nov 2026: the fixed asset named Fraunces in the Northshore bundle,
+    // which does not ship it. The generated text cannot, because it is built from the files.
+    expect(themeLicence).not.toContain("fraunces");
+  });
+
+  test("a licence naming a font the bundle does not ship fails by name", () => {
+    const problems = licenceTextProblems({
+      fontsInBundle: ["OFL.txt", "source-sans-3-latin.woff2", "source-serif-4-latin-600.woff2", "OFL-source-serif-4.txt"],
+      licenceTexts: { "OFL.txt": licenceText("OFL.txt", shipped, FONT_LICENCE_FILES) },
+      licences: FONT_LICENCE_FILES,
+    });
+    expect(problems.some((p) => p.includes("fonts/OFL.txt names fraunces-latin-600.woff2"))).toBe(true);
+  });
+
+  test("a shipped font no licence names fails by name, and so does a licence with no font behind it", () => {
+    const problems = licenceTextProblems({
+      fontsInBundle: ["OFL.txt", "source-sans-3-latin.woff2", "OFL-stray.txt"],
+      licenceTexts: { "OFL.txt": licenceText("OFL.txt", ["source-sans-3-latin.woff2"], FONT_LICENCE_FILES), "OFL-stray.txt": "SIL Open Font License 1.1" },
+      licences: FONT_LICENCE_FILES,
+    });
+    expect(problems.some((p) => p.includes("fonts/OFL-stray.txt is in this bundle with no font file behind it"))).toBe(true);
+    const missing = licenceTextProblems({
+      fontsInBundle: ["OFL.txt", "fraunces-latin-600.woff2", "source-sans-3-latin.woff2"],
+      licenceTexts: { "OFL.txt": "SIL Open Font License 1.1" },
+      licences: FONT_LICENCE_FILES,
+    });
+    expect(missing.some((p) => p.includes("does not name fraunces-latin-600.woff2"))).toBe(true);
+  });
+});
+
+/**
+ * The claim, against a bundle a real build wrote: the licence files name exactly the font
+ * files in the folder, and the Northshore bundle's shared licence does not mention Fraunces
+ * — the face that bundle replaced. This is the defect of 25 Nov 2026, and it is refused by
+ * `licenceTextProblems` at build time, not only here.
+ */
+test("a real bundle's licence files name exactly the font files in its fonts/ folder", async () => {
+  const fixtures = resolve(import.meta.dir, "fixtures");
+  const record = JSON.parse(readFileSync(join(fixtures, "northshore-garden-works.json"), "utf8")) as BusinessRecord;
+  const out = "/tmp/ss-font-licence-test";
+  await rm(out, { recursive: true, force: true });
+  const before = {
+    card: process.env.DEMO_SERVICE_CARD_ACTION_BAR,
+    ghost: process.env.DEMO_GHOST_CONTROLS,
+    form: process.env.SS_FORMSPARK_FORM_ID,
+  };
+  process.env.DEMO_SERVICE_CARD_ACTION_BAR = "nested-cta";
+  process.env.DEMO_GHOST_CONTROLS = "1";
+  // The record names `env:SS_FORMSPARK_FORM_ID`; this test is about the licence file, so it
+  // supplies a stand-in id rather than reading the gitignored `.env.local`.
+  process.env.SS_FORMSPARK_FORM_ID = "test-form-id";
+  try {
+    await buildBundle(record, {
+      outRoot: out,
+      cacheDir: resolve(import.meta.dir, "..", "out", "cache", "demo"),
+      recordDir: fixtures,
+      noImages: false,
+      refresh: false,
+      onNote: () => {},
+    });
+  } finally {
+    for (const [key, value] of [
+      ["DEMO_SERVICE_CARD_ACTION_BAR", before.card],
+      ["DEMO_GHOST_CONTROLS", before.ghost],
+      ["SS_FORMSPARK_FORM_ID", before.form],
+    ] as const) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+  const dir = join(out, "northshore-garden-works", "fonts");
+  const names = await readdir(dir);
+  const fontFiles = names.filter((n) => /\.woff2$/i.test(n)).sort();
+  expect(fontFiles).toEqual(["source-sans-3-latin.woff2", "source-serif-4-latin-600.woff2"]);
+  const named = new Set<string>();
+  const licenceNames = names.filter((n) => /\.txt$/i.test(n)).sort();
+  for (const licence of licenceNames) {
+    for (const file of fontsNamedIn(await readFile(join(dir, licence), "utf8"))) named.add(file);
+  }
+  expect([...named].sort()).toEqual(fontFiles);
+  // The face this bundle does not ship is named nowhere in it.
+  for (const licence of licenceNames) {
+    expect(await readFile(join(dir, licence), "utf8")).not.toContain("fraunces");
+  }
+  await rm(out, { recursive: true, force: true });
 });

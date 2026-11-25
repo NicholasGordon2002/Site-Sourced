@@ -347,9 +347,10 @@ export function ghostControlsCss(): string {
    One system, from the lead's ruling the same day: the ghost is drawn in the colour of the
    surface it sits on, because white text or a white outline on a paper-surfaced header is
    1.00:1 — invisible. So the outline follows the surface: white over the home page's
-   photograph, ink on every other page's header. ${GHOST_CONTROLS_VAR} is unset in the
-   repository, so this block is absent from the published stylesheet: it is written only for
-   a build that opts in (src/demo/ghost-controls.ts). */
+   photograph, ink on every other page's header. This block is in this stylesheet because
+   this build opted in: ${GHOST_CONTROLS_VAR} is set. A build that does not set the switch
+   writes none of it, and its stylesheet is the published one byte for byte
+   (src/demo/ghost-controls.ts). */
 ${GHOST_HEADER_ACTION_SELECTOR} {
   ${GHOST_CONTROLS_MARKER}: ${GHOST_SURFACE_INK};
   background: transparent;
