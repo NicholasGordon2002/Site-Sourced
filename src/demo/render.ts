@@ -343,7 +343,16 @@ function servicesBlock(
       // block as the name, so both card shapes carry it and neither shape moves.
       const cardImage = serviceCardImage(images, s.name);
       const figure = cardImage ? serviceCardFigure(cardImage) : "";
-      const head = `<${heading}>${markHere}${esc(s.name)}</${heading}>${s.note ? `<p>${esc(s.note)}</p>` : ""}`;
+      const title = `<${heading}>${markHere}${esc(s.name)}</${heading}>`;
+      const note = s.note ? `<p>${esc(s.note)}</p>` : "";
+      const head = `${title}${note}`;
+      // **The field guide leads each card with its own title** (owner, 25 Nov 2026): the
+      // title first, then the picture with the label that belongs to it, then the note and
+      // the card's action. A card that opens on a photograph makes the picture the subject
+      // and the service its caption; opening on the name makes the service the subject.
+      // Only this treatment moves — every other build keeps the picture above the name, so
+      // Maple Avenue's cards are the bytes they were.
+      const body = fieldGuide ? `${title}${figure}${note}` : `${figure}${head}`;
       // Treatment 1 (`service-card-action.ts`): the recorded name and note in a body block,
       // then a full-width action bar at the card's foot — still inside the card's one link,
       // still one target and one tab stop, because the bar is a styled element and not a
@@ -353,7 +362,7 @@ function servicesBlock(
         return (
           `          <li>\n` +
           `            <a class="card service-tile ${SERVICE_CARD_ACTION_CARD_CLASS}" href="${href}">` +
-          `<div class="${SERVICE_CARD_ACTION_BODY_CLASS}">${figure}${head}</div>` +
+          `<div class="${SERVICE_CARD_ACTION_BODY_CLASS}">${body}</div>` +
           serviceActionBarMarkup(label) +
           `</a>\n` +
           `          </li>`
@@ -370,7 +379,7 @@ function servicesBlock(
         return (
           `          <li>\n` +
           `            <div class="card service-tile ${SERVICE_CARD_ACTION_NESTED_CARD_CLASS}">` +
-          `<div class="${SERVICE_CARD_ACTION_BODY_CLASS}">${figure}${head}</div>` +
+          `<div class="${SERVICE_CARD_ACTION_BODY_CLASS}">${body}</div>` +
           serviceActionCtaMarkup(label, href) +
           `</div>\n` +
           `          </li>`
@@ -379,8 +388,7 @@ function servicesBlock(
       return (
         `          <li>\n` +
         `            <a class="card service-tile" href="${href}">` +
-        figure +
-        head +
+        body +
         `<p class="service-action">${label}</p>` +
         `</a>\n` +
         `          </li>`
