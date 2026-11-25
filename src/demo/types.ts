@@ -27,6 +27,17 @@ export interface ServiceItem {
   note: string;
 }
 
+/**
+ * One social account the client keeps up to date, as they gave it: the network's name in
+ * their own words, and the account's address. Stored and never printed (`socials` below).
+ */
+export interface SocialLink {
+  /** e.g. "Facebook", "Instagram". The client's own name for the network. */
+  network: string;
+  /** One absolute `https` URL. */
+  url: string;
+}
+
 /** Where the business is. `street` may be empty — OSM often has no address. */
 export interface RecordAddress {
   street: string;
@@ -145,6 +156,24 @@ export interface BusinessRecord {
    * the same as absent: an owner answering "no website" has nothing to record.
    */
   website_url?: string;
+  /**
+   * The business's **own Google page**, as the client gave it — intake question 19 of
+   * `ops/post-agreement-intake-questionnaire.md`. Stored and **never printed**: a "reviews"
+   * block cannot ship (the build refuses the word, and any rating or quote in one would be
+   * invented) and the quiet link the plan proposes is a treatment the owner has not ruled on.
+   * The build refuses a value that is not one absolute `https` URL, and refuses any page that
+   * presents it as a link or a booking action (`reviewsUrlProblems`, build.ts). Blank is the
+   * same as absent: an owner with no Google page has nothing to record.
+   */
+  reviews_url?: string;
+  /**
+   * The accounts the client actually keeps up to date — intake question 20. Stored and
+   * **never printed**, for the same reason as `reviews_url`: a social row needs a layout and
+   * a rule about dormant accounts, and neither exists yet. The build refuses anything but a
+   * list of `{ network, url }` entries whose `url` is one absolute `https` URL, and refuses
+   * any page that presents one as a link or a booking action (`socialsProblems`, build.ts).
+   */
+  socials?: SocialLink[];
   address?: Partial<RecordAddress>;
   phone?: string;
   email?: string;

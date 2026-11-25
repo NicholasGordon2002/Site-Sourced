@@ -3010,6 +3010,238 @@ export function websiteUrlProblems(vars: {
   return problems;
 }
 
+/** The variables every "stored and never printed" link rule reads. */
+interface NeverPrintedVars {
+  record: BusinessRecord;
+  pages: RenderedPage[];
+  /** The booking URL this build resolved, so a link that points at one of these is refused. */
+  bookingUrl?: string;
+}
+
+/** One absolute `https` address, or nothing. `http:`, a bare host and a `mailto:` are not. */
+function isAbsoluteHttps(value: string): boolean {
+  if (/\s/.test(value)) return false;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" && parsed.hostname !== "";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Every form one of these addresses can take on a rendered page: as given, HTML-escaped,
+ * without its scheme, and with the `//` a protocol-relative link carries.
+ *
+ * The **bare host on its own is deliberately left out**, which is where this differs from
+ * `websiteUrlProblems`: a reviews address on `www.google.com` and the address block's own
+ * Google Maps link share that host, so refusing the host alone would refuse the page's map
+ * link the first time a client's reviews address had no path. What is refused is the address
+ * as a link takes it — the whole address, with or without its scheme.
+ *
+ * One consequence, stated because it is a refusal and not a bug: a record whose address has
+ * **no path** (`https://www.google.com/`) is a prefix of every link beneath that host, so it
+ * refuses any page that links there at all. A reviews address is a business's own page, not a
+ * host; a record that gives only the host is refused by name rather than quietly accepted.
+ */
+function printedFormsOf(value: string): Set<string> {
+  const forms = new Set<string>();
+  const add = (form: string) => {
+    if (form !== "") forms.add(form);
+  };
+  const parsed = new URL(value);
+  const hostPath = `${parsed.host}${parsed.pathname}${parsed.search}`;
+  add(value);
+  add(esc(value));
+  add(hostPath);
+  add(esc(hostPath));
+  add(`//${hostPath}`);
+  return forms;
+}
+
+/** Two addresses are the same page: same host, same path, same query, ignoring a trailing slash. */
+function sameAddressAs(candidate: string, value: string): boolean {
+  const c = candidate.trim();
+  if (c === "") return false;
+  try {
+    const other = new URL(c);
+    const mine = new URL(value);
+    const path = (u: URL) => {
+      const p = u.pathname || "/";
+      return p.length > 1 ? p.replace(/\/+$/, "") : p;
+    };
+    return (
+      other.protocol === mine.protocol &&
+      other.host.toLowerCase() === mine.host.toLowerCase() &&
+      path(other) === path(mine) &&
+      other.search === mine.search
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The half both new fields share: **no page presents the address, and it is never the booking
+ * action.** Read off the rendered pages, because a rule that only holds in the renderer is the
+ * bug this catches.
+ */
+function neverPrintedProblems(opts: {
+  /** How the field is named in a refusal: `reviews_url`, `socials[2].url`. */
+  field: string;
+  value: string;
+  /** The noun the sentences use for what the field records. */
+  what: string;
+  /** Why the value is stored rather than printed — the rule's reason, not a paraphrase. */
+  why: string;
+  vars: NeverPrintedVars;
+}): string[] {
+  const problems: string[] = [];
+  const forms = printedFormsOf(opts.value);
+  for (const page of opts.vars.pages) {
+    const hit = [...forms].find((form) => page.html.includes(form));
+    if (hit !== undefined) {
+      problems.push(
+        `${page.file}: prints the record's ${opts.field} (${hit}). ${opts.what} is stored and never printed: it is not a link, a booking action or a contact action on the page — ${opts.why}.`,
+      );
+    }
+  }
+  const bookingRaw = typeof opts.vars.record.booking_url === "string" ? opts.vars.record.booking_url : "";
+  if (sameAddressAs(bookingRaw, opts.value)) {
+    problems.push(
+      `the record's booking_url is its ${opts.field} ("${opts.value}"). ${opts.what} does not book a time, so it cannot be the booking action: a booking link must point at a page that really books one.`,
+    );
+  } else if (sameAddressAs(opts.vars.bookingUrl ?? "", opts.value)) {
+    problems.push(
+      `this build's booking link points at the record's ${opts.field} ("${opts.value}"). ${opts.what} does not book a time, so it cannot be the booking action: a booking link must point at a page that really books one.`,
+    );
+  }
+  return problems;
+}
+
+/**
+ * The business's own Google page is recorded and **never printed** (intake question 19,
+ * `ops/post-agreement-intake-questionnaire.md`).
+ *
+ * `reviews_url` exists because that answer had nowhere to live — and it stays a record, not a
+ * link. A "reviews" block cannot ship: the build refuses the word, and any rating or review
+ * quote in one would be invented. The quiet `See this business on Google` link the plan
+ * proposes is a treatment the owner has not ruled on, so nothing on the page may present the
+ * address today. Three things are refused here by name:
+ *
+ *   1. a value that is not **one absolute `https` URL** — a bare host, an `http://` address, a
+ *      `mailto:` or a non-string. A blank value is treated as absent: an owner with no Google
+ *      page has nothing to record.
+ *   2. any page that **presents** it — as a link, a booking action, a contact action or
+ *      anywhere else (`neverPrintedProblems`).
+ *   3. a record or a build whose **booking link is this address**: a Google page does not book
+ *      a time.
+ *
+ * The host is not policed: which of Google's own addresses a business's page lives at is
+ * something we cannot verify, so the rule is about the shape and the page, not the domain.
+ */
+export function reviewsUrlProblems(vars: NeverPrintedVars): string[] {
+  const problems: string[] = [];
+  const raw = (vars.record as { reviews_url?: unknown }).reviews_url;
+  if (raw === undefined || raw === null) return problems;
+  if (typeof raw !== "string") {
+    problems.push(
+      `the record's reviews_url is not a string (${JSON.stringify(raw)}). It is the business's own Google page as the client gave it: one absolute https address, or nothing at all.`,
+    );
+    return problems;
+  }
+  const value = raw.trim();
+  if (value === "") return problems;
+  if (!isAbsoluteHttps(value)) {
+    problems.push(
+      `the record's reviews_url ("${value}") is not an absolute https URL. It is stored and never printed, so nothing on a page breaks — but a link we cannot read as one address is a link we could never show, and the questionnaire asks for a link, not a sentence.`,
+    );
+    return problems;
+  }
+  problems.push(
+    ...neverPrintedProblems({
+      field: "reviews_url",
+      value,
+      what: "The business's own Google page",
+      why: "a reviews block with a rating or a quote in it would be invented, so the address is kept for the owner's decision and printed nowhere",
+      vars,
+    }),
+  );
+  return problems;
+}
+
+/**
+ * The accounts the client keeps up to date are recorded and **never printed** (intake question
+ * 20, `ops/post-agreement-intake-questionnaire.md`).
+ *
+ * `socials` exists for the same reason as `reviews_url`: the questionnaire asks the question,
+ * and the record had nowhere to put the answer. Printing it needs a social row and a rule about
+ * dormant accounts, and neither exists — so the list is stored and three things are refused:
+ *
+ *   1. anything but **a list of `{ network, url }` entries**: not a list at all, an entry that
+ *      is not an object (a bare address is not an account we can name), an entry with no
+ *      network name, an entry with no address (a link to nothing), and a `url` that is not one
+ *      absolute `https` URL.
+ *   2. any page that **presents** one of the addresses (`neverPrintedProblems`).
+ *   3. a record or a build whose **booking link is one of them**: a social account does not
+ *      book a time.
+ */
+export function socialsProblems(vars: NeverPrintedVars): string[] {
+  const problems: string[] = [];
+  const raw = (vars.record as { socials?: unknown }).socials;
+  if (raw === undefined || raw === null) return problems;
+  if (!Array.isArray(raw)) {
+    problems.push(
+      `the record's socials is not a list (${JSON.stringify(raw)}). It is the accounts the client keeps up to date as they gave them: a list of entries, each a network and one absolute https address, or nothing at all.`,
+    );
+    return problems;
+  }
+  raw.forEach((entry: unknown, i: number) => {
+    if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
+      problems.push(
+        `the record's socials[${i}] is not an entry (${JSON.stringify(entry)}). Each entry carries a network and one absolute https url — a bare address is not an account we can name.`,
+      );
+      return;
+    }
+    const network = (entry as { network?: unknown }).network;
+    const url = (entry as { url?: unknown }).url;
+    if (typeof network !== "string" || network.trim() === "") {
+      problems.push(
+        `the record's socials[${i}] has no network name (${JSON.stringify(network)}). Each entry says which network the account is on, in the client's own words, e.g. "Facebook" or "Instagram".`,
+      );
+    }
+    if (typeof url !== "string") {
+      problems.push(
+        `the record's socials[${i}].url is not a string (${JSON.stringify(url)}). Each entry carries one absolute https address.`,
+      );
+      return;
+    }
+    const value = url.trim();
+    if (value === "") {
+      problems.push(
+        `the record's socials[${i}].url is blank. An entry with no address is a link to nothing: drop the entry, or record the address the client gave.`,
+      );
+      return;
+    }
+    if (!isAbsoluteHttps(value)) {
+      problems.push(
+        `the record's socials[${i}].url ("${value}") is not an absolute https URL. Social accounts are stored and never printed, so nothing on a page breaks — but an account we cannot read as one address is an account we cannot check, and the questionnaire asks for a link, not a sentence.`,
+      );
+      return;
+    }
+    problems.push(
+      ...neverPrintedProblems({
+        field: `socials[${i}].url`,
+        value,
+        what: `The account recorded in socials[${i}]`,
+        why: "no social row exists on any page, and only the accounts a client keeps up to date would ever be printed",
+        vars,
+      }),
+    );
+  });
+  return problems;
+}
+
 /**
  * Everything that must be true for a bundle to be publishable at all — one list, one
  * throw — checked **on every page**, because the plan's compliance rules are per page
@@ -3246,6 +3478,12 @@ export function complianceChecks(vars: {
   // value must be one absolute https address and no page may present it as a booking or a
   // contact action.
   problems.push(...websiteUrlProblems({ record, pages, bookingUrl: copy.booking.url }));
+  // Two more answers that are records and not links (intake questions 19 and 20): the
+  // business's own Google page and the accounts the client keeps up to date. Stored and
+  // never printed, so each must be the shape the questionnaire asks for and no page may
+  // present one as a link or a booking action.
+  problems.push(...reviewsUrlProblems({ record, pages, bookingUrl: copy.booking.url }));
+  problems.push(...socialsProblems({ record, pages, bookingUrl: copy.booking.url }));
   problems.push(...contactLabelProblems({ pages, label: copy.contactLabel }));
   problems.push(...submitLabelProblems({ pages, label: copy.contactLabel }));
   // The family rendering layer: the fields the form asks for, the days the
