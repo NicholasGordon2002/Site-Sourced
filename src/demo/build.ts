@@ -15,7 +15,7 @@
  * not allowed to make, the build fails loudly instead of shipping.
  */
 
-import { copyFile, mkdir, readdir, rm, rmdir, stat } from "node:fs/promises";
+import { copyFile, mkdir, readFile, readdir, rm, rmdir, stat } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 
 import type { BundleResult, BusinessRecord, DeliveredBuildRecord, DemoManifest, ManifestHeaderAction, ManifestImage } from "./types.ts";
@@ -24,6 +24,7 @@ import { BOOKING_ANCHOR_CLASS, BOOKING_ARROW, bookingBelongs, DEMO_BOOKING_URL_V
 import {
   BOOKING_COMPARISON_FILE,
   BOOKING_COMPARISON_VAR,
+  BOOKING_COMPARISON_SWITCH,
   bookingComparisonProblems,
   comparisonDecision,
   renderBookingComparison,
@@ -128,7 +129,9 @@ import { provenanceProblems } from "./provenance.ts";
 import { KEY_PLACEHOLDER, notificationSubject, resolveForm, type ResolvedForm } from "./forms.ts";
 import { sourceImages } from "./images.ts";
 import { filesForSupplied, inspectSuppliedImage, manifestForSupplied } from "./supplied.ts";
-import { BUDGET, imageBudgetProblems, kb, pageLoadout, weightProblems } from "./weight.ts";
+import { BUDGET, imageBudgetProblems, kb, PHONE_DPR, pageWeights, weightProblems } from "./weight.ts";
+import { externalOriginProblems } from "./remote-resources.ts";
+import { licenceText, licenceTextProblems } from "./font-licences.ts";
 import {
   esc,
   headerActionBelongs,
@@ -217,7 +220,9 @@ export const GENERATOR = "sitesourced-demo-generator/0.1";
  * relative `url()` from styles.css — because the page must load nothing from the
  * network. See docs/design-system.md §2.
  */
-const FONT_ASSETS = ["fraunces-latin-600.woff2", "source-sans-3-latin.woff2", "OFL.txt"] as const;
+const FONT_ASSETS = ["fraunces-latin-600.woff2", "source-sans-3-latin.woff2"] as const;
+/** The licence text the shared faces travel under. Written by the build, not copied. */
+const SHARED_LICENCE_FILE = "OFL.txt";
 const FONT_SOURCE_DIR = join(import.meta.dir, "assets", "fonts");
 
 /**
@@ -3805,11 +3810,15 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   // `DEMO_BOOKING_URL` stays unset so the derived booking mode stays `none`) no page is
   // written at all and the bundle is byte-identical to a build from master.
   const comparisonUrl = (process.env[BOOKING_COMPARISON_VAR] ?? "").trim();
+  // The switch, and the address, are two different things: an address left in a local env
+  // file is not an instruction to publish a page that loads a third party (25 Nov 2026).
+  const comparisonSwitch = (process.env[BOOKING_COMPARISON_SWITCH] ?? "").trim() === "1";
   const comparison: ComparisonDecision = comparisonDecision({
     record,
     slug,
     url: comparisonUrl,
     phase: delivery.mode,
+    switchOn: comparisonSwitch,
   });
   const comparisonPage = comparison.enabled
     ? {
@@ -3883,6 +3892,16 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
       html: comparisonPage?.html ?? "",
       url: comparisonUrl,
     }),
+    // **A demo page loads nothing from another origin.** The bundle's pages, its stylesheet,
+    // and the one external address a page may name — the form endpoint this build derived
+    // from the record. The review-only comparison page is passed in `allow` only when this
+    // build opted into it, so a build that did not ask for it refuses even that page.
+    ...externalOriginProblems({
+      pages: comparisonPage ? [...pages, { file: comparisonPage.file, html: comparisonPage.html }] : pages,
+      css,
+      formEndpoint: form.endpoint,
+      allow: comparisonPage ? [comparisonPage.file] : [],
+    }),
     // The action-bar card's own clauses: the variant on the page it names and nowhere else,
     // only when a build opts in, one bar card per recorded service, the derived label and the
     // text glyph, the measured 44px bar and the card's own ring — and nothing that costs a
@@ -3925,7 +3944,8 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
         ...NORTHSHORE_THEME_FONT_FILES,
       ]
     : FONT_ASSETS;
-  for (const name of fontAssets) {
+  const fontBinaries = fontAssets.filter((name) => FONT_FILE.test(name));
+  for (const name of fontBinaries) {
     try {
       await mkdir(join(dir, "fonts"), { recursive: true });
       await copyFile(join(FONT_SOURCE_DIR, name), join(dir, "fonts", name));
@@ -3933,6 +3953,18 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
     } catch (err) {
       await fail(`bundle ${slug} cannot include its font assets — ${name}: ${(err as Error).message}`);
     }
+  }
+  /* The licence text is **written from the fonts this bundle ships**, not copied from a fixed
+     asset: until 25 Nov 2026 `fonts/OFL.txt` was a file that named Fraunces in every bundle,
+     including the Northshore one, which ships Source Serif 4 instead and carries its own
+     licence. A licence file that names a face the folder does not hold is a claim the bundle
+     does not support. `licenceText` composes the list from `fontBinaries` and `FONT_LICENCE_FILES`;
+     `licenceTextProblems` reads the written files back and holds them to the folder. */
+  const licenceFiles = [...new Set([SHARED_LICENCE_FILE, ...fontAssets.filter((name) => FONT_LICENCE_FILE.test(name))])].sort();
+  for (const licence of licenceFiles) {
+    await mkdir(join(dir, "fonts"), { recursive: true });
+    await Bun.write(join(dir, "fonts", licence), licenceText(licence, fontBinaries, FONT_LICENCE_FILES));
+    files.push(`fonts/${licence}`);
   }
 
   // What the folder now holds, against what the stylesheet asks for: a bundle ships exactly
@@ -3942,6 +3974,17 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   const fontsInBundle = await readdir(join(dir, "fonts")).catch(() => [] as string[]);
   const fontProblems = fontAssetProblems({ css, fontsInBundle });
   if (fontProblems.length > 0) await fail(`bundle ${slug}'s fonts do not match its stylesheet:\n  - ${fontProblems.join("\n  - ")}`);
+
+  // And the licence text, read back from the files this build has just written: a licence
+  // that names a font the folder does not hold (Fraunces in the Northshore bundle, before
+  // 25 Nov 2026), a shipped font no licence names, and a licence with no font behind it, are
+  // each a failure rather than a note.
+  const licenceTexts: Record<string, string> = {};
+  for (const name of fontsInBundle.filter((n) => FONT_LICENCE_FILE.test(n))) {
+    licenceTexts[name] = await readFile(join(dir, "fonts", name), "utf8").catch(() => "");
+  }
+  const licenceProblems = licenceTextProblems({ fontsInBundle, licenceTexts, licences: FONT_LICENCE_FILES });
+  if (licenceProblems.length > 0) await fail(`bundle ${slug}'s font licence does not match its fonts:\n  - ${licenceProblems.join("\n  - ")}`);
 
   // Images: either the bytes we downloaded, or a supplied file in the record — both
   // are in `bytesByPath` by now, already measured, so the page and the manifest
@@ -4020,30 +4063,36 @@ export async function buildBundle(record: BusinessRecord, opts: BuildOptions): P
   // What each page actually weighs, measured from the files on disk rather than
   // estimated from the record: the page itself, its stylesheet, its script if it has
   // one, its two fonts, and one file per image slot it shows — the hero variant a
-  // 360px phone asks for. Over the ceiling the bundle does not ship; over the target it
-  // still does, and the manifest carries the per-page number so a heavy-but-honest page
-  // is visible, not hidden.
+  // 360px phone asks for, at DPR 1 and at DPR 2. The DPR 2 figure is the phone case (a
+  // 360 CSS px phone has 720 device pixels across, so it downloads the 900w file, not the
+  // 600w one) and it is the one the ceiling is judged against; both are printed, labelled,
+  // so a figure can never be read as the other. Over the ceiling the bundle does not ship;
+  // over the target it still does, and the manifest carries the per-page number so a
+  // heavy-but-honest page is visible, not hidden.
   const sizes = new Map<string, number>();
   for (const f of files) sizes.set(f, (await stat(join(dir, f))).size);
   const weight: string[] = [];
-  const pageBytes: { file: string; bytes: number }[] = [];
+  const pageBytes: { file: string; atDpr1: number; atDpr2: number }[] = [];
   for (const page of pages) {
     const loadout = { page: page.file, html: page.html, css, sizes, images };
     weight.push(...weightProblems(loadout));
-    pageBytes.push({ file: page.file, bytes: pageLoadout(loadout).reduce((sum, f) => sum + f.bytes, 0) });
+    const cases = pageWeights(loadout);
+    const atDpr1 = cases.find((c) => c.dpr === 1)?.bytes ?? 0;
+    const atDpr2 = cases.find((c) => c.dpr === PHONE_DPR)?.bytes ?? 0;
+    pageBytes.push({ file: page.file, atDpr1, atDpr2 });
   }
   const imageBudgets = imageBudgetProblems({ images, sizes });
   if (weight.length > 0 || imageBudgets.length > 0) {
     await fail(`bundle ${slug} breaks the weight budget in docs/design-system.md §8:\n  - ${[...weight, ...imageBudgets].join("\n  - ")}`);
   }
-  const heaviest = [...pageBytes].sort((a, b) => b.bytes - a.bytes)[0]!;
+  const heaviest = [...pageBytes].sort((a, b) => b.atDpr2 - a.atDpr2)[0]!;
   opts.onNote(
-    `weight: heaviest page is ${heaviest.file} at ${kb(heaviest.bytes)} cold at 360px (target ${kb(BUDGET.pageTarget)}, ceiling ${kb(BUDGET.pageCeiling)})`,
+    `weight: heaviest page is ${heaviest.file} at ${kb(heaviest.atDpr2)} cold at 360px DPR 2 (the phone case) and ${kb(heaviest.atDpr1)} at DPR 1 (target ${kb(BUDGET.pageTarget)}, ceiling ${kb(BUDGET.pageCeiling)}, judged against the DPR 2 figure)`,
   );
   for (const page of pageBytes) {
-    if (page.bytes > BUDGET.pageTarget) {
+    if (page.atDpr2 > BUDGET.pageTarget) {
       warnings.push(
-        `${page.file} weighs ${kb(page.bytes)} cold, over the ${kb(BUDGET.pageTarget)} target in docs/design-system.md §8 (the ${kb(BUDGET.pageCeiling)} ceiling is what fails a build).`,
+        `${page.file} weighs ${kb(page.atDpr2)} cold at 360px DPR 2 (the phone case; ${kb(page.atDpr1)} at DPR 1), over the ${kb(BUDGET.pageTarget)} target in docs/design-system.md §8 (the ${kb(BUDGET.pageCeiling)} ceiling is what fails a build).`,
       );
     }
   }

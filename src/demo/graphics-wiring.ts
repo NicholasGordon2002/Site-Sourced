@@ -226,8 +226,9 @@ export function graphicsWiringCss(): string {
   return `
 /* -------------------------------------------------- graphics layer (wired, opt-in)
    The marker rule — it paints nothing and names the layer's version, so the build can see
-   in the stylesheet it ships that the opt-in was honoured. ${GRAPHICS_VAR} is unset in the
-   repository, so this block is absent from the published stylesheet
+   in the stylesheet it ships that the opt-in was honoured. This block is in this stylesheet
+   because this build opted in: ${GRAPHICS_VAR} is set. A build that does not set the switch
+   writes none of it, and its stylesheet is the published one byte for byte
    (src/demo/graphics-wiring.ts). */
 ${GRAPHICS_MARKER_SELECTOR} { ${GRAPHICS_MARKER}: ${GRAPHICS_VERSION}; }
 /* The map's figure, in the location column beside the address. The caption is the drawing's

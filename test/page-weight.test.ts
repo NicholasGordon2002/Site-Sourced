@@ -25,7 +25,15 @@ import { join, resolve } from "node:path";
 import { buildBundle } from "../src/demo/build.ts";
 import { extensionForFormat, sniffImageFormat } from "../src/demo/images.ts";
 import { inspectSuppliedImage, manifestForSupplied } from "../src/demo/supplied.ts";
-import { BUDGET, imageBudgetProblems, pageLoadout, phoneImageVariant, weightProblems } from "../src/demo/weight.ts";
+import {
+  BUDGET,
+  imageBudgetProblems,
+  pageLoadout,
+  pageWeights,
+  PHONE_DPR,
+  phoneImageVariant,
+  weightProblems,
+} from "../src/demo/weight.ts";
 import type { BusinessRecord, ManifestImage } from "../src/demo/types.ts";
 
 const FIXTURES = resolve(import.meta.dir, "fixtures");
@@ -86,6 +94,27 @@ test("a 360px screen is charged for one hero variant, not the whole set", () => 
   expect(total).toBeLessThan(BUDGET.pageTarget);
 });
 
+test("a 360px phone at DPR 2 downloads the 900w file, and its page weighs more than at DPR 1", () => {
+  // The selection is the browser's: 360 CSS px at DPR 2 is 720 device pixels, so the
+  // narrowest file at least that wide is the 900w one. The 600w file is never downloaded
+  // on that phone, which is why the DPR 1 figure flattered every page with variants.
+  expect(PHONE_DPR).toBe(2);
+  expect(phoneImageVariant(HERO, 360, 2)).toBe("images/hero-900.jpg");
+  expect(phoneImageVariant(HERO, 360, 1)).toBe("images/hero-600.jpg");
+  const sizes = sizesFor(44 * 1024);
+  const [at1, at2] = pageWeights({ page: "index.html", html: HTML, css: CSS, sizes, images: [HERO] });
+  expect(at1!.dpr).toBe(1);
+  expect(at2!.dpr).toBe(2);
+  expect(at1!.label).toBe("360px at DPR 1");
+  expect(at2!.label).toBe("360px at DPR 2");
+  expect(at1!.files.map((f) => f.file)).toContain("images/hero-600.jpg");
+  expect(at2!.files.map((f) => f.file)).toContain("images/hero-900.jpg");
+  expect(at2!.files.map((f) => f.file)).not.toContain("images/hero-600.jpg");
+  expect(at2!.bytes).toBeGreaterThan(at1!.bytes);
+  // 95 KB instead of 44 KB for the one picture, and the rest of the page is unchanged.
+  expect(at2!.bytes - at1!.bytes).toBe(95 * 1024 - 44 * 1024);
+});
+
 test("a wider screen is charged for the variant it asks for, and a single file is charged as itself", () => {
   expect(phoneImageVariant(HERO, 800)).toBe("images/hero-900.jpg");
   expect(phoneImageVariant(HERO, 2000)).toBe("images/hero-1536.jpg");
@@ -93,14 +122,20 @@ test("a wider screen is charged for the variant it asks for, and a single file i
   expect(phoneImageVariant(single)).toBe("images/hero.jpg");
 });
 
-test("a page over the ceiling fails, naming the page and the heaviest file it loads", () => {
-  const problems = weightProblems({ page: "index.html", html: HTML, css: CSS, sizes: sizesFor(2.6 * 1024 * 1024), images: [HERO] });
+test("a page over the ceiling fails at the DPR 2 figure, naming the page, the heaviest file and both numbers", () => {
+  // The file a DPR 2 phone actually downloads is the 900w one, so that is the file that has
+  // to be heavy for the ceiling to be about the phone in someone's hand.
+  const sizes = sizesFor(44 * 1024, { "images/hero-900.jpg": 2.6 * 1024 * 1024 });
+  const problems = weightProblems({ page: "index.html", html: HTML, css: CSS, sizes, images: [HERO] });
   const heavy = problems.find((p) => p.includes("ceiling"));
   expect(heavy).toBeDefined();
   expect(heavy).toContain("index.html");
-  expect(heavy).toContain("images/hero-600.jpg");
+  expect(heavy).toContain("images/hero-900.jpg");
   expect(heavy).toContain("750 KB");
   expect(heavy).toContain("tools/prepare-images.py");
+  // Both figures are printed, labelled, so the DPR 1 number cannot be read as the phone one.
+  expect(heavy).toContain("DPR 2");
+  expect(heavy).toContain("at DPR 1");
   // The same bundle also trips the single-file cap: two real problems, not one.
   expect(problems.some((p) => p.includes("700 KB cap"))).toBe(true);
 });

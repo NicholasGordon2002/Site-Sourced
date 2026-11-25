@@ -39,9 +39,11 @@
  *      not in the nav, and every existing check that walks `pages` — the self-containment
  *      check, the booking scoping rules, the phase furniture rules — still refuses a
  *      remote `script`, `iframe` or `embed` on any other page of the bundle;
- *   2. it is enabled only when `DEMO_BOOKING_COMPARISON_URL` is set, and only for the
- *      record this page is scoped to; with the variable unset the bundle is byte-identical
- *      to a build from `master`;
+ *   2. it is enabled only when `DEMO_BOOKING_COMPARISON=1` **and** an address is set, and
+ *      only for the record this page is scoped to; with the switch unset the bundle is
+ *      byte-identical to a build from `master`. Since 25 Nov 2026 the switch is separate
+ *      from the address, because an address left in a local env file was writing this page
+ *      into every build;
  *   3. `bookingComparisonProblems` refuses the page in the delivered phase, refuses it on
  *      every other record, and refuses it if any other page in the bundle has grown a
  *      remote script or frame.
@@ -59,8 +61,19 @@ import { bookingNoticeDemo, guardCopy } from "./copy.ts";
 import { esc, renderComparisonHead, renderComparisonPage, type RenderContext } from "./render.ts";
 import type { BusinessRecord } from "./types.ts";
 
-/** The configuration key that opts this page in. No address is ever committed. */
+/** The configuration key that carries the address the page offers. No address is ever committed. */
 export const BOOKING_COMPARISON_VAR = "DEMO_BOOKING_COMPARISON_URL";
+/**
+ * The **switch**: the page is written only when this is set to exactly `1`.
+ *
+ * It is separate from the address on purpose. Until 25 Nov 2026 a build wrote this page
+ * whenever `DEMO_BOOKING_COMPARISON_URL` was set, and the repository's own gitignored
+ * `.env.local` set it — so every fixture build carried Google's script and Google's frame,
+ * the published Maple Avenue bundle was serving the page unlinked, and nobody had asked
+ * for it that day. An address left in a local env file is not an instruction to publish a
+ * page that loads a third party; typing `DEMO_BOOKING_COMPARISON=1` is.
+ */
+export const BOOKING_COMPARISON_SWITCH = "DEMO_BOOKING_COMPARISON";
 /** The one file this page is. The carve-outs name it by name. */
 export const BOOKING_COMPARISON_FILE = "booking-comparison.html";
 /**
@@ -235,6 +248,8 @@ export interface ComparisonRenderVars {
   url: string;
   /** The phase this bundle is in — `delivery.mode`. */
   phase: string;
+  /** Whether `DEMO_BOOKING_COMPARISON` is set to exactly `1` in this build. */
+  switchOn: boolean;
 }
 
 export interface ComparisonDecision {
@@ -252,17 +267,23 @@ export interface ComparisonDecision {
  * page**, so an incomplete configuration can only ever make a bundle say less.
  */
 export function comparisonDecision(vars: ComparisonRenderVars): ComparisonDecision {
-  const { record, slug, url, phase } = vars;
+  const { record, slug, url, phase, switchOn } = vars;
   if (phase === "business") {
     return {
       enabled: false,
-      basis: `refused: this bundle is in the delivered phase. The comparison page carries Google's code and Google's frame; it is a review artifact for the owner, is never delivered to a client, and ${BOOKING_COMPARISON_VAR} carries no weight in a client build (${BOOKING_COMPARISON_BASIS}).`,
+      basis: `refused: this bundle is in the delivered phase. The comparison page carries Google's code and Google's frame; it is a review artifact for the owner, is never delivered to a client, and neither ${BOOKING_COMPARISON_SWITCH} nor ${BOOKING_COMPARISON_VAR} carries any weight in a client build (${BOOKING_COMPARISON_BASIS}).`,
+    };
+  }
+  if (!switchOn) {
+    return {
+      enabled: false,
+      basis: `${BOOKING_COMPARISON_SWITCH} is not set to 1 in this build, so no comparison page is written and the bundle is the nine approved pages, byte for byte. ${BOOKING_COMPARISON_VAR} alone does not write it: an address left in a local env file is not an instruction to publish a page that loads a third party.`,
     };
   }
   if (url === "") {
     return {
       enabled: false,
-      basis: `${BOOKING_COMPARISON_VAR} is not set in this build, so no comparison page is written and the bundle is the nine approved pages, byte for byte.`,
+      basis: `${BOOKING_COMPARISON_SWITCH} is set but ${BOOKING_COMPARISON_VAR} is not, so there is no address for the three options to reach and no comparison page is written.`,
     };
   }
   if (slug !== BOOKING_COMPARISON_SLUG || !record.booking_url) {
@@ -273,7 +294,7 @@ export function comparisonDecision(vars: ComparisonRenderVars): ComparisonDecisi
   }
   return {
     enabled: true,
-    basis: `${BOOKING_COMPARISON_VAR} is set and this record is the ${BOOKING_COMPARISON_SLUG} appointment demonstration, so one extra page is written: ${BOOKING_COMPARISON_FILE}, requested by the owner as a comparison of three ways to reach the same booking page. It is not one of the nine; the nine are unchanged (${BOOKING_COMPARISON_BASIS}).`,
+    basis: `${BOOKING_COMPARISON_SWITCH}=1 and ${BOOKING_COMPARISON_VAR} is set, and this record is the ${BOOKING_COMPARISON_SLUG} appointment demonstration, so one extra page is written: ${BOOKING_COMPARISON_FILE}, requested by the owner as a comparison of three ways to reach the same booking page. It is not one of the nine; the nine are unchanged (${BOOKING_COMPARISON_BASIS}).`,
   };
 }
 
