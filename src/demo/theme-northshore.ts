@@ -258,76 +258,72 @@ p { line-height: 1.62; }
   transform: rotate(-45deg);
 }
 /* The home header sits on the photograph, so the trigger is white there — outline and icon
-   alike, in the closed, open, focus and active states — and the panel it opens is that same
-   ink surface, so the tab and the panel are one white-outlined shape instead of a white tab
-   sitting on top of a bone card. Every other page keeps the ink its paper header calls for:
-   white on bone paper is 1.07:1, and the outline follows the surface, as the buttons do. */
+   alike, in the closed, open, focus and active states. Every other page keeps the ink its
+   paper header calls for: white on bone paper is 1.07:1, and the outline follows the surface,
+   as the buttons do. The sheet the trigger opens is paper on both surfaces, so the trigger is
+   the only thing whose colour changes with the surface under it. */
 .page--index .site-menu-summary,
 .page--index .site-menu[open] .site-menu-summary { border-color: #fff; color: #fff; }
-.page--index .site-menu[open] .site-menu-summary { background: var(--ink); }
-.page--index .site-nav { background: var(--ink); border-color: #fff; }
-.page--index .site-nav a { color: #fff; }
-.page--index .site-nav a:hover { background: none; color: #fff; }
-.page--index .site-nav a[aria-current="page"] { background: none; color: #A9C0A4; }
 
-/* The phone's panel: a ruled card of small-caps links rather than a stack of grey chips. */
-.site-nav {
-  width: min(46vw, 13rem);
-  margin-top: 0;
-  padding: var(--s-1) 0;
-  background: var(--paper);
-  border: 1px solid var(--ink);
-  border-radius: var(--r-lg);
-  box-shadow: none;
-}
-.site-nav ul { gap: 0; }
-.site-nav a {
-  min-height: 2.75rem;
-  padding: 0 var(--s-3);
-  border-radius: 0;
-  border-bottom: 1px solid var(--line);
-  background: none;
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--ink);
-}
-.site-nav li:last-child a { border-bottom: 0; }
-.site-nav a:hover { background: none; color: var(--accent-ink); }
-.site-nav a[aria-current="page"] { background: none; color: var(--accent-ink); }
-
-/* The joined state. The anchor-name property puts the trigger's own box on the map; the panel is then
-   placed against it rather than against the header, so it hangs from the trigger on every
-   page whatever the header's height — the home header is two rows and an inner page's is one.
-   The trigger's bottom edge opens into the panel (no bottom border, no bottom radius) and the
-   panel's top rule starts where the trigger's right border ends, so the two boxes read as one
-   outline with the trigger as its tab. */
-@supports (position-anchor: --ns-pages) {
-  .site-menu-summary { anchor-name: --ns-pages; }
+/* ------------------------------------------------------ the phone menu: a sheet */
+/* The owner's second look at this menu (brief of 25 Nov 2026): it has to read as a deliberate,
+   finished thing rather than a dropdown of small text. A small card hung off the trigger's
+   corner reads as a box that happens to be open; a sheet reads as the page's own navigation.
+   So below 48rem the panel is the header's full width — edge to edge, squared, flush under the
+   header's ink rule and ruled off at its foot — with the page's links set as a ruled list of
+   small caps on 52px rows, and one heavier rule before Contact Us, the row that asks something
+   of the visitor where the other three only take them somewhere.
+   Nothing is added to the page for it: the same <details>, the same <nav>, the same four links,
+   no script, no shadow, no mark and no icon beyond the trigger's own bars/X. */
+@media (max-width: 47.99rem) {
   .site-nav {
-    position-anchor: --ns-pages;
-    top: anchor(bottom);
-    left: anchor(left);
-    margin-top: 0;
-    border-top: 0;
-    border-radius: 0 var(--r-lg) var(--r-lg) var(--r-lg);
-  }
-  .site-nav::before {
-    content: "";
-    position: absolute;
-    top: -1px;
-    left: 2.75rem;
+    left: 0;
     right: 0;
-    height: 1px;
-    background: var(--ink);
+    width: auto;
+    min-width: 0;
+    margin-top: 0;
+    padding: 0;
+    background: var(--paper);
+    border: 0;
+    border-top: 1px solid var(--ink);
+    border-bottom: 1px solid var(--ink);
+    border-radius: 0;
+    box-shadow: none;
   }
-  /* Over the photograph the panel is ink, so the line that squares the tab into it is white. */
-  .page--index .site-nav::before { background: #fff; }
-  .site-menu[open] .site-menu-summary {
-    border-bottom: 0;
-    border-radius: var(--r-lg) var(--r-lg) 0 0;
+  .site-nav ul { gap: 0; }
+  /* The row's own hairline, full bleed: on a sheet the rules are the structure, and a rule
+     that stops at the gutter would read as a box inside a box. */
+  .site-nav li { border-top: 1px solid var(--line); }
+  .site-nav li:first-child { border-top: 0; }
+  .site-nav li:nth-last-child(2) { margin-top: var(--s-2); border-top: 1px solid var(--ink); }
+  .site-nav a {
+    min-height: 3.25rem;
+    /* The leading bar below is 4px of the row, so the words still start on the gutter's line,
+       under the wordmark. */
+    padding: 0 var(--gutter) 0 calc(var(--gutter) - 4px);
+    border: 0;
+    border-left: 4px solid transparent;
+    border-radius: 0;
+    background: none;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink);
   }
+  .site-nav a:hover { background: var(--paper-2); color: var(--ink); }
+  /* The current page: the accent's bar on the row's leading edge, the accent's ink in the
+     words, and the alternate band behind them. Three quiet signals rather than one loud one,
+     so the row a visitor is already on is unmistakable without shouting — and it is the same
+     state the wide row shows with its underline, in the shape this menu has. */
+  .site-nav a[aria-current="page"] {
+    background: var(--paper-2);
+    color: var(--accent-ink);
+    border-left-color: var(--accent);
+  }
+  /* The ring is drawn inside the row: a full-bleed row's focus ring hung outside it would be
+     clipped by the sheet's own edge. */
+  .site-nav a:focus-visible { outline-offset: -3px; }
 }
 
 /* --------------------------------------------------------------- buttons */
@@ -513,23 +509,54 @@ p { line-height: 1.62; }
   .services .service-tile--cta { flex-direction: row; align-items: center; justify-content: space-between; gap: var(--s-6); }
   .services .service-tile--cta .service-tile-body { padding: var(--s-5) 0; }
   .services .service-tile--cta .service-cta { flex: none; margin: 0; }
-  /* The panel's geometry is undone up here, and so is its paper: the wide row sits on the
-     header's own surface (the photograph on the home page), where the links are white. The
-     first pass left the paper fill in place and drew white links on it — nothing at all. */
+  /* ------------------------------------------------ the classic wide header */
+  /* The owner's direction (25 Nov 2026): on desktop the page links are listed plainly beside
+     the wordmark, with no hamburger, no panel and no box around them. What was wrong was the
+     box: the panel's ink surface was written for the phone's sheet and outlived it up here,
+     where it drew an evergreen rectangle behind five links that sat on the header's own line.
+     The fill, the outline and the panel's geometry are undone for the wide row, and what is
+     left is the header's own surface with the links on it — white over the home photograph,
+     ink on paper — and the outlined action at the end.
+     The wide row keeps a 44px-tall target per link and the current page's mark: an underline
+     in the accent (white over the photograph), set a little clear of the caps so it reads as a
+     rule rather than as a clipped descender. */
   .site-nav {
+    flex: 0 0 auto;
+    margin-left: var(--s-6);
+    padding: 0;
     background: none;
     border: 0;
     border-radius: 0;
     box-shadow: none;
     width: auto;
     min-width: 0;
-    padding: 0;
   }
-  .site-nav::before { display: none; }
-  .site-nav a { border-bottom: 2px solid transparent; font-size: 0.75rem; letter-spacing: 0.1em; }
+  .site-nav ul { gap: 0 1.75rem; }
+  .site-nav li { margin: 0; border: 0; }
+  .site-nav a {
+    min-height: 2.75rem;
+    padding: 0 0 0.25rem;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    background: none;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink);
+  }
   .site-nav li:last-child a { border-bottom: 2px solid transparent; }
-  .site-nav a:hover { border-bottom-color: var(--line); }
-  .site-nav a[aria-current="page"] { border-bottom-color: var(--accent); }
+  .site-nav a:hover { background: none; color: var(--ink); border-bottom-color: var(--line); }
+  .site-nav a[aria-current="page"] { background: none; color: var(--accent-ink); border-bottom-color: var(--accent); }
+  /* Over the photograph the row is white, its hover rule is white at two-thirds, and the
+     current page's rule is solid white: the same three states, on the other surface. */
+  .page--index .site-header .site-nav a { color: #fff; }
+  .page--index .site-header .site-nav a:hover { color: #fff; border-bottom-color: rgba(255, 255, 255, .6); }
+  .page--index .site-header .site-nav a[aria-current="page"] { color: #fff; border-bottom-color: #fff; }
+  /* The action closes the row: a gap from the last link, and no auto margin of its own now
+     that the wordmark's own growth is what holds the pair against the right edge. */
+  .site-header .call-button { margin-left: var(--s-6); }
 }
 `;
 }
@@ -581,6 +608,7 @@ export const PAIRS: readonly { fg: string; bg: string; min: number; what: string
   { fg: "var(--accent-ink)", bg: "var(--paper)", min: 4.5, what: "links and the eyebrow" },
   { fg: "var(--accent-ink)", bg: "var(--paper-2)", min: 4.5, what: "links on an alternate band" },
   { fg: "var(--accent)", bg: "var(--paper)", min: 3, what: "the focus ring, and the rules the accent draws" },
+  { fg: "var(--accent)", bg: "var(--paper-2)", min: 3, what: "the phone menu's current-page bar on its alternate band" },
   { fg: "var(--footer-ink)", bg: "var(--ink)", min: 4.5, what: "the footer's small print" },
   { fg: "#F7F4EA", bg: "var(--ink)", min: 4.5, what: "an inner page's title on its dark band" },
   { fg: "#D6DED0", bg: "var(--ink)", min: 4.5, what: "an inner page's lead on its dark band" },
