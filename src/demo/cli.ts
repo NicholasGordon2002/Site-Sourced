@@ -66,6 +66,12 @@ Record format (one JSON object, or an array, or {"records": [...]}):
                  "province": "ON", "postcode": "L8P 2A1" },
     "phone": "+1 905-555-0142",
     "email": "shop@example.com",
+    "website_url": "https://example.com",   // optional; the business's CURRENT website
+                                            // (intake question 14). Stored and NEVER printed:
+                                            // one absolute https URL, or blank for none. The
+                                            // build refuses any other shape, and refuses a
+                                            // page that presents it as a booking or contact
+                                            // action.
     "hours": [ { "days": "Mon–Fri", "hours": "9:00 am – 6:00 pm" } ],
     "services": [ { "name": "Haircut", "note": "optional client wording" } ],
     "form_recipient": "the-business@example.com",   // required for a working form

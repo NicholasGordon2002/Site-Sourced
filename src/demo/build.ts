@@ -2901,6 +2901,116 @@ export function serviceCardImageProblems(vars: {
 }
 
 /**
+ * The business's current website is recorded and **never printed** (intake question 14,
+ * `ops/post-agreement-intake-questionnaire.md`).
+ *
+ * `website_url` exists because that answer had nowhere to live: a prospect's current site
+ * is one of the first things we ask for and the one fact the record could not hold. It is
+ * **not** a link on the page. A demonstration is built for a business that has no site yet
+ * — printing the old one would send the visitor away from the page we built — and a
+ * delivered site's address is the domain it is served from, not a field. So the value is
+ * stored, carried into no page and no manifest, and two things are refused here by name:
+ *
+ *   1. a value that is not an **absolute `https` URL**. A bare `example.com`, an `http://`
+ *      address, a `mailto:` or anything with no host is not a link we could trust if we
+ *      ever did print it, and a typo caught here is caught before it reaches a client's
+ *      record. A blank value is treated as absent: an owner answering "no website" has
+ *      nothing to record.
+ *   2. any page that **presents** it — as a booking or a contact action, or anywhere else.
+ *      A page's own routes are the form, the phone number and the business's booking page;
+ *      the current website is none of those. A record whose `booking_url` *is* its website
+ *      is refused the same way: the booking link must point at a page that really books,
+ *      and "the website we already have" is not that.
+ */
+export function websiteUrlProblems(vars: {
+  record: BusinessRecord;
+  pages: RenderedPage[];
+  /** The booking URL this build resolved, so a link that points at the website is refused. */
+  bookingUrl?: string;
+}): string[] {
+  const problems: string[] = [];
+  const raw = (vars.record as { website_url?: unknown }).website_url;
+  if (raw === undefined || raw === null) return problems;
+  if (typeof raw !== "string") {
+    problems.push(
+      `the record's website_url is not a string (${JSON.stringify(raw)}). It is the business's current website as the client gave it: one absolute https address, or nothing at all.`,
+    );
+    return problems;
+  }
+  const value = raw.trim();
+  if (value === "") return problems;
+
+  let parsed: URL | null = null;
+  try {
+    parsed = new URL(value);
+  } catch {
+    parsed = null;
+  }
+  if (!parsed || parsed.protocol !== "https:" || parsed.hostname === "" || /\s/.test(value)) {
+    problems.push(
+      `the record's website_url ("${value}") is not an absolute https URL. It is stored and never printed, so nothing on a page breaks — but a record we cannot read as one address is a record we cannot check, and the questionnaire asks for a link, not a sentence.`,
+    );
+    return problems;
+  }
+
+  // Every shape the address could take on a page: as given, HTML-escaped, without its
+  // scheme, and (for a bare domain) the host on its own — the last only where the record's
+  // own email address does not already contain that host, so a business at `example.com`
+  // with the address `shop@example.com` is not refused for printing its own email.
+  const forms = new Set<string>();
+  const add = (form: string) => {
+    if (form !== "") forms.add(form);
+  };
+  const hostPath = `${parsed.host}${parsed.pathname}${parsed.search}`;
+  add(value);
+  add(esc(value));
+  add(hostPath);
+  add(esc(hostPath));
+  add(`//${hostPath}`);
+  if (parsed.pathname === "/" && parsed.search === "") {
+    const elsewhere = `${vars.record.email ?? ""} ${vars.record.form_recipient ?? ""}`.toLowerCase();
+    if (!elsewhere.includes(parsed.host.toLowerCase())) add(parsed.host);
+  }
+
+  for (const page of vars.pages) {
+    const hit = [...forms].find((form) => page.html.includes(form));
+    if (hit !== undefined) {
+      problems.push(
+        `${page.file}: prints the record's website_url (${hit}). The business's current website is stored and never printed: it is not a booking or contact action on the page, and a page that shows it sends the visitor away from the one we built.`,
+      );
+    }
+  }
+
+  const sameAddress = (candidate: string): boolean => {
+    const c = candidate.trim();
+    if (c === "" || parsed === null) return false;
+    try {
+      const other = new URL(c);
+      return (
+        other.protocol === parsed.protocol &&
+        other.host.toLowerCase() === parsed.host.toLowerCase() &&
+        (other.pathname || "/") === (parsed.pathname || "/") &&
+        other.search === parsed.search
+      );
+    } catch {
+      return false;
+    }
+  };
+  const bookingRaw = typeof vars.record.booking_url === "string" ? vars.record.booking_url : "";
+  if (sameAddress(bookingRaw)) {
+    problems.push(
+      `the record's booking_url is its website_url ("${value}"). The current website is stored and never printed, and it is not a booking action: a booking link must point at a page that really books a time.`,
+    );
+  } else if (sameAddress(vars.bookingUrl ?? "")) {
+    problems.push(
+      `this build's booking link points at the record's website_url ("${value}"). The current website is stored and never printed, and it is not a booking action: a booking link must point at a page that really books a time.`,
+    );
+  }
+
+  return problems;
+}
+
+/**
  * Everything that must be true for a bundle to be publishable at all — one list, one
  * throw — checked **on every page**, because the plan's compliance rules are per page
  * and never inherited. It covers the pages' compliance strings, the contact form, and
@@ -3132,6 +3242,10 @@ export function complianceChecks(vars: {
   problems.push(...familyProblems({ record, family: copy.conversion.family }));
   problems.push(...familyHonestyProblems({ pages, record, family: copy.conversion.family }));
   problems.push(...fictionalNarrativeProblems(record));
+  // The business's current website (intake question 14): stored and never printed, so the
+  // value must be one absolute https address and no page may present it as a booking or a
+  // contact action.
+  problems.push(...websiteUrlProblems({ record, pages, bookingUrl: copy.booking.url }));
   problems.push(...contactLabelProblems({ pages, label: copy.contactLabel }));
   problems.push(...submitLabelProblems({ pages, label: copy.contactLabel }));
   // The family rendering layer: the fields the form asks for, the days the

@@ -136,6 +136,15 @@ export interface BusinessRecord {
    * invents a URL, and a record that carries none prints none.
    */
   booking_url?: string;
+  /**
+   * The business's **current** website, as the client gave it — intake question 14 of
+   * `ops/post-agreement-intake-questionnaire.md`. Stored and **never printed**: it is not
+   * a booking or a contact action on the page, and a demonstration is built for a business
+   * whose site we are replacing. The build refuses a value that is not one absolute `https`
+   * URL, and refuses any page that presents it (`websiteUrlProblems`, build.ts). Blank is
+   * the same as absent: an owner answering "no website" has nothing to record.
+   */
+  website_url?: string;
   address?: Partial<RecordAddress>;
   phone?: string;
   email?: string;
