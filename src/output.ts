@@ -36,6 +36,11 @@ export const COLUMNS: Array<[string, keyof Lead]> = [
   ["viewport_meta", "viewport_meta"],
   ["page_weight_bytes", "page_weight_bytes"],
   ["site_evidence", "site_evidence"],
+  // Consent evidence: the plan's "consent evidence per lead, or no send".
+  ["consent_source_url", "consent_source_url"],
+  ["consent_archive_path", "consent_archive_path"],
+  ["consent_relevance_note", "consent_relevance_note"],
+  ["consent_captured_at", "consent_captured_at"],
 ];
 
 function csvCell(value: unknown): string {
