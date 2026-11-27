@@ -204,6 +204,39 @@ p { line-height: 1.62; }
 .site-header { border-bottom: 1px solid var(--ink); }
 .wordmark { font-size: 1.1875rem; letter-spacing: -0.005em; }
 
+/* ------------------------------------------- the phone header: two rows, both of them meant */
+/* At 320–414 the header is two rows and the shared rule leaves both of them to chance: the
+   wordmark is given "flex: 1 1 50%", so it grows to fill the first line and its last letter
+   lands on the right gutter, while the trigger's 44px box sits 16px from the left edge and the
+   name starts 60px in — the site's name is the only line on the page that does not begin on the
+   page's column, and the row reads as a bar packed edge to edge. The action, which cannot share
+   a line with both, is then left alone on the second row, right-aligned, belonging to nothing.
+   So each row is given a job instead: **the name owns the first row on the page's own left
+   column, and the second row is the header's control bar — the menu at the left gutter, the
+   page's action at the right gutter.** Two things follow, and they are the point: the name
+   starts where every other line on the page starts, and the trigger no longer competes with it
+   for the same line, so it has air above and beside it instead of being wedged against the
+   last letter. Nothing is added, removed or reordered in the document: the same <details>, the
+   same three items, the same two rows, no script and no new mechanism — this is the same
+   header, composed. The wide header is untouched: the min-width block further down restores
+   the one-line row, and its own rules never see these.
+   The one thing the composition costs, stated rather than hidden: the trigger is the first of
+   the three in the document and the name is the first to the eye, so the tab order reaches the
+   trigger before the name — a swap of two neighbours inside one header, with nothing skipped,
+   nothing hidden and nothing added. The markup is not ours to reorder on this record alone (a
+   page that moved for one demonstration would move for Maple and every client build with it),
+   and the alternative — the name starting 60px in behind the trigger's box, which is what the
+   shared rule gives — is the layout this replaces. */
+@media (max-width: 47.99rem) {
+  /* The name takes the row it now has: the full measure, on the gutter, and 44px tall so that
+     the way home is a target a thumb can hit rather than a 23px line of type. */
+  .wordmark { order: -1; flex: 1 1 100%; display: flex; align-items: center; min-height: 2.75rem; }
+  /* The control bar. The trigger keeps its own 44x44 box, its outline and its colour; what it
+     loses is the name's shoulder. The action keeps its place at the right gutter, and now it
+     shares the row with the control rather than sitting alone on one. */
+  .site-header .call-button { order: 1; margin-left: auto; }
+}
+
 /* ---------------------------------------------- the menu: one control, not two */
 /* The owner's first fix of this pass: the open menu must feel like the same control as the
    button that opened it. Four things make a panel read as a second, separate control — its
