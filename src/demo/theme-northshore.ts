@@ -309,29 +309,56 @@ p { line-height: 1.62; }
 .site-menu[open] .site-menu-summary,
 .site-menu-summary:active { border-width: 2px; }
 
-/* ------------------------------------------------------ the phone menu: a sheet */
-/* The owner's second look at this menu (brief of 25 Nov 2026): it has to read as a deliberate,
-   finished thing rather than a dropdown of small text. A small card hung off the trigger's
-   corner reads as a box that happens to be open; a sheet reads as the page's own navigation.
-   So below 48rem the panel is the header's full width — edge to edge, squared, flush under the
-   header's ink rule and ruled off at its foot — with the page's links set as a ruled list of
-   small caps on 52px rows, and one heavier rule before Contact Us, the row that asks something
-   of the visitor where the other three only take them somewhere.
-   Nothing is added to the page for it: the same <details>, the same <nav>, the same four links,
-   no script, no shadow, no mark and no icon beyond the trigger's own bars/X. */
+/* ------------------------------------------- the phone menu: a glass sheet, hung on the trigger */
+/* The owner's third look at this menu (brief of 27 Nov 2026): "Make the open mobile menu
+   transparent with a white outline and white lettering, and constrain the menu panel to
+   roughly 2/3–3/4 of the viewport width rather than full width" — with the 44px controls, the
+   keyboard behaviour, the short-screen scroll and the field guide left as they were.
+   So the sheet stops being the header's full width and becomes a box: **72% of the viewport
+   wide, hung under the trigger's own left edge** (the page's gutter, so the sheet's edge is on
+   the same line as the wordmark and the control that opened it), a 10px surface radius, a 1px
+   white outline, and the page's links still a ruled list of small caps on 52px rows with one
+   heavier rule before Contact Us. Nothing is added to the page: the same <details>, the same
+   <nav>, the same four links, no script, no shadow, no mark, no icon beyond the trigger's bars/X.
+   **Why 72%.** The band the owner named is 2/3 (240px at 360) to 3/4 (270px). At the narrow end
+   a sheet whose rows carry a 4px current-page bar, 12px of inset and 13px small caps at 0.12em
+   starts to read as a cramped dropdown beside a 44px control; at the wide end it is the old
+   full-width bar with a token margin, and only 70px of the page is left visible beside it. 72%
+   is 259px at 360 — the widest label (SERVICES, 90px) keeps a 137px measure, and 81px of the
+   page stays visible down the side, which is what tells a thumb the page is still there.
+   **Why the veil, measured and not assumed.** A fully transparent sheet was built and shot
+   first: at 360x740, DPR 1, with the panel's own paint removed, the pixels a row sits over are
+   the dark title band on every inner page (services, about, contact, privacy: 80–96% of the
+   band's pixels under L 0.10, mean rgb(40–57, 52–70, 41–60)) and the hero photograph on the
+   home page (row means rgb(94,94,86), rgb(59,67,42), rgb(53,64,30), rgb(98,108,79)). On that,
+   white lettering measures **1.00–1.38:1 at worst on every one of the five pages** — the worst
+   pixels are the title band's own pale heading and lead (rgb(250,247,239) behind a row) and the
+   photograph's sky and highlights (pure white behind row four). White on a transparent sheet is
+   therefore not shippable, and ink on it is no better (1.00:1 where the band is dark). What
+   ships is the same transparent sheet with **--ink at 70% behind it and a 12px blur**: the page
+   still reads through it (30% of what is behind comes through, blurred), and the surface a row
+   is drawn on stops depending on the page. The veil's lightest possible composite is 70% ink
+   over pure white = rgb(91, 101, 95), and with the current page's own 8% band over that,
+   rgb(104, 113, 108): white lettering measures 6.05:1 on the first and 5.04:1 on the second, and
+   the current-page bar 3.65:1 — the pairs in PAIRS, measured off the stylesheet this build ships.
+   On the dark title band the veil composites to rgb(20, 35, 26) and white is 16.34:1 there; over
+   the photograph's brightest row (mean rgb(94,94,86)) it is 12.77:1. The rendered figures are in
+   the commit and the review note.
+   The blur is a courtesy, never the guarantee: a browser without backdrop-filter drops the blur
+   and keeps the veil, and the veil alone is what the numbers above are for. */
 @media (max-width: 47.99rem) {
   .site-nav {
-    left: 0;
-    right: 0;
-    width: auto;
+    left: var(--gutter);
+    right: auto;
+    width: 72vw;
     min-width: 0;
-    margin-top: 0;
+    margin-top: var(--s-2);
     padding: 0;
-    background: var(--paper);
-    border: 0;
-    border-top: 1px solid var(--ink);
-    border-bottom: 1px solid var(--ink);
-    border-radius: 0;
+    background: rgba(20, 35, 26, .70);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    border: 1px solid #fff;
+    border-radius: var(--r-lg);
     box-shadow: none;
     /* **A short screen scrolls the sheet, it does not lose the bottom of it.** The sheet hangs
        under the header at top: 100%, and the header is its positioned ancestor, so 100% in the
@@ -348,24 +375,30 @@ p { line-height: 1.62; }
        scrolled to. Where the content already fits, the cap is never reached: the sheet is its
        own height, no scrollbar, no clipping, not a pixel of difference on a normal phone. The
        top and bottom rules stay on the sheet's own edge while the rows move under them, so it
-       still reads as one sheet flush under the header rather than as a scrolled box. */
-    max-height: calc(100vh - 100% - 4rem);
-    max-height: calc(100dvh - 100% - 4rem);
+       still reads as one sheet rather than as a scrolled box.
+       The sheet now hangs 8px under the header's rule rather than flush against it (a box with
+       its own outline needs its own edge), so the 8px is taken off the cap as well: at 568x320
+       the cap is 320 - 132 - 64 - 8 = 116px, and the four rows still travel inside it. */
+    max-height: calc(100vh - 100% - 4rem - var(--s-2));
+    max-height: calc(100dvh - 100% - 4rem - var(--s-2));
     overflow-y: auto;
     /* A flick that reaches the end of the sheet must not carry on into the page behind it. */
     overscroll-behavior: contain;
   }
   .site-nav ul { gap: 0; }
   /* The row's own hairline, full bleed: on a sheet the rules are the structure, and a rule
-     that stops at the gutter would read as a box inside a box. */
-  .site-nav li { border-top: 1px solid var(--line); }
+     that stops at the inset would read as a box inside a box. They are the dark bands' own
+     hairline — white at a fifth — because the sheet is now a dark surface: --line on it is a
+     warm pale rule that reads as bright as the words. */
+  .site-nav li { border-top: 1px solid rgba(255, 255, 255, .16); }
   .site-nav li:first-child { border-top: 0; }
-  .site-nav li:nth-last-child(2) { margin-top: var(--s-2); border-top: 1px solid var(--ink); }
+  .site-nav li:nth-last-child(2) { margin-top: var(--s-2); border-top: 1px solid rgba(255, 255, 255, .42); }
   .site-nav a {
     min-height: 3.25rem;
-    /* The leading bar below is 4px of the row, so the words still start on the gutter's line,
-       under the wordmark. */
-    padding: 0 var(--gutter) 0 calc(var(--gutter) - 4px);
+    /* 12px of inset for the words, 4px of it taken by the current-page bar, which sits on the
+       row's own leading edge so it reads as a bookmark on the sheet rather than as a stripe
+       floating inside it. */
+    padding: 0 var(--s-3) 0 var(--s-2);
     border: 0;
     border-left: 4px solid transparent;
     border-radius: 0;
@@ -374,35 +407,43 @@ p { line-height: 1.62; }
     font-weight: 600;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: var(--ink);
+    /* The owner's white lettering, and the only colour a row has: on the veil every row clears
+       4.5:1 with room, which is what the veil was for. */
+    color: #fff;
   }
-  .site-nav a:hover { background: var(--paper-2); color: var(--ink); }
-  /* The current page: the accent's bar on the row's leading edge, the accent's ink in the
-     words, and the alternate band behind them. Three quiet signals rather than one loud one,
-     so the row a visitor is already on is unmistakable without shouting — and it is the same
-     state the wide row shows with its underline, in the shape this menu has. */
+  /* A hover is a step *darker* here, not lighter: the sheet is a dark surface now, so the
+     palette's own "deepen the surface" answers with more ink rather than with paper. A paper
+     band on a glass sheet would be the loudest thing on it. */
+  .site-nav a:hover { background: rgba(20, 35, 26, .22); color: #fff; }
+  /* The current page: the pale accent's bar on the row's leading edge and a band of white at a
+     tenth behind the words, which stay white. Three quiet signals in the wide row's vocabulary
+     (bar, band, and the underline it shows up there) — the accent's *ink* is dropped here on
+     purpose: --accent-ink on this surface is 1.55:1, the accent itself 1.03:1, and the pale
+     accent #A9C0A4 the dark bands use is 3.10:1 on the veil but only 2.58:1 once the row's own
+     band lightens it, under the 3:1 a bar needs. #D6DED0, the lead's colour on a dark band,
+     clears it at 3.65:1. */
   .site-nav a[aria-current="page"] {
-    background: var(--paper-2);
-    color: var(--accent-ink);
-    border-left-color: var(--accent);
+    background: rgba(255, 255, 255, .08);
+    color: #fff;
+    border-left-color: #D6DED0;
   }
-  /* A press has to be answered before the page changes. The rows carried a hover state and
-     nothing else, and on a phone there is no hover to give: the finger lands, the page
-     navigates, and nothing in between said the tap had been taken. The pressed row deepens a
-     step past the hover band — to the rule colour, one tone under the alternate band — so the
-     answer is unmistakable and still the palette's own. The current page's row deepens too and
-     keeps its accent bar and accent ink: its own rule is the more specific of the two, so it
-     has to be said again here, or the row a visitor is already on would be the one silent row
-     on the sheet. */
-  .site-nav a:active { background: var(--line); color: var(--ink); }
+  /* A press has to be answered before the page changes. On a phone there is no hover to give:
+     the finger lands, the page navigates, and nothing in between said the tap had been taken.
+     The pressed row goes a step past the hover band, to the darkest state the sheet has, so the
+     answer is unmistakable and still the palette's own. The current page's row answers too and
+     keeps its pale accent bar: its own rule is the more specific of the two, so it has to be
+     said again here, or the row a visitor is already on would be the one silent row. */
+  .site-nav a:active { background: rgba(20, 35, 26, .42); color: #fff; }
   .site-nav a[aria-current="page"]:active {
-    background: var(--line);
-    color: var(--accent-ink);
-    border-left-color: var(--accent);
+    background: rgba(20, 35, 26, .42);
+    color: #fff;
+    border-left-color: #D6DED0;
   }
   /* The ring is drawn inside the row: a full-bleed row's focus ring hung outside it would be
-     clipped by the sheet's own edge. */
-  .site-nav a:focus-visible { outline-offset: -3px; }
+     clipped by the sheet's own edge. Its colour is set too, and it has to be: the shared ring
+     is --accent, which on this dark sheet is 2.4:1 — a keyboard visitor would be moving through
+     rows with no visible ring at all. White is 5.04:1 at the veil's lightest. */
+  .site-nav a:focus-visible { outline: 2px solid #fff; outline-offset: -3px; }
 }
 
 /* --------------------------------------------------------------- buttons */
@@ -687,7 +728,13 @@ export const PAIRS: readonly { fg: string; bg: string; min: number; what: string
   { fg: "var(--accent-ink)", bg: "var(--paper)", min: 4.5, what: "links and the eyebrow" },
   { fg: "var(--accent-ink)", bg: "var(--paper-2)", min: 4.5, what: "links on an alternate band" },
   { fg: "var(--accent)", bg: "var(--paper)", min: 3, what: "the focus ring, and the rules the accent draws" },
-  { fg: "var(--accent)", bg: "var(--paper-2)", min: 3, what: "the phone menu's current-page bar on its alternate band" },
+  /* The phone menu's glass sheet (27 Nov 2026). Its surface is not a token: it is --ink at 70%
+     over whatever the page has behind it, and the lightest that composite can ever be is over
+     pure white, with the current page's own 8% white band on top — rgb(104, 113, 108), #68716C.
+     Both pairs are measured against that lightest case, so every other page is darker and
+     better; the arithmetic is in the theme's comment above the phone-menu block. */
+  { fg: "#FFFFFF", bg: "#68716C", min: 4.5, what: "the phone menu's rows on its ink veil, at the veil's lightest" },
+  { fg: "#D6DED0", bg: "#68716C", min: 3, what: "the phone menu's current-page bar on the same surface" },
   { fg: "var(--footer-ink)", bg: "var(--ink)", min: 4.5, what: "the footer's small print" },
   { fg: "#F7F4EA", bg: "var(--ink)", min: 4.5, what: "an inner page's title on its dark band" },
   { fg: "#D6DED0", bg: "var(--ink)", min: 4.5, what: "an inner page's lead on its dark band" },
