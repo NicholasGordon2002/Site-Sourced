@@ -212,10 +212,9 @@ p { line-height: 1.62; }
      - the trigger and the panel are the same surface with the same 1px outline;
      - the panel loses its shadow, so nothing floats;
      - the trigger's open state is drawn on the trigger itself — the three bars become an X;
-     - where the browser supports anchor positioning, the panel hangs from the trigger's own
-       bottom-left corner, its top-left corner squared off into the tab above it, so the two
-       boxes share one outline. Every other browser keeps the panel under the header (the
-       shared sheet's own position), now in the same surface and outline.
+     - the panel is the header's own full width, flush under the header's rule, so the two
+       boxes share one edge and one outline instead of the panel hanging off the trigger's
+       corner as a separate card.
    Nothing here changes what the control does: a native <details>, keyboard-operable, no script. */
 .site-menu-summary {
   border: 1px solid var(--ink);
@@ -264,6 +263,18 @@ p { line-height: 1.62; }
    the only thing whose colour changes with the surface under it. */
 .page--index .site-menu-summary,
 .page--index .site-menu[open] .site-menu-summary { border-color: #fff; color: #fff; }
+/* The trigger's two engaged states, in the vocabulary every other control on the page already
+   speaks: a state is a **thicker outline**, never a fill (owner, 16 Oct 2026). Closed, the
+   trigger is a 1px outline; open — the menu is up and the control is doing something — it
+   thickens to the 2px the header's action wears, in the same colour the surface gave it, so
+   the engaged control and the primary action read at one weight. A press thickens it the same
+   way, which is the only answer a phone gets between the tap and the page: on a sheet this
+   size the tap is the whole interaction, and until now nothing on the trigger acknowledged it.
+   box-sizing is border-box site-wide, so the 44x44 target stays exactly 44x44 and the header
+   does not move by a pixel; the keyboard's ring is an outline rather than a border, so the
+   focus treatment is untouched and still wins. */
+.site-menu[open] .site-menu-summary,
+.site-menu-summary:active { border-width: 2px; }
 
 /* ------------------------------------------------------ the phone menu: a sheet */
 /* The owner's second look at this menu (brief of 25 Nov 2026): it has to read as a deliberate,
@@ -318,6 +329,20 @@ p { line-height: 1.62; }
      state the wide row shows with its underline, in the shape this menu has. */
   .site-nav a[aria-current="page"] {
     background: var(--paper-2);
+    color: var(--accent-ink);
+    border-left-color: var(--accent);
+  }
+  /* A press has to be answered before the page changes. The rows carried a hover state and
+     nothing else, and on a phone there is no hover to give: the finger lands, the page
+     navigates, and nothing in between said the tap had been taken. The pressed row deepens a
+     step past the hover band — to the rule colour, one tone under the alternate band — so the
+     answer is unmistakable and still the palette's own. The current page's row deepens too and
+     keeps its accent bar and accent ink: its own rule is the more specific of the two, so it
+     has to be said again here, or the row a visitor is already on would be the one silent row
+     on the sheet. */
+  .site-nav a:active { background: var(--line); color: var(--ink); }
+  .site-nav a[aria-current="page"]:active {
+    background: var(--line);
     color: var(--accent-ink);
     border-left-color: var(--accent);
   }
