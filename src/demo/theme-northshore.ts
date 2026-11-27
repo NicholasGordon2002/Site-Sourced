@@ -300,6 +300,27 @@ p { line-height: 1.62; }
     border-bottom: 1px solid var(--ink);
     border-radius: 0;
     box-shadow: none;
+    /* **A short screen scrolls the sheet, it does not lose the bottom of it.** The sheet hangs
+       under the header at top: 100%, and the header is its positioned ancestor, so 100% in the
+       cap below is exactly the header's own height. What is left between the sheet's foot and
+       the bottom of the screen is therefore the viewport, minus the header, minus the one thing
+       above the header: the proposal banner, which is 4rem at every phone width (measured 64px
+       at 568, 640 and 740 wide; one line, 44.5px, from about 50rem). Four 52px rows and the
+       heavier rule before Contact Us come to 221px, so a portrait phone has room to spare and
+       nothing here applies to it. A landscape phone does not: 568x320 leaves 320 - 132 = 188px
+       below the header, and before this cap the last row and the sheet's foot rule fell 33px
+       past the bottom of the screen, where nothing could reach them — an absolutely positioned
+       box adds no height to the page to scroll, and the sheet had no scroll of its own. Now the
+       sheet stops at the screen's own foot and the rows travel inside it, so the last row can be
+       scrolled to. Where the content already fits, the cap is never reached: the sheet is its
+       own height, no scrollbar, no clipping, not a pixel of difference on a normal phone. The
+       top and bottom rules stay on the sheet's own edge while the rows move under them, so it
+       still reads as one sheet flush under the header rather than as a scrolled box. */
+    max-height: calc(100vh - 100% - 4rem);
+    max-height: calc(100dvh - 100% - 4rem);
+    overflow-y: auto;
+    /* A flick that reaches the end of the sheet must not carry on into the page behind it. */
+    overscroll-behavior: contain;
   }
   .site-nav ul { gap: 0; }
   /* The row's own hairline, full bleed: on a sheet the rules are the structure, and a rule
