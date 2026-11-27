@@ -29,3 +29,6 @@ out/biz/
 out/client/
 out/demo-phase-twin/
 out/fixtures-mine/
+
+# durable suppression list — real addresses, never committed
+out/suppression.json

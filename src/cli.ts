@@ -7,7 +7,7 @@
  * See README.md for every flag and every output field.
  */
 
-import { mkdir } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -15,7 +15,9 @@ import { circleBBox, geocodeArea, haversineKm, parseRadius } from "./geo.ts";
 import { buildOverpassQueries, fetchOverpass } from "./overpass.ts";
 import { dedupeKey, elementToLead, mergeDuplicates, slugifyArea } from "./classify.ts";
 import { checkSite } from "./health.ts";
-import { writeOutputs } from "./output.ts";
+import { toCsv, writeOutputs } from "./output.ts";
+import { sendableLeads } from "./consent.ts";
+import { SuppressionList } from "./suppression.ts";
 import type { Lead, RunSummary } from "./types.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -36,6 +38,9 @@ interface Args {
   respectRobots: boolean;
   limit: number;
   queryMode: "auto" | "union" | "chunks";
+  suppression: string;
+  suppress: string[];
+  sendable: string;
   quiet: boolean;
   help: boolean;
 }
@@ -55,6 +60,9 @@ function parseArgs(argv: string[]): Args {
     respectRobots: true,
     limit: 0,
     queryMode: "auto",
+    suppression: "",
+    suppress: [],
+    sendable: "",
     quiet: false,
     help: false,
   };
@@ -81,6 +89,9 @@ function parseArgs(argv: string[]): Args {
         args.queryMode = v;
         break;
       }
+      case "--suppression": args.suppression = resolve(next()); break;
+      case "--suppress": args.suppress.push(next()); break;
+      case "--sendable": args.sendable = resolve(next()); break;
       case "--refresh": args.refresh = true; break;
       case "--no-health": args.noHealth = true; break;
       case "--respect-robots": args.respectRobots = true; break;
@@ -114,6 +125,11 @@ Flags
   --[no-]respect-robots    honour robots.txt before checking a site (default: honour)
   --query-mode <m>         auto (default: one union request, chunks on failure), union, chunks
   --limit <n>              cap the number of leads written (0 = no cap)
+  --suppression <file>     durable suppression list (default <out>/suppression.json)
+  --suppress <address>     add an address to the suppression list, then carry on
+  --sendable <file>        write only the leads that pass the send gate (consent
+                           evidence + not suppressed); refuses, writing nothing, if
+                           any candidate fails
   --quiet                  less progress output
   --help
 `;
@@ -259,8 +275,25 @@ async function main() {
     }
   }
 
-  let final = leads;
-  if (args.limit > 0) final = leads.slice(0, args.limit);
+  // 4b. The durable suppression list -----------------------------------------
+  // Applied to every run, before the limit, so an address that has unsubscribed
+  // cannot come back into a list however it was pulled or however it was re-tagged.
+  const suppressionPath = args.suppression || join(args.outDir, "suppression.json");
+  const suppression = await SuppressionList.load(suppressionPath);
+  for (const address of args.suppress) {
+    const { added, entry } = await suppression.add(address, {
+      reason: "manual",
+      note: "recorded from the command line (--suppress)",
+    });
+    log(args, `${added ? "suppressed" : "already suppressed"}: ${entry.address} (${entry.reason}, ${entry.added_at})`, true);
+  }
+  const afterSuppression = suppression.filter(leads);
+  for (const { lead, entry } of afterSuppression.dropped) {
+    log(args, `  - dropped ${lead.name} <${entry.address}>: on the suppression list since ${entry.added_at} (${entry.reason})`);
+  }
+
+  let final = afterSuppression.kept;
+  if (args.limit > 0) final = final.slice(0, args.limit);
   for (const l of final) {
     const bucket = l.site_verdict || "unchecked";
     counts[`verdict_${bucket}`] = (counts[`verdict_${bucket}`] ?? 0) + 1;
@@ -281,6 +314,25 @@ async function main() {
   };
   const paths = await writeOutputs(args.outDir, slug, summary);
 
+  // 4c. The send gate --------------------------------------------------------
+  // "Consent evidence per lead, or no send." Nothing is written if any candidate
+  // fails: a partial sendable list would be a list nobody checked.
+  if (args.sendable) {
+    const gate = sendableLeads(final, { suppression, archiveRoot: PROJECT_ROOT });
+    if (gate.refused.length) {
+      const lines = gate.refused.flatMap(({ lead, reasons }) => [
+        `  ${lead.name || lead.osm_id} <${lead.email || "no address"}>`,
+        ...reasons.map((r) => `    - ${r}`),
+      ]);
+      throw new Error(
+        `the send gate refused ${gate.refused.length} of ${final.length} lead(s) — no sendable list written:\n${lines.join("\n")}`,
+      );
+    }
+    await mkdir(dirname(args.sendable), { recursive: true });
+    await writeFile(args.sendable, toCsv(gate.sendable), "utf8");
+    process.stdout.write(`Sendable    : ${gate.sendable.length} lead(s) → ${args.sendable}\n`);
+  }
+
   const verdicts = Object.entries(counts)
     .filter(([k]) => k.startsWith("verdict_"))
     .map(([k, v]) => `${k.replace("verdict_", "")}=${v}`)
@@ -289,7 +341,7 @@ async function main() {
   process.stdout.write(
     [
       `Area        : ${args.area} (${centre.lat.toFixed(4)}, ${centre.lon.toFixed(4)}) ± ${args.radiusKm}km`,
-      `Leads       : ${final.length}`,
+      `Leads       : ${final.length}${afterSuppression.dropped.length ? ` (${afterSuppression.dropped.length} dropped: on the suppression list)` : ""}`,
       `Website tier: no_website=${counts.no_website ?? 0} social_only=${counts.social_only ?? 0} has_website=${counts.has_website ?? 0}`,
       `Site verdict: ${verdicts}`,
       `Rows written: ${paths.csv}`,

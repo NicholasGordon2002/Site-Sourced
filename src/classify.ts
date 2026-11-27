@@ -147,6 +147,12 @@ export function elementToLead(
     viewport_meta: "",
     page_weight_bytes: "",
     site_evidence: "",
+    // A freshly pulled POI has no consent evidence yet — the send gate refuses it
+    // until someone has read the source page and saved a copy of it.
+    consent_source_url: "",
+    consent_archive_path: "",
+    consent_relevance_note: "",
+    consent_captured_at: "",
   };
 }
 

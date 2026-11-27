@@ -48,6 +48,21 @@ export interface Lead {
   viewport_meta: string; // "yes" | "no" | ""
   page_weight_bytes: string;
   site_evidence: string;
+
+  /**
+   * Consent evidence, one set per lead: the plan's "consent evidence per lead, or
+   * no send". All four are empty for a lead the OSM pull has just produced; they
+   * are filled only when someone has actually read the source page and saved it.
+   * `src/consent.ts` refuses a lead with any of them missing.
+   */
+  /** The page the address was read from. Plain http(s). */
+  consent_source_url: string;
+  /** A saved copy of that page (path), kept as the evidence the marker scan reads. */
+  consent_archive_path: string;
+  /** Why this business is relevant to us, in our own words. */
+  consent_relevance_note: string;
+  /** ISO 8601 date the evidence above was captured. */
+  consent_captured_at: string;
 }
 
 export interface HttpRecord {
